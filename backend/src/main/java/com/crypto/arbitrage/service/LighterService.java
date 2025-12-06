@@ -1,0 +1,160 @@
+package com.crypto.arbitrage.service;
+
+import com.crypto.arbitrage.model.Dex;
+import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.repository.DexRepository;
+import com.crypto.arbitrage.repository.FundingRateRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class LighterService {
+
+    private final DexRepository dexRepository;
+    private final FundingRateRepository fundingRateRepository;
+    private final WebClient.Builder webClientBuilder;
+
+    private static final String DEX_NAME = "Lighter";
+    private static final String DEFAULT_BASE_URL = "https://mainnet.zklighter.elliot.ai/api/v1";
+
+    public List<FundingRate> fetchFundingData() {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isEmpty()) {
+            log.error("DEX Lighter non trouvé en base de données");
+            return List.of();
+        }
+
+        Dex dex = dexOpt.get();
+        String baseUrl = dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty() 
+                ? dex.getBaseUrl() 
+                : DEFAULT_BASE_URL;
+
+        try {
+            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+
+            // Endpoint: /funding-rates
+            JsonNode response = webClient.get()
+                    .uri("/funding-rates")
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            if (response == null) {
+                log.warn("Réponse vide de Lighter");
+                return List.of();
+            }
+
+            JsonNode ratesNode = response;
+            // Handle if response is wrapped in an object (e.g. { "funding_rates": [...] })
+            if (response.isObject()) {
+                if (response.has("funding_rates")) {
+                    ratesNode = response.get("funding_rates");
+                } else if (response.has("rates")) {
+                    ratesNode = response.get("rates");
+                } else if (response.has("result")) { // Some APIs use "result"
+                     ratesNode = response.get("result");
+                }
+            }
+            
+            if (!ratesNode.isArray()) {
+                 log.warn("Format de réponse invalide pour Lighter (attendu tableau): {}", response.toPrettyString());
+                 return List.of();
+            }
+
+            Map<String, FundingRate> uniqueRates = new HashMap<>();
+            LocalDateTime now = LocalDateTime.now();
+
+            for (JsonNode node : ratesNode) {
+                FundingRate rate = parseFundingRate(node, dex, now);
+                if (rate != null) {
+                    // This will overwrite if duplicates exist, ensuring only one per symbol is saved
+                    uniqueRates.put(rate.getSymbol(), rate);
+                }
+            }
+            
+            List<FundingRate> rates = new ArrayList<>(uniqueRates.values());
+            
+            // Save all fetched rates
+            if (!rates.isEmpty()) {
+                fundingRateRepository.saveAll(rates);
+                log.info("Récupéré et sauvegardé {} funding rates pour Lighter", rates.size());
+            }
+
+            return rates;
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des funding data Lighter: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    // Symboles autorisés (comme Paradex)
+    private static final List<String> ALLOWED_TOKENS = List.of("BTC", "ETH", "SOL", "RESOLV");
+
+    private FundingRate parseFundingRate(JsonNode node, Dex dex, LocalDateTime timestamp) {
+        try {
+            // Lighter API returns: { "market_id": 1, "symbol": "BTC_USDC", "rate": 0.0001, "exchange": "lighter" }
+            if (node.has("exchange")) {
+                String exchange = node.get("exchange").asText();
+                if (!"lighter".equalsIgnoreCase(exchange)) {
+                    return null; // Skip rates from other exchanges (e.g. binance)
+                }
+            }
+
+            String rawSymbol = node.get("symbol").asText();
+            
+            // Extract base symbol (e.g. from "BTC_USDC" -> "BTC", or just "BTC")
+            String baseSymbol = rawSymbol.split("_")[0];
+            
+            // Filter: Strict match against allowed tokens (avoids matching ETHFI for ETH)
+            if (!ALLOWED_TOKENS.contains(baseSymbol)) {
+                return null;
+            }
+
+            String symbol = baseSymbol + "-USD-PERP"; // Normalize to standardized format (e.g. BTC-USD-PERP)
+            BigDecimal rate = new BigDecimal(node.get("rate").asText());
+            
+            // Correction based on user feedback:
+            // API returns the rate in decimal format corresponding to the displayed 8h Funding Rate.
+            // Example: API -0.001248 corresponds to -0.1248% (which is the 8h rate).
+            // Even if payments are hourly, the quoted 'rate' is standard 8h.
+            
+            // Rate 8h % = rate * 100
+            BigDecimal rate8h = rate.multiply(BigDecimal.valueOf(100))
+                    .setScale(6, RoundingMode.HALF_UP);
+            
+            // Annual Rate % = rate * 3 (8h periods per day) * 365 * 100
+            BigDecimal rateAnnual = rate.multiply(BigDecimal.valueOf(3 * 365))
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            return FundingRate.builder()
+                    .dex(dex)
+                    .symbol(symbol)
+                    .rate(rate)
+                    .rate8h(rate8h)
+                    .rateAnnual(rateAnnual)
+                    .intervalHours(1) // Payments are hourly, but rate is quoted as 8h equivalent
+                    .timestamp(timestamp)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors du parsing du funding rate Lighter: {}", e.getMessage());
+            return null;
+        }
+    }
+}
