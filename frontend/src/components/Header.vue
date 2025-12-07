@@ -1,7 +1,15 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useAppKit, useAppKitAccount } from '@reown/appkit/vue'
 
 const searchQuery = ref('')
+const { open } = useAppKit()
+const { address, isConnected } = useAppKitAccount()
+
+const formattedAddress = computed(() => {
+  if (!address.value) return ''
+  return `${address.value.slice(0, 6)}...${address.value.slice(-4)}`
+})
 </script>
 
 <template>
@@ -28,6 +36,15 @@ const searchQuery = ref('')
       <button class="w-9 h-9 rounded-full glass-card flex items-center justify-center text-neutral-400 hover:text-white transition-colors relative">
         <span class="iconify" data-icon="lucide:bell" data-width="16"></span>
         <span class="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+      </button>
+
+      <!-- Connect Wallet Custom Button -->
+      <button 
+        @click="open()" 
+        class="glass-card rounded-full px-4 py-2 flex items-center gap-2 text-xs font-medium text-white hover:bg-white/5 transition-all border border-white/5 hover:border-white/10"
+      >
+        <span class="iconify" :data-icon="isConnected ? 'lucide:wallet' : 'lucide:plug'" data-width="14"></span>
+        {{ isConnected ? formattedAddress : 'Connect Wallet' }}
       </button>
     </div>
   </header>
