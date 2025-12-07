@@ -761,7 +761,7 @@ onUnmounted(() => {
         
         <!-- Description -->
         <p class="text-sm text-neutral-400 mb-6 max-w-[280px] leading-relaxed">
-          L'exécution automatique des trades d'arbitrage n'est pas disponible dans la version <span class="text-amber-400 font-medium">open source</span>.
+          L'exécution automatique des trades d'arbitrage est disponible exclusivement sur <span class="text-amber-400 font-medium">la version Pro</span> du site web.
         </p>
         
         <!-- Features List -->
@@ -788,14 +788,14 @@ onUnmounted(() => {
         
         <!-- CTA Button -->
         <a 
-          href="https://github.com/cactuszdre/crypto-arbitrage-pro" 
+          href="https://cactusfund.io" 
           target="_blank"
           class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
           </svg>
-          Obtenir la version Pro
+          Accéder au site Pro
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
           </svg>
@@ -804,7 +804,7 @@ onUnmounted(() => {
         <!-- Footer Note -->
         <p class="text-[10px] text-neutral-600 mt-4">
           Accédez à toutes les fonctionnalités sur 
-          <a href="https://github.com/cactuszdre/crypto-arbitrage-pro" target="_blank" class="text-amber-500 hover:underline">crypto-arbitrage-pro</a>
+          <a href="https://cactusfund.io" target="_blank" class="text-amber-500 hover:underline">cactusfund.io</a>
         </p>
       </div>
     </div>
