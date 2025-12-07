@@ -1,14 +1,32 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watchEffect, unref } from 'vue'
 import { useAppKit, useAppKitAccount } from '@reown/appkit/vue'
 
 const searchQuery = ref('')
 const { open } = useAppKit()
-const { address, isConnected } = useAppKitAccount()
+
+// State refs
+const isConnected = ref(false)
+const userAddress = ref('')
+
+const account = useAppKitAccount()
+
+// Robustly track state changes
+watchEffect(() => {
+  // Check if properties might be refs or direct values
+  // In some versions, it's a reactive object, in others refs
+  const connected = unref(account.isConnected)
+  const addr = unref(account.address)
+  
+  console.log('Wallet Debug:', { connected, addr })
+  
+  isConnected.value = !!connected
+  userAddress.value = addr || ''
+})
 
 const formattedAddress = computed(() => {
-  if (!address.value) return ''
-  return `${address.value.slice(0, 6)}...${address.value.slice(-4)}`
+  if (!userAddress.value) return ''
+  return `${userAddress.value.slice(0, 6)}...${userAddress.value.slice(-4)}`
 })
 </script>
 

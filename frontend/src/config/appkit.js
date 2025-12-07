@@ -3,8 +3,10 @@ import { mainnet, arbitrum } from '@reown/appkit/networks'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 
 // 1. Get a project ID at https://cloud.reown.com
-// You should replace this with your own project ID
-const projectId = '45b37d9953d53600889255869a87d00f' // Using a demo ID or placeholder
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
+if (!projectId) {
+    console.error('VITE_WALLETCONNECT_PROJECT_ID is not set in .env file')
+}
 
 // 2. Set up Wagmi Adapter
 export const networks = [mainnet, arbitrum]
