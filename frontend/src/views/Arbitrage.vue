@@ -5,6 +5,11 @@ import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
 import { executeHyperliquidOrder } from '../services/hyperliquid'
 import { executeParadexOrder } from '../services/paradex'
 import { executeLighterOrder } from '../services/lighter'
+import { useAuth } from '../stores/auth'
+
+// Auth store for Pro plan check
+const { state: authState } = useAuth()
+const isPro = computed(() => authState.user?.plan === 'PRO' || authState.user?.role === 'ADMIN')
 
 const opportunities = ref([])
 const currentPage = ref(1)
@@ -733,18 +738,87 @@ onUnmounted(() => {
     </div>
 
     <!-- Trade Execution Panel -->
-    <div class="glass-card rounded-3xl p-6 flex flex-col h-full border border-white/10 relative overflow-hidden">
+    <div :class="['glass-card rounded-3xl p-6 flex flex-col h-full relative overflow-hidden', isPro ? 'border border-white/10' : 'border border-amber-500/20']">
       <!-- Background Glow -->
-      <div v-if="selectedOpportunity" class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
+      <div v-if="selectedOpportunity && isPro" class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
+      <div v-if="!isPro" class="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -z-10"></div>
 
       <h3 class="text-base font-medium text-white mb-6 flex items-center gap-2">
-        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        <svg :class="['w-5 h-5', isPro ? 'text-indigo-400' : 'text-amber-400']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path v-if="isPro" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
         </svg>
         Arbitrage Execution
+        <span v-if="!isPro" class="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full">
+          Pro
+        </span>
       </h3>
       
-      <div v-if="selectedOpportunity" class="flex-1 flex flex-col">
+      <!-- PRO RESTRICTION - Shown to non-Pro users -->
+      <div v-if="!isPro" class="flex-1 flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-amber-500/5 to-orange-500/5 border border-amber-500/20 rounded-2xl">
+        <!-- Lock Icon -->
+        <div class="w-16 h-16 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-full flex items-center justify-center mb-5 ring-2 ring-amber-500/30">
+          <svg class="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
+        </div>
+        
+        <!-- Title -->
+        <h4 class="text-lg font-bold text-white mb-2">
+          Fonctionnalité Pro
+        </h4>
+        
+        <!-- Description -->
+        <p class="text-sm text-neutral-400 mb-6 max-w-[280px] leading-relaxed">
+          L'exécution automatique des trades d'arbitrage est disponible exclusivement pour les utilisateurs <span class="text-amber-400 font-medium">Pro</span>.
+        </p>
+        
+        <!-- Features List -->
+        <div class="w-full mb-6 space-y-2">
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Exécution Long + Short automatique
+          </div>
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Multi-DEX en parallèle
+          </div>
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Support Hyperliquid, Paradex, Lighter
+          </div>
+        </div>
+        
+        <!-- CTA Button -->
+        <a 
+          href="https://cactusfund.io/pro" 
+          target="_blank"
+          class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          Passer à Pro
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+          </svg>
+        </a>
+        
+        <!-- Footer Note -->
+        <p class="text-[10px] text-neutral-600 mt-4">
+          Accédez à toutes les fonctionnalités sur 
+          <a href="https://cactusfund.io" target="_blank" class="text-amber-500 hover:underline">cactusfund.io</a>
+        </p>
+      </div>
+      
+      <!-- EXECUTION PANEL - Shown to Pro/Admin users -->
+      <div v-else-if="selectedOpportunity" class="flex-1 flex flex-col">
         <!-- Strategy Header -->
         <div class="mb-6 p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
            <div>
@@ -866,7 +940,7 @@ onUnmounted(() => {
         
       </div>
 
-      <!-- Empty State -->
+      <!-- Empty State (Pro users only) -->
       <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-40">
         <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
              <svg class="w-8 h-8 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
