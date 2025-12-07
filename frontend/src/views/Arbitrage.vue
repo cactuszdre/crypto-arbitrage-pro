@@ -1,6 +1,8 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, unref } from 'vue'
 import { arbitrageApi } from '../services/api'
+import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
+import { executeHyperliquidOrder } from '../services/hyperliquid'
 
 const opportunities = ref([])
 const currentPage = ref(1)
@@ -8,9 +10,94 @@ const itemsPerPage = 8
 const failedImages = ref(new Set())
 const searchQuery = ref('')
 
+// Wallet & Execution State
+const accountData = useAppKitAccount()
+const providerData = useAppKitProvider('eip155')
+
+const provider = computed(() => {
+  // Debug to see structure
+  if (providerData && providerData.walletProvider) {
+      return providerData.walletProvider.value || providerData.walletProvider
+  }
+  return null
+})
+
+const selectedOpportunity = ref(null)
+const executionSide = ref('Buy') // 'Buy' or 'Sell'
+const tradeSize = ref(100) // Default 100 USD
+const isExecuting = ref(false)
+const executionLog = ref(null)
+
+const isConnected = computed(() => {
+  if (!accountData || !accountData.value) return false
+  return Boolean(accountData.value.isConnected)
+})
+
+const userAddress = computed(() => {
+  if (!accountData || !accountData.value) return null
+  return accountData.value.address
+})
+
+// Execution Logic
+const selectOpportunity = (opp) => {
+  selectedOpportunity.value = opp
+  executionLog.value = null
+  
+  // Auto-select side based on where Hyperliquid is
+  if (opp.longDex.toLowerCase() === 'hyperliquid') {
+    executionSide.value = 'Buy'
+  } else if (opp.shortDex.toLowerCase() === 'hyperliquid') {
+    executionSide.value = 'Sell'
+  } else {
+    // Both or neither (fallback)
+    executionSide.value = 'Buy'
+  }
+}
+
+const executeTrade = async () => {
+  if (!isConnected.value) return
+  if (!selectedOpportunity.value) return
+  
+  isExecuting.value = true
+  executionLog.value = null
+  
+  try {
+    const symbol = getBaseSymbol(selectedOpportunity.value.symbol).toUpperCase()
+    
+    const orderDetails = {
+      symbol: symbol,
+      isBuy: executionSide.value === 'Buy',
+      price: "0", // Market Order logic will be handled by service
+      size: tradeSize.value.toString()
+    }
+
+    if (!provider.value) {
+        throw new Error("Wallet Provider not found. Please reconnect wallet.")
+    }
+
+    const result = await executeHyperliquidOrder(provider.value, orderDetails)
+    
+    executionLog.value = {
+      success: true,
+      message: `Successfully executed! Sig: ${result.signature.slice(0, 10)}...`
+    }
+    
+  } catch (error) {
+    console.error('Execution failed:', error)
+    executionLog.value = {
+      success: false,
+      message: error.message || 'Execution failed'
+    }
+  } finally {
+    isExecuting.value = false
+  }
+}
+
 // Sorting state
 const sortColumn = ref('projectedDailyReturn') // default sort by daily return
 const sortDirection = ref('desc') // 'asc' or 'desc'
+// Sorting state
+
 
 // Time period filter
 const selectedPeriod = ref('current') // 'current', '1d', '7d', '30d'
@@ -610,7 +697,11 @@ onUnmounted(() => {
                 </span>
               </td>
               <td class="px-6 py-4 text-right">
-                <button class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors">
+                <button 
+                  @click="selectOpportunity(opp)"
+                  class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                  :class="{ 'bg-indigo-500 text-white border-indigo-500': selectedOpportunity?.symbol === opp.symbol }"
+                >
                   <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z"/>
                   </svg>
@@ -643,53 +734,90 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Strategy Config Panel -->
-    <div class="glass-card rounded-3xl p-6 flex flex-col justify-between">
-      <div>
-        <h3 class="text-base font-medium text-white mb-6">Execution Strategy</h3>
-        
-        <div class="space-y-8">
-          <!-- Slider 1 -->
-          <div class="group">
-            <div class="flex justify-between mb-3">
-              <span class="text-xs text-neutral-400 font-medium group-hover:text-white transition-colors">Risk Tolerance</span>
-              <span class="text-xs text-white">Medium</span>
+    <!-- Trade Execution Panel -->
+    <div class="glass-card rounded-3xl p-6 flex flex-col h-full">
+      <h3 class="text-base font-medium text-white mb-6">Trade Execution</h3>
+      
+      <div v-if="selectedOpportunity" class="flex-1 flex flex-col">
+        <!-- Selected Opportunity Info -->
+        <div class="mb-6 p-4 rounded-xl bg-white/5 border border-white/5">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-bold text-white">{{ selectedOpportunity.symbol }}</span>
+            <span :class="['text-xs font-medium px-2 py-0.5 rounded', selectedOpportunity.projectedDailyReturn >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400']">
+              {{ (selectedOpportunity.projectedDailyReturn || 0).toFixed(4) }}% Daily
+            </span>
+          </div>
+          <div class="flex justify-between text-xs text-neutral-400">
+            <span>Long: <span class="text-white">{{ selectedOpportunity.longDex }}</span></span>
+            <span>Short: <span class="text-white">{{ selectedOpportunity.shortDex }}</span></span>
+          </div>
+        </div>
+
+        <!-- Trade Form -->
+        <div class="space-y-4">
+          <div>
+            <label class="text-xs text-neutral-400 mb-1.5 block">Side to Execute (Hyperliquid)</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button 
+                @click="executionSide = 'Buy'"
+                :disabled="selectedOpportunity.longDex.toLowerCase() !== 'hyperliquid'"
+                :class="['py-2 text-xs font-medium rounded-lg border transition-all', executionSide === 'Buy' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10']"
+              >
+                Long (Buy)
+              </button>
+              <button 
+                @click="executionSide = 'Sell'"
+                :disabled="selectedOpportunity.shortDex.toLowerCase() !== 'hyperliquid'"
+                :class="['py-2 text-xs font-medium rounded-lg border transition-all', executionSide === 'Sell' ? 'bg-red-500 text-white border-red-500' : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10']"
+              >
+                Short (Sell)
+              </button>
             </div>
-            <input type="range" class="w-full" value="45">
           </div>
 
-          <!-- Slider 2 -->
-          <div class="group">
-            <div class="flex justify-between mb-3">
-              <span class="text-xs text-neutral-400 font-medium group-hover:text-white transition-colors">Profit Trigger</span>
-              <span class="text-xs text-white">0.5%</span>
-            </div>
-            <input type="range" class="w-full" value="20">
-          </div>
-
-          <!-- Switch -->
-          <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M11.983 1.907a.75.75 0 00-1.292-.657l-8.5 9.5A.75.75 0 002.75 12h6.572l-1.305 6.093a.75.75 0 001.292.657l8.5-9.5A.75.75 0 0017.25 8h-6.572l1.305-6.093z"/>
-                </svg>
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-medium text-white">Auto-Pilot</span>
-                <span class="text-[10px] text-neutral-500">Execute under 50ms</span>
-              </div>
-            </div>
-            <div class="w-10 h-6 bg-indigo-600 rounded-full relative cursor-pointer">
-              <div class="absolute top-1 right-1 w-4 h-4 bg-white rounded-full shadow-sm"></div>
+          <div>
+            <label class="text-xs text-neutral-400 mb-1.5 block">Size (USD)</label>
+            <div class="relative">
+              <span class="absolute left-3 top-2.5 text-xs text-neutral-500">$</span>
+              <input 
+                v-model="tradeSize"
+                type="number" 
+                class="w-full pl-6 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="100"
+              >
             </div>
           </div>
         </div>
+
+        <!-- Execute Button -->
+        <div class="mt-auto pt-6">
+          <button 
+            @click="executeTrade"
+            :disabled="isExecuting || !isConnected"
+            class="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-white/10 flex items-center justify-center gap-2"
+          >
+            <svg v-if="isExecuting" class="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span v-if="!isConnected">Connect Wallet First</span>
+            <span v-else-if="isExecuting">Signing...</span>
+            <span v-else>Execute Trade</span>
+          </button>
+          
+          <p v-if="executionLog" class="mt-3 text-[10px] text-center" :class="executionLog.success ? 'text-emerald-400' : 'text-red-400'">
+            {{ executionLog.message }}
+          </p>
+        </div>
       </div>
-      
-      <button class="mt-8 w-full py-3 bg-white text-black text-xs font-semibold rounded-xl hover:bg-neutral-200 transition-colors shadow-lg shadow-white/10 cursor-pointer">
-        Calibrate Strategy
-      </button>
+
+      <!-- Empty State -->
+      <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-50">
+        <svg class="w-12 h-12 text-neutral-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        <p class="text-sm text-neutral-400">Select an opportunity to trade</p>
+      </div>
     </div>
   </div>
 </template>
