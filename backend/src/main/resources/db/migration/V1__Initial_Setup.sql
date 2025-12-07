@@ -1,8 +1,3 @@
--- Crypto Arbitrage Database Initialization
-
-USE cryptodb;
-
--- Table DEX (avec champ api_key)
 CREATE TABLE IF NOT EXISTS dex (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) UNIQUE NOT NULL,
@@ -13,7 +8,17 @@ CREATE TABLE IF NOT EXISTS dex (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table Funding Rate
+CREATE TABLE IF NOT EXISTS dex_market (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    dex_id BIGINT NOT NULL,
+    symbol VARCHAR(50) NOT NULL,
+    original_symbol VARCHAR(50),
+    active BOOLEAN DEFAULT true,
+    updated_at DATETIME,
+    FOREIGN KEY (dex_id) REFERENCES dex(id),
+    UNIQUE KEY uk_dex_symbol (dex_id, symbol)
+);
+
 CREATE TABLE IF NOT EXISTS funding_rate (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     dex_id BIGINT NOT NULL,
@@ -31,7 +36,6 @@ CREATE TABLE IF NOT EXISTS funding_rate (
     INDEX idx_timestamp (timestamp)
 );
 
--- Table Arbitrage Opportunity
 CREATE TABLE IF NOT EXISTS arbitrage_opportunity (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     dex1_id BIGINT NOT NULL,
@@ -50,7 +54,6 @@ CREATE TABLE IF NOT EXISTS arbitrage_opportunity (
     INDEX idx_symbol_time (symbol, detected_at)
 );
 
--- Table Position (pour tracking)
 CREATE TABLE IF NOT EXISTS position (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     dex_id BIGINT NOT NULL,
@@ -65,3 +68,11 @@ CREATE TABLE IF NOT EXISTS position (
     FOREIGN KEY (dex_id) REFERENCES dex(id)
 );
 
+-- Initial Data Seeding
+INSERT INTO dex (name, base_url, funding_interval_hours) VALUES 
+('Paradex', 'https://api.testnet.paradex.trade/v1', 8)
+ON DUPLICATE KEY UPDATE base_url=VALUES(base_url);
+
+INSERT INTO dex (name, base_url, funding_interval_hours) VALUES 
+('Lighter', 'https://mainnet.zklighter.elliot.ai/api/v1', 1)
+ON DUPLICATE KEY UPDATE base_url=VALUES(base_url);

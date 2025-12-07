@@ -49,6 +49,11 @@ public class FundingRateController {
         return ResponseEntity.ok(fundingRateService.getSymbolsByDex(dexName));
     }
 
+    @GetMapping("/symbols")
+    public ResponseEntity<List<com.crypto.arbitrage.dto.MarketSymbolDTO>> getAllSymbols() {
+        return ResponseEntity.ok(fundingRateService.getAllMonitoredSymbolsWithIcons());
+    }
+
     @GetMapping("/paradex/symbols")
     public ResponseEntity<List<String>> getParadexSymbols() {
         return ResponseEntity.ok(paradexService.fetchAvailableSymbols());

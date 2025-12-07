@@ -35,6 +35,7 @@ export const fundingRateApi = {
     getLatest: (dexName, symbol) => api.get(`/funding-rates/dex/${dexName}/symbol/${symbol}`),
     getHistory: (params) => api.get('/funding-rates/history', { params }),
     getSymbols: (dexName) => api.get(`/funding-rates/symbols/${dexName}`),
+    getAllSymbols: () => api.get('/funding-rates/symbols'),
     fetchAndSave: (symbol) => api.post(`/funding-rates/fetch/${symbol}`)
 };
 

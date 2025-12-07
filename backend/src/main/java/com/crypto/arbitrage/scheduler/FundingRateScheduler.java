@@ -1,5 +1,6 @@
 package com.crypto.arbitrage.scheduler;
 
+import com.crypto.arbitrage.service.HyperliquidService;
 import com.crypto.arbitrage.service.LighterService;
 import com.crypto.arbitrage.service.ParadexService;
 import lombok.RequiredArgsConstructor;
@@ -15,51 +16,58 @@ import java.util.List;
 public class FundingRateScheduler {
 
     private final ParadexService paradexService;
-    private final LighterService lighterService; // Inject LighterService
+    private final LighterService lighterService;
+    private final HyperliquidService hyperliquidService;
+    private final com.crypto.arbitrage.repository.DexRepository dexRepository;
+    private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
 
-    // Symboles à surveiller par défaut pour Paradex
-    private static final List<String> DEFAULT_SYMBOLS = List.of(
-            "BTC-USD-PERP",
-            "ETH-USD-PERP",
-            "SOL-USD-PERP",
-            "RESOLV-USD-PERP"
-    );
 
     /**
      * Récupère les funding rates toutes les 10 secondes
      */
-    @Scheduled(fixedRate = 10000) // 10 secondes en millisecondes
-    public void fetchFundingRatesHourly() {
-        log.info("=== Démarrage de la récupération périodique des funding rates ===");
+    @Scheduled(fixedRate = 10000) // 10 secondes
+    public void fetchFundingRatesLoop() {
+        log.debug("=== Start periodic funding rate fetch ===");
         
-        // 1. Fetch Paradex
-        for (String symbol : DEFAULT_SYMBOLS) {
-            try {
-                paradexService.fetchAndSaveLatestFundingRate(symbol);
-                log.info("Paradex: Funding rate récupéré pour {}", symbol);
-            } catch (Exception e) {
-                log.error("Paradex: Erreur lors de la récupération pour {}: {}", 
-                        symbol, e.getMessage());
-            }
+        // 1. Fetch Paradex (Iterator based on active markets)
+        try {
+            dexRepository.findByName("Paradex").ifPresent(dex -> {
+                List<com.crypto.arbitrage.model.DexMarket> markets = dexMarketRepository.findByDexAndActiveTrue(dex);
+                if (markets.isEmpty()) {
+                    log.debug("No active markets found for Paradex, skipping.");
+                    return;
+                }
+                
+                for (com.crypto.arbitrage.model.DexMarket market : markets) {
+                    try {
+                        paradexService.fetchAndSaveLatestFundingRate(market.getSymbol());
+                    } catch (Exception e) {
+                        log.error("Paradex: Error fetching {}", market.getSymbol(), e);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            log.error("Error in Paradex fetch loop", e);
         }
         
-        // 2. Fetch Lighter (fetches all rates at once)
+        // 2. Fetch Lighter (Global fetch)
         try {
             lighterService.fetchFundingData();
-            log.info("Lighter: Funding rates global fetch completed");
         } catch (Exception e) {
-            log.error("Lighter: Erreur lors de la récupération globale: {}", e.getMessage());
+            log.error("Lighter: Error fetching data", e);
         }
-        
-        log.info("=== Fin de la récupération périodique des funding rates ===");
+
+        // 3. Fetch Hyperliquid (Global fetch)
+        try {
+            hyperliquidService.fetchFundingData();
+        } catch (Exception e) {
+            log.error("Hyperliquid: Error fetching data", e);
+        }
     }
 
-    /**
-     * Récupère les funding rates au démarrage de l'application
-     */
     @Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE)
-    public void fetchFundingRatesOnStartup() {
-        log.info("=== Récupération initiale des funding rates au démarrage ===");
-        fetchFundingRatesHourly();
+    public void onStartup() {
+        // Initial fetch logic if needed, but the loop handles it.
+        // MarketSyncService will run at 2s to populate the list.
     }
 }

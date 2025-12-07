@@ -24,6 +24,7 @@ public class FundingRateService {
 
     private final FundingRateRepository fundingRateRepository;
     private final DexRepository dexRepository;
+    private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
 
     /**
      * Récupère tous les derniers funding rates
@@ -93,6 +94,17 @@ public class FundingRateService {
         }
         
         return fundingRateRepository.findDistinctSymbolsByDex(dexOpt.get());
+    }
+
+    /**
+     * Récupère la liste globale de tous les symboles surveillés
+     */
+    public List<String> getAllMonitoredSymbols() {
+        return dexMarketRepository.findDistinctActiveSymbols();
+    }
+
+    public List<com.crypto.arbitrage.dto.MarketSymbolDTO> getAllMonitoredSymbolsWithIcons() {
+        return dexMarketRepository.findDistinctSymbolsWithIcons();
     }
 
     /**

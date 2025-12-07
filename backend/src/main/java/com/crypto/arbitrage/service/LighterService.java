@@ -102,9 +102,6 @@ public class LighterService {
         }
     }
 
-    // Symboles autorisés (comme Paradex)
-    private static final List<String> ALLOWED_TOKENS = List.of("BTC", "ETH", "SOL", "RESOLV");
-
     private FundingRate parseFundingRate(JsonNode node, Dex dex, LocalDateTime timestamp) {
         try {
             // Lighter API returns: { "market_id": 1, "symbol": "BTC_USDC", "rate": 0.0001, "exchange": "lighter" }
@@ -120,10 +117,7 @@ public class LighterService {
             // Extract base symbol (e.g. from "BTC_USDC" -> "BTC", or just "BTC")
             String baseSymbol = rawSymbol.split("_")[0];
             
-            // Filter: Strict match against allowed tokens (avoids matching ETHFI for ETH)
-            if (!ALLOWED_TOKENS.contains(baseSymbol)) {
-                return null;
-            }
+            // Removed strict filter `ALLOWED_TOKENS` to allow all tokens
 
             String symbol = baseSymbol + "-USD-PERP"; // Normalize to standardized format (e.g. BTC-USD-PERP)
             BigDecimal rate = new BigDecimal(node.get("rate").asText());

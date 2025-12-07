@@ -1,0 +1,1 @@
+ALTER TABLE dex_market ADD COLUMN icon_url VARCHAR(255);
