@@ -16,6 +16,7 @@
     "@tanstack/vue-query": "^5.92.1",
     "axios": "^1.13.2",
     "chart.js": "^4.5.1",
+    "ethers": "^6.16.0",
     "viem": "^2.41.2",
     "vue": "^3.5.24",
     "vue-chartjs": "^5.3.3",

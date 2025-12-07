@@ -19,6 +19,11 @@ const routes = [
         component: () => import('../views/Arbitrage.vue')
     },
     {
+        path: '/swap',
+        name: 'Swap',
+        component: () => import('../views/Swap.vue')
+    },
+    {
         path: '/admin',
         name: 'Admin',
         component: () => import('../views/Admin.vue'),

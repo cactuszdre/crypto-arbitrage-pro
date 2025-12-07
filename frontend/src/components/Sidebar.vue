@@ -10,6 +10,7 @@ const navItems = computed(() => {
   const items = [
     { path: '/', name: 'Overview', icon: 'lucide:layout-template' },
     { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
+    { path: '/swap', name: 'Swap', icon: 'lucide:repeat' },
   ]
   // Réactif: vérifie le state directement
   if (state.user?.role === 'ADMIN') {
