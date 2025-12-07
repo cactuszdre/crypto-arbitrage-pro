@@ -22,9 +22,7 @@ const navItems = computed(() => {
     <!-- Logo -->
     <div class="p-6 mb-2">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-xl bg-white text-black flex items-center justify-center shadow-lg shadow-white/5">
-          <span class="iconify" data-icon="lucide:infinity" data-width="16"></span>
-        </div>
+        <img src="@/assets/logo.png" alt="CactusFund Logo" class="w-8 h-8 rounded-xl shadow-lg shadow-green-500/20" />
         <span class="hidden lg:block text-sm font-semibold tracking-tight text-white">CactusFund</span>
       </div>
     </div>
