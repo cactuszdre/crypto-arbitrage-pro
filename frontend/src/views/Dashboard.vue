@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { fundingRateApi } from '../services/api'
 import FundingRateChart from '../components/FundingRateChart.vue'
 
@@ -28,6 +28,18 @@ const otherSymbols = computed(() => {
     .filter(s => !['BTC-USD-PERP', 'ETH-USD-PERP', 'SOL-USD-PERP'].includes(s.symbol))
     .sort((a, b) => a.symbol.localeCompare(b.symbol))
 })
+
+// Crypto brand colors
+const cryptoColors = {
+  'BTC': '#F7931A',
+  'ETH': '#627EEA', 
+  'SOL': '#14F195'
+}
+
+const getCryptoColor = (symbol) => {
+  const base = symbol?.replace(/-USD-PERP$/i, '').replace(/-PERP$/i, '').toUpperCase()
+  return cryptoColors[base] || '#6366F1'
+}
 
 // Helper to get fallback icon URL from GitHub crypto-icons
 const getFallbackIcon = (symbol) => {
@@ -93,146 +105,183 @@ const fetchLatestRate = async (symbolStr) => {
   }
 }
 
+// Dropdown state
+const showDropdown = ref(false)
+
+// Auto-refresh every 10 seconds
+let refreshInterval = null
+
 onMounted(() => {
   fetchData()
+  refreshInterval = setInterval(() => {
+    fetchData()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
 })
 </script>
 
 <template>
-  <!-- Highlight Cards -->
+  <!-- Metrics Grid -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <!-- Card 1: Current Funding Rate -->
-    <div class="glass-card p-6 rounded-3xl relative group overflow-hidden">
-      <div class="absolute top-0 right-0 p-6 opacity-50 group-hover:opacity-100 transition-opacity">
-        <span class="iconify text-white/10 group-hover:text-indigo-500/20 transform group-hover:scale-110 transition-all duration-500" data-icon="lucide:activity" data-width="64"></span>
+    <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+      <div class="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors"></div>
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Current Funding Rate</h3>
+        <svg class="w-5 h-5 text-indigo-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
       </div>
-      <div class="relative z-10">
-        <p class="text-xs font-medium text-neutral-400 uppercase tracking-wide">Current Funding Rate</p>
-        <h2 class="text-3xl font-semibold text-white mt-2 tracking-tight">
+      <div class="flex items-baseline gap-2">
+        <span class="text-3xl font-semibold text-white tracking-tight">
           {{ latestRate ? (latestRate.rate * 100).toFixed(6) + '%' : '--' }}
-        </h2>
-        <div class="flex items-center gap-2 mt-4">
-          <span 
-            v-if="latestRate"
-            :class="[
-              'text-[10px] font-medium px-2 py-1 rounded-full border',
-              latestRate.rate > 0 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 
-                : 'bg-red-500/10 text-red-400 border-red-500/10'
-            ]"
-          >
-            {{ latestRate.rate > 0 ? 'Longs pay Shorts' : 'Shorts pay Longs' }}
-          </span>
-        </div>
+        </span>
+      </div>
+      <div class="mt-4 flex items-center gap-2">
+        <span 
+          v-if="latestRate"
+          :class="[
+            'px-2 py-1 rounded text-xs font-medium border',
+            latestRate.rate > 0 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+              : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+          ]"
+        >
+          {{ latestRate.rate > 0 ? 'Longs pay Shorts' : 'Shorts pay Longs' }}
+        </span>
       </div>
     </div>
 
     <!-- Card 2: 8h Rate -->
-    <div class="glass-card p-6 rounded-3xl relative group overflow-hidden">
-      <div class="absolute top-0 right-0 p-6 opacity-50 group-hover:opacity-100 transition-opacity">
-        <span class="iconify text-white/10 group-hover:text-blue-500/20 transform group-hover:scale-110 transition-all duration-500" data-icon="lucide:clock" data-width="64"></span>
+    <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+      <div class="absolute right-0 top-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-500">8H Funding Rate</h3>
+        <svg class="w-5 h-5 text-orange-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
       </div>
-      <div class="relative z-10">
-        <p class="text-xs font-medium text-neutral-400 uppercase tracking-wide">8H Funding Rate</p>
-        <h2 class="text-3xl font-semibold text-white mt-2 tracking-tight">
+      <div class="flex items-baseline gap-2">
+        <span class="text-3xl font-semibold text-white tracking-tight">
           {{ latestRate ? latestRate.rate8h?.toFixed(4) + '%' : '--' }}
-        </h2>
-        <div class="flex items-center gap-2 mt-4">
-          <span class="text-xs text-neutral-500">{{ latestRate?.dexName || 'Paradex' }}</span>
-          <span class="iconify text-white" data-icon="lucide:arrow-right" data-width="12"></span>
-          <!-- Dynamic Icon in Card -->
-          <div class="flex items-center gap-1">
-             <img 
-                v-if="selectedSymbolObj?.iconUrl" 
-                :src="selectedSymbolObj.iconUrl" 
-                class="w-3 h-3 rounded-full"
-                @error="$event.target.style.display='none'"
-             />
-             <span class="text-xs text-white">{{ selectedSymbol }}</span>
-          </div>
-        </div>
+        </span>
+      </div>
+      <div class="mt-4 flex items-center gap-2 text-xs text-neutral-500">
+        <span>{{ latestRate?.dexName || 'Paradex' }}</span>
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+        </svg>
+        <span class="text-orange-300 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+          {{ selectedSymbol }}
+        </span>
       </div>
     </div>
 
     <!-- Card 3: Annual Rate -->
-    <div class="glass-card p-6 rounded-3xl relative group overflow-hidden">
-      <div class="absolute top-0 right-0 p-6 opacity-50 group-hover:opacity-100 transition-opacity">
-        <span class="iconify text-white/10 group-hover:text-purple-500/20 transform group-hover:scale-110 transition-all duration-500" data-icon="lucide:trending-up" data-width="64"></span>
+    <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+      <div class="absolute right-0 top-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors"></div>
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Annualized Rate</h3>
+        <svg class="w-5 h-5 text-emerald-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
       </div>
-      <div class="relative z-10">
-        <p class="text-xs font-medium text-neutral-400 uppercase tracking-wide">Annualized Rate</p>
-        <h2 class="text-3xl font-semibold text-white mt-2 tracking-tight">
+      <div class="flex items-baseline gap-2">
+        <span class="text-3xl font-semibold text-white tracking-tight">
           {{ latestRate ? latestRate.rateAnnual?.toFixed(2) + '%' : '--' }}
-        </h2>
-        <div class="flex items-center gap-2 mt-4">
-          <span 
-            :class="[
-              'text-[10px] font-medium px-2 py-1 rounded-full border',
-              latestRate && latestRate.rateAnnual > 0 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 
-                : 'bg-red-500/10 text-red-400 border-red-500/10'
-            ]"
-          >
-            {{ latestRate && latestRate.rateAnnual > 0 ? 'Bullish' : 'Bearish' }}
-          </span>
-        </div>
+        </span>
+      </div>
+      <div class="mt-4 flex items-center gap-2">
+        <span 
+          :class="[
+            'px-2 py-1 rounded text-xs font-medium border',
+            latestRate && latestRate.rateAnnual > 0 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+              : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+          ]"
+        >
+          {{ latestRate && latestRate.rateAnnual > 0 ? 'Bullish' : 'Bearish' }}
+        </span>
       </div>
     </div>
   </div>
 
-  <!-- Symbol Selector -->
-  <div class="glass-card rounded-3xl p-6 mb-6">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-base font-medium text-white">Select Asset to Monitor</h3>
-      <span class="text-xs text-neutral-500">{{ symbols.length }} Assets Available</span>
-    </div>
-    
-    <div class="flex flex-col gap-4">
-      <!-- Major Assets (Pinned) -->
-      <div class="flex flex-wrap gap-3">
-         <button 
+  <!-- Control Bar -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+    <div class="space-y-3">
+      <h2 class="text-lg font-medium text-white tracking-tight">Select Asset to Monitor</h2>
+      <div class="flex items-center gap-3 flex-wrap">
+        <!-- Pinned Assets (Pills) -->
+        <button 
           v-for="item in pinnedSymbols" 
           :key="item.symbol"
           @click="fetchLatestRate(item.symbol)"
           :class="[
-            'px-4 py-2 text-xs font-medium rounded-xl transition-all cursor-pointer border',
+            'flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all',
             selectedSymbol === item.symbol 
-              ? 'bg-white text-black border-white shadow-lg shadow-white/10' 
-              : 'glass-card text-neutral-300 border-white/5 hover:border-white/20 hover:text-white hover:bg-white/5'
+              ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105' 
+              : 'bg-white/5 border border-white/5 text-neutral-400 hover:bg-white/10 hover:text-white hover:border-white/20'
           ]"
         >
-          <div class="flex items-center gap-2">
+          <span 
+            class="w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white font-bold"
+            :style="{ backgroundColor: getCryptoColor(item.symbol) }"
+          >
+            {{ item.symbol.charAt(0) }}
+          </span>
+          {{ item.symbol.replace('-USD-PERP', '') }}
+        </button>
+
+        <!-- Separator -->
+        <div class="w-px h-6 bg-white/10 mx-1 hidden md:block"></div>
+
+        <!-- Dropdown for other assets -->
+        <div class="relative">
+          <button 
+            @click="showDropdown = !showDropdown"
+            class="flex items-center justify-between w-40 px-3 py-2 rounded-lg bg-neutral-900/50 border border-white/10 text-sm text-neutral-400 hover:border-white/20 hover:text-white transition-colors"
+          >
+            <span>Select Asset</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
+          
+          <!-- Dropdown Panel -->
+          <div 
+            v-if="showDropdown" 
+            class="absolute left-0 top-full mt-2 w-56 max-h-64 overflow-y-auto bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50"
+          >
+            <button 
+              v-for="item in otherSymbols" 
+              :key="item.symbol"
+              @click="fetchLatestRate(item.symbol); showDropdown = false"
+              :class="[
+                'w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors',
+                selectedSymbol === item.symbol 
+                  ? 'bg-indigo-500/20 text-white' 
+                  : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+              ]"
+            >
               <img 
                 :src="item.iconUrl || getFallbackIcon(item.symbol)" 
-                class="w-4 h-4 rounded-full bg-neutral-800"
-                @error="$event.target.style.display='none'" 
+                class="w-5 h-5 rounded-full bg-neutral-800"
+                @error="$event.target.style.display='none'"
               />
               {{ item.symbol.replace('-USD-PERP', '') }}
+            </button>
           </div>
-        </button>
-      </div>
-
-      <!-- Searchable Dropdown for others -->
-      <div class="relative">
-        <select 
-          v-model="selectedSymbol"
-          @change="fetchLatestRate(selectedSymbol)"
-          class="w-full md:w-64 appearance-none bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-colors cursor-pointer hover:bg-black/30"
-        >
-          <option value="" disabled>Select other asset...</option>
-          <option 
-            v-for="item in otherSymbols" 
-            :key="item.symbol" 
-            :value="item.symbol"
-            class="bg-neutral-900 text-white"
-          >
-            {{ item.symbol.replace('-USD-PERP', '') }}
-          </option>
-        </select>
-        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-neutral-400 md:right-auto md:left-56">
-          <span class="iconify" data-icon="lucide:chevron-down" data-width="16"></span>
         </div>
       </div>
+    </div>
+    <div class="flex items-end">
+      <p class="text-xs text-neutral-600 font-mono">{{ symbols.length }} Assets Available</p>
     </div>
   </div>
 

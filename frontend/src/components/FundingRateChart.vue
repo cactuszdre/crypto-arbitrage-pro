@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { fundingRateApi } from '../services/api'
 import {
   Chart as ChartJS,
@@ -9,7 +9,8 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
 
@@ -20,7 +21,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 )
 
 const props = defineProps({
@@ -31,6 +33,8 @@ const props = defineProps({
 })
 
 const loading = ref(true)
+const isInitialLoad = ref(true)
+const chartKey = ref(0) // Used to force chart re-render
 const historyData = ref([])
 const selectedDex = ref('All') // 'All', 'Paradex', 'Lighter', 'Hyperliquid'
 const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
@@ -72,8 +76,11 @@ const aggregateByMinute = (data) => {
   return Array.from(buckets.values())
 }
 
-const fetchData = async () => {
-  loading.value = true
+// Fetch data with optional silent mode (no loading spinner)
+const fetchData = async (silent = false) => {
+  if (!silent) {
+    loading.value = true
+  }
   try {
     const data = []
     
@@ -122,14 +129,37 @@ const fetchData = async () => {
     // Aggregate by minute and sort by timestamp asc
     const aggregated = aggregateByMinute(data)
     historyData.value = aggregated.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    
+    // Increment key to force chart re-render
+    chartKey.value++
   } catch (error) {
     console.error('Failed to fetch history:', error)
   } finally {
     loading.value = false
+    isInitialLoad.value = false
   }
 }
 
-watch(() => [props.symbol, selectedDex.value], fetchData, { immediate: true })
+// Watch for prop/selection changes - show loading on these
+watch(() => [props.symbol, selectedDex.value], () => fetchData(false), { immediate: true })
+
+// Auto-refresh every 10 seconds (silent - no loading spinner)
+let refreshInterval = null
+onMounted(() => {
+  console.log('[Chart] Setting up auto-refresh interval (10s)')
+  refreshInterval = setInterval(() => {
+    console.log('[Chart] Auto-refreshing data...')
+    fetchData(true) // Silent refresh
+  }, 10000)
+})
+
+onUnmounted(() => {
+  console.log('[Chart] Cleaning up refresh interval')
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+})
 
 // Unified Timeline with aggregated data
 const unifiedChartData = computed(() => {
@@ -152,12 +182,17 @@ const unifiedChartData = computed(() => {
         return {
             label: dexName,
             borderColor: color,
-            backgroundColor: color,
+            backgroundColor: 'transparent',
             data: metricsData,
             tension: 0.4,
             spanGaps: true,
             pointRadius: 2,
-            borderWidth: 2
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor: '#000',
+            pointHoverBorderWidth: 2,
+            borderWidth: 2.5,
+            fill: false
         }
     }
     
@@ -175,64 +210,105 @@ const unifiedChartData = computed(() => {
     return { labels, datasets }
 })
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  animation: {
+    duration: isInitialLoad.value ? 750 : 0 // Animation only on first load
+  },
+  interaction: {
+    mode: 'index',
+    intersect: false
+  },
   plugins: {
     legend: {
-      labels: { color: '#9CA3AF' }
+      display: false 
     },
     tooltip: {
-      mode: 'index',
-      intersect: false
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      titleColor: '#fff',
+      bodyColor: '#9CA3AF',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      borderWidth: 1,
+      cornerRadius: 8,
+      padding: 12,
+      displayColors: true,
+      boxPadding: 4,
+      animation: false // No tooltip animation for snappy feel
     }
   },
   scales: {
     y: {
-      grid: { color: 'rgba(255, 255, 255, 0.1)' },
-      ticks: { color: '#9CA3AF' }
+      grid: { 
+        color: 'rgba(255, 255, 255, 0.05)',
+        drawBorder: false
+      },
+      ticks: { 
+        color: '#6B7280',
+        font: { size: 10 },
+        padding: 8
+      },
+      border: {
+        display: false
+      }
     },
     x: {
-      grid: { display: false },
+      grid: { 
+        display: false 
+      },
       ticks: { 
-        color: '#9CA3AF',
-        maxTicksLimit: 12 // Limit number of x-axis labels for readability
+        color: '#6B7280',
+        font: { size: 10 },
+        maxTicksLimit: 12,
+        maxRotation: 45
+      },
+      border: {
+        display: false
       }
     }
   }
-}
+}))
 </script>
 
 <template>
-  <div class="glass-card rounded-3xl p-6">
-    <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-      <h3 class="text-lg font-medium text-white">Funding Rate History</h3>
+  <div class="glass-card rounded-2xl p-6 md:p-8 min-h-[500px] flex flex-col relative">
+    <!-- Chart Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+      <h2 class="text-lg font-medium text-white tracking-tight">Funding Rate History</h2>
       
-      <div class="flex flex-wrap gap-2">
+      <!-- Controls -->
+      <div class="flex items-center gap-4 bg-black/40 rounded-lg p-1 border border-white/5">
         <!-- DEX Tabs -->
-        <div class="bg-white/5 rounded-lg p-1 flex">
+        <div class="flex items-center">
           <button 
             v-for="dex in dexes" 
             :key="dex"
             @click="selectedDex = dex"
             :class="[
-              'px-3 py-1 text-xs font-medium rounded-md transition-all',
-              selectedDex === dex ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+              'px-3 py-1.5 rounded-md text-xs font-medium transition-all',
+              selectedDex === dex 
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' 
+                : 'text-neutral-500 hover:text-white'
             ]"
           >
             {{ dex }}
           </button>
         </div>
-
+        
+        <!-- Separator -->
+        <div class="w-px h-4 bg-white/10"></div>
+        
         <!-- Metric Tabs -->
-        <div class="bg-white/5 rounded-lg p-1 flex">
+        <div class="flex items-center">
           <button 
             v-for="metric in metrics" 
             :key="metric.value"
             @click="selectedMetric = metric.value"
             :class="[
-              'px-3 py-1 text-xs font-medium rounded-md transition-all',
-              selectedMetric === metric.value ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+              'px-3 py-1.5 rounded-md text-xs font-medium transition-all',
+              selectedMetric === metric.value 
+                ? 'bg-white/10 text-white border border-white/10' 
+                : 'text-neutral-500 hover:text-white'
             ]"
           >
             {{ metric.label }}
@@ -241,8 +317,32 @@ const chartOptions = {
       </div>
     </div>
 
-    <!-- Chart -->
-    <div class="h-[300px] w-full">
+    <!-- Custom Legend -->
+    <div class="absolute top-20 md:top-24 right-6 md:right-8 flex items-center gap-4 text-xs z-10">
+      <div v-if="selectedDex === 'All' || selectedDex === 'Paradex'" class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
+        <span class="text-neutral-400">Paradex</span>
+      </div>
+      <div v-if="selectedDex === 'All' || selectedDex === 'Lighter'" class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span>
+        <span class="text-neutral-400">Lighter</span>
+      </div>
+      <div v-if="selectedDex === 'All' || selectedDex === 'Hyperliquid'" class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
+        <span class="text-neutral-400">Hyperliquid</span>
+      </div>
+    </div>
+
+    <!-- Loading State (only on initial load) -->
+    <div v-if="loading && isInitialLoad" class="flex-1 flex items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-sm text-neutral-500">Loading chart data...</span>
+      </div>
+    </div>
+
+    <!-- Chart (show after initial load, even during background refresh) -->
+    <div v-else class="flex-1 relative w-full min-h-[360px] mt-4">
       <Line :data="unifiedChartData" :options="chartOptions" />
     </div>
   </div>

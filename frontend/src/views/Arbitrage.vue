@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { arbitrageApi } from '../services/api'
 
 const opportunities = ref([])
@@ -21,6 +21,59 @@ const periodOptions = [
   { value: '30d', label: '30 Days Avg' }
 ]
 
+// DEX filter - all DEXes selected by default
+const selectedDexes = ref([]) // Will be initialized with all DEXes on mount
+const showDexFilter = ref(false)
+const dexFilterInitialized = ref(false)
+
+// Get unique DEXes from opportunities
+const availableDexes = computed(() => {
+  const dexSet = new Set()
+  opportunities.value.forEach(opp => {
+    if (opp.longDex) dexSet.add(opp.longDex)
+    if (opp.shortDex) dexSet.add(opp.shortDex)
+  })
+  return Array.from(dexSet).sort()
+})
+
+// Initialize selectedDexes with all available DEXes when data loads
+watch(availableDexes, (newDexes) => {
+  if (!dexFilterInitialized.value && newDexes.length > 0) {
+    selectedDexes.value = [...newDexes]
+    dexFilterInitialized.value = true
+  }
+}, { immediate: true })
+
+// Toggle DEX selection - simple add/remove
+const toggleDex = (dex) => {
+  const index = selectedDexes.value.indexOf(dex)
+  if (index === -1) {
+    selectedDexes.value.push(dex)
+  } else {
+    selectedDexes.value.splice(index, 1)
+  }
+}
+
+// Check if DEX is selected
+const isDexSelected = (dex) => {
+  return selectedDexes.value.includes(dex)
+}
+
+// Check if we have enough DEXes selected (need at least 2 for arbitrage)
+const hasEnoughDexes = computed(() => {
+  return selectedDexes.value.length >= 2
+})
+
+// Select all DEXes
+const selectAllDexes = () => {
+  selectedDexes.value = [...availableDexes.value]
+}
+
+// Deselect all DEXes
+const deselectAllDexes = () => {
+  selectedDexes.value = []
+}
+
 // Toggle sort on column click
 const toggleSort = (column) => {
   if (sortColumn.value === column) {
@@ -33,15 +86,29 @@ const toggleSort = (column) => {
   }
 }
 
-// Get sort icon for column
-const getSortIcon = (column) => {
-  if (sortColumn.value !== column) return '↕️'
-  return sortDirection.value === 'asc' ? '↑' : '↓'
+// Get sort state for column (returns 'neutral', 'asc', or 'desc')
+const getSortState = (column) => {
+  if (sortColumn.value !== column) return 'neutral'
+  return sortDirection.value
 }
 
-// Filter opportunities based on search query
+// Filter opportunities based on search query and DEX filter
 const filteredOpportunities = computed(() => {
+  // If less than 2 DEXes selected, return empty (need at least 2 for arbitrage)
+  if (selectedDexes.value.length < 2) {
+    return []
+  }
+  
   let result = opportunities.value
+  
+  // Apply DEX filter - only show opportunities where BOTH dexes are selected
+  // Always apply if not all DEXes are selected
+  if (selectedDexes.value.length < availableDexes.value.length) {
+    result = result.filter(opp => 
+      selectedDexes.value.includes(opp.longDex) && 
+      selectedDexes.value.includes(opp.shortDex)
+    )
+  }
   
   // Apply search filter
   if (searchQuery.value.trim()) {
@@ -170,13 +237,30 @@ const formatRate = (rate) => {
   return { value: formatted, class: 'text-neutral-400' }
 }
 
-onMounted(async () => {
-    try {
-        const response = await arbitrageApi.getOpportunities()
-        opportunities.value = response.data
-    } catch (error) {
-        console.error('Failed to fetch opportunities:', error)
-    }
+// Fetch opportunities
+const fetchOpportunities = async () => {
+  try {
+    const response = await arbitrageApi.getOpportunities()
+    opportunities.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch opportunities:', error)
+  }
+}
+
+// Auto-refresh every 10 seconds
+let refreshInterval = null
+
+onMounted(() => {
+  fetchOpportunities()
+  refreshInterval = setInterval(() => {
+    fetchOpportunities()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
 })
 </script>
 
@@ -240,26 +324,128 @@ onMounted(async () => {
             <span v-if="selectedPeriod !== 'current'" class="text-[10px] text-neutral-600 ml-2">
               (Avg data coming soon)
             </span>
+            
+            <!-- DEX Filter Dropdown -->
+            <div class="relative ml-auto">
+              <button 
+                @click="showDexFilter = !showDexFilter"
+                :class="[
+                  'flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all',
+                  !hasEnoughDexes 
+                    ? 'bg-red-500/10 text-red-400 border-red-500/30' 
+                    : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                ]"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                </svg>
+                DEX Filter
+                <span 
+                  v-if="selectedDexes.length !== availableDexes.length" 
+                  :class="[
+                    'text-[10px] px-1.5 py-0.5 rounded-full',
+                    hasEnoughDexes ? 'bg-indigo-500 text-white' : 'bg-red-500 text-white'
+                  ]"
+                >
+                  {{ selectedDexes.length }}/{{ availableDexes.length }}
+                </span>
+                <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showDexFilter }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+              
+              <!-- Dropdown Panel -->
+              <div 
+                v-if="showDexFilter" 
+                class="absolute right-0 top-full mt-2 w-56 bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden"
+              >
+                <div class="p-2 border-b border-white/5 flex gap-2">
+                  <button 
+                    @click="selectAllDexes"
+                    class="flex-1 px-3 py-2 text-xs text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    Select All
+                  </button>
+                  <button 
+                    @click="deselectAllDexes"
+                    class="flex-1 px-3 py-2 text-xs text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+                
+                <!-- Warning message -->
+                <div v-if="!hasEnoughDexes" class="p-2 bg-red-500/10 border-b border-red-500/20">
+                  <p class="text-[10px] text-red-400 text-center">
+                    <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    Sélectionnez au moins 2 DEX
+                  </p>
+                </div>
+                
+                <div class="p-2 max-h-48 overflow-y-auto">
+                  <label 
+                    v-for="dex in availableDexes" 
+                    :key="dex"
+                    class="flex items-center gap-3 px-3 py-2 text-xs hover:bg-white/5 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <input 
+                      type="checkbox" 
+                      :checked="isDexSelected(dex)"
+                      @change="toggleDex(dex)"
+                      class="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500/50"
+                    >
+                    <span :class="isDexSelected(dex) ? 'text-white' : 'text-neutral-500'">{{ dex }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
         <!-- Empty State: No data at all -->
         <div v-if="opportunities.length === 0" class="p-12 text-center">
-          <span class="text-neutral-600 mb-4 text-5xl">📭</span>
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+            <svg class="w-8 h-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+            </svg>
+          </div>
           <p class="text-neutral-500 text-sm">Pas assez de données pour le moment</p>
           <p class="text-neutral-600 text-xs mt-1">Attendez le prochain cycle de fetch ou ajoutez plus de DEX</p>
         </div>
 
-        <!-- Empty State: No search results -->
-        <div v-else-if="filteredOpportunities.length === 0" class="p-12 text-center">
-          <span class="text-neutral-600 mb-4 text-5xl">🔍</span>
-          <p class="text-neutral-500 text-sm">Aucun résultat pour "{{ searchQuery }}"</p>
-          <p class="text-neutral-600 text-xs mt-1">Essayez un autre ticker ou nom de DEX</p>
+        <!-- Empty State: Not enough DEXes selected -->
+        <div v-else-if="!hasEnoughDexes" class="p-12 text-center">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
+            <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          </div>
+          <p class="text-neutral-500 text-sm">Sélectionnez au moins 2 DEX</p>
+          <p class="text-neutral-600 text-xs mt-1">L'arbitrage nécessite au moins 2 plateformes pour comparer les taux</p>
           <button 
-            @click="searchQuery = ''; handleSearch()"
+            @click="selectAllDexes"
             class="mt-4 px-4 py-2 text-xs font-medium text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/10 transition-colors"
           >
-            Effacer la recherche
+            Sélectionner tous les DEX
+          </button>
+        </div>
+
+        <!-- Empty State: No search results -->
+        <div v-else-if="filteredOpportunities.length === 0" class="p-12 text-center">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
+            <svg class="w-8 h-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+          <p class="text-neutral-500 text-sm">Aucun résultat trouvé</p>
+          <p class="text-neutral-600 text-xs mt-1">Essayez un autre ticker ou modifiez les filtres DEX</p>
+          <button 
+            @click="searchQuery = ''; selectAllDexes(); handleSearch()"
+            class="mt-4 px-4 py-2 text-xs font-medium text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/10 transition-colors"
+          >
+            Réinitialiser les filtres
           </button>
         </div>
 
@@ -272,7 +458,15 @@ onMounted(async () => {
               >
                 <span class="flex items-center gap-1">
                   Pair
-                  <span class="text-[8px]">{{ getSortIcon('symbol') }}</span>
+                  <svg v-if="getSortState('symbol') === 'neutral'" class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                  </svg>
+                  <svg v-else-if="getSortState('symbol') === 'asc'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
                 </span>
               </th>
               <th class="px-6 py-4 font-medium">Route</th>
@@ -282,7 +476,15 @@ onMounted(async () => {
               >
                 <span class="flex items-center gap-1">
                   Long Rate
-                  <span class="text-[8px]">{{ getSortIcon('longRate') }}</span>
+                  <svg v-if="getSortState('longRate') === 'neutral'" class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                  </svg>
+                  <svg v-else-if="getSortState('longRate') === 'asc'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
                 </span>
               </th>
               <th 
@@ -291,7 +493,15 @@ onMounted(async () => {
               >
                 <span class="flex items-center gap-1">
                   Short Rate
-                  <span class="text-[8px]">{{ getSortIcon('shortRate') }}</span>
+                  <svg v-if="getSortState('shortRate') === 'neutral'" class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                  </svg>
+                  <svg v-else-if="getSortState('shortRate') === 'asc'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
                 </span>
               </th>
               <th 
@@ -300,7 +510,15 @@ onMounted(async () => {
               >
                 <span class="flex items-center gap-1">
                   Daily Return
-                  <span class="text-[8px]">{{ getSortIcon('projectedDailyReturn') }}</span>
+                  <svg v-if="getSortState('projectedDailyReturn') === 'neutral'" class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                  </svg>
+                  <svg v-else-if="getSortState('projectedDailyReturn') === 'asc'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
                 </span>
               </th>
               <th class="px-6 py-4 font-medium text-right"></th>
@@ -360,7 +578,9 @@ onMounted(async () => {
               </td>
               <td class="px-6 py-4 text-right">
                 <button class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors">
-                  ▶️
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
                 </button>
               </td>
             </tr>
@@ -386,23 +606,6 @@ onMounted(async () => {
           >
             Next
           </button>
-        </div>
-      </div>
-
-      <!-- Strategy Explanation -->
-      <div class="glass-card rounded-3xl p-6">
-        <h3 class="text-base font-medium text-white mb-4">Funding Rate Arbitrage Strategy</h3>
-        <div class="space-y-4 text-sm text-neutral-400">
-          <p>
-            <span class="text-white font-medium">Principe:</span> Profiter des différences de funding rates entre DEX.
-          </p>
-          <div class="p-4 bg-white/5 rounded-xl border border-white/5">
-            <p class="text-xs font-mono">
-              <span class="text-emerald-400">LONG</span> sur le DEX avec le funding le plus négatif<br>
-              <span class="text-red-400">SHORT</span> sur l'autre DEX<br>
-              <span class="text-indigo-400">PROFIT</span> = |rate1| + |rate2| (si les deux sont négatifs)
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -435,7 +638,9 @@ onMounted(async () => {
           <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-                ⚡
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M11.983 1.907a.75.75 0 00-1.292-.657l-8.5 9.5A.75.75 0 002.75 12h6.572l-1.305 6.093a.75.75 0 001.292.657l8.5-9.5A.75.75 0 0017.25 8h-6.572l1.305-6.093z"/>
+                </svg>
               </div>
               <div class="flex flex-col">
                 <span class="text-xs font-medium text-white">Auto-Pilot</span>
