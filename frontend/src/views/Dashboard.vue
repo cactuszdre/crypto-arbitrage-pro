@@ -44,8 +44,8 @@ const getCryptoColor = (symbol) => {
 // Helper to get fallback icon URL from GitHub crypto-icons
 const getFallbackIcon = (symbol) => {
   if (!symbol) return null
-  const base = symbol.replace(/-USD-PERP$/i, '').replace(/-PERP$/i, '').toLowerCase()
-  return `https://img.logo.dev/crypto/${base}?token=pk_UVWGxI47TA-3_B2HalawKQ`
+  const base = symbol.replace(/-USD-PERP$/i, '').replace(/-PERP$/i, '').toUpperCase()
+  return `https://app.paradex.trade/static/market/${base}.svg`
 }
 
 // Deduplicate symbols and ensure icon URLs
@@ -55,7 +55,7 @@ const processSymbols = (rawSymbols) => {
     if (!seen.has(item.symbol)) {
       seen.set(item.symbol, {
         symbol: item.symbol,
-        iconUrl: item.iconUrl || getFallbackIcon(item.symbol)
+        iconUrl: getFallbackIcon(item.symbol)
       })
     } else if (!seen.get(item.symbol).iconUrl && item.iconUrl) {
       // Update if current has no icon but this one does

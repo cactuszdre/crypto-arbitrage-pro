@@ -205,15 +205,16 @@ const getBaseSymbol = (symbol) => {
 }
 
 // Get crypto icon URL with multiple fallback sources
+// Get crypto icon URL with multiple fallback sources
 const getCryptoIcon = (symbol) => {
-  const base = getBaseSymbol(symbol)
-  return `https://img.logo.dev/crypto/${base}?token=pk_UVWGxI47TA-3_B2HalawKQ`
+  const base = getBaseSymbol(symbol).toUpperCase()
+  return `https://app.paradex.trade/static/market/${base}.svg`
 }
 
 // Fallback icon using crypto-icons (GitHub hosted, very reliable)
 const getFallbackIcon = (symbol) => {
-  const base = getBaseSymbol(symbol)
-  return `https://img.logo.dev/crypto/${base}?token=pk_UVWGxI47TA-3_B2HalawKQ`
+  const base = getBaseSymbol(symbol).toUpperCase()
+  return `https://app.paradex.trade/static/market/${base}.svg`
 }
 
 // Handle image load error - mark as failed
@@ -556,7 +557,7 @@ onUnmounted(() => {
                       v-if="!isImageFailed(opp.symbol)"
                       :src="getFallbackIcon(opp.symbol)"
                       :alt="getBaseSymbol(opp.symbol)"
-                      class="w-6 h-6 rounded-full border border-black grayscale group-hover:grayscale-0 transition-all bg-neutral-800"
+                      class="w-6 h-6 rounded-full border border-black transition-all bg-neutral-800"
                       @error="(e) => handleImageError(opp.symbol, e)"
                     >
                     <!-- Fallback: styled letter placeholder -->
