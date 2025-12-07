@@ -2,9 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, unref } from 'vue'
 import { arbitrageApi } from '../services/api'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
-import { executeHyperliquidOrder } from '../services/hyperliquid'
-import { executeParadexOrder } from '../services/paradex'
-import { executeLighterOrder } from '../services/lighter'
+import { executeHyperliquidOrder, executeParadexOrder, executeLighterOrder } from '../services/execution'
 
 const opportunities = ref([])
 const currentPage = ref(1)
@@ -732,150 +730,81 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Trade Execution Panel -->
-    <div class="glass-card rounded-3xl p-6 flex flex-col h-full border border-white/10 relative overflow-hidden">
+    <!-- Trade Execution Panel - PRO ONLY -->
+    <div class="glass-card rounded-3xl p-6 flex flex-col h-full border border-amber-500/20 relative overflow-hidden">
       <!-- Background Glow -->
-      <div v-if="selectedOpportunity" class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
+      <div class="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -z-10"></div>
 
       <h3 class="text-base font-medium text-white mb-6 flex items-center gap-2">
-        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
         </svg>
         Arbitrage Execution
+        <span class="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full">
+          Pro
+        </span>
       </h3>
       
-      <div v-if="selectedOpportunity" class="flex-1 flex flex-col">
-        <!-- Strategy Header -->
-        <div class="mb-6 p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
-           <div>
-              <div class="text-lg font-bold text-white tracking-wide">{{ selectedOpportunity.symbol }}</div>
-              <div class="text-xs text-neutral-400 mt-1">Neutral Strategy</div>
-           </div>
-           
-           <div class="text-right">
-             <div class="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-1 rounded">
-                +{{ (selectedOpportunity.projectedDailyReturn || 0).toFixed(4) }}% / day
-             </div>
-           </div>
+      <!-- Pro Upgrade CTA -->
+      <div class="flex-1 flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-amber-500/5 to-orange-500/5 border border-amber-500/20 rounded-2xl">
+        <!-- Lock Icon -->
+        <div class="w-16 h-16 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-full flex items-center justify-center mb-5 ring-2 ring-amber-500/30">
+          <svg class="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+          </svg>
         </div>
-
-        <!-- Dual Legs -->
-        <div class="space-y-4 mb-6">
-            <!-- Leg A: Long -->
-            <div class="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl relative group">
-                <div class="absolute -left-1 top-4 w-2 h-8 bg-emerald-500 rounded-r opacity-50"></div>
-                
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Long Leg (Buy)</span>
-                    <span class="text-[10px] text-neutral-500 font-mono">{{ selectedOpportunity.longDex }}</span>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                     <span class="text-sm text-white">Market Order</span>
-                     
-                     <!-- Status Leg A -->
-                     <span v-if="executionLogA" :class="['text-xs px-2 py-0.5 rounded', executionLogA.success ? 'bg-emerald-500 text-white' : executionLogA.success === false ? 'bg-red-500 text-white' : 'bg-yellow-500/20 text-yellow-400']">
-                        {{ executionLogA.success ? 'FILLED' : (executionLogA.success === false ? 'FAILED' : 'PENDING') }}
-                     </span>
-                     <span v-else class="text-xs text-neutral-600">Ready</span>
-                </div>
-                <!-- Error Message A -->
-                <div v-if="executionLogA && executionLogA.success === false" class="mt-2 text-[10px] text-red-400 bg-red-950/30 p-1.5 rounded border border-red-500/20">
-                    {{ executionLogA.message }}
-                </div>
-            </div>
-
-            <!-- Loop Icon -->
-            <div class="flex justify-center -my-2 relative z-10">
-                <div class="bg-[#0f0f13] border border-white/10 rounded-full p-1.5 shadow-xl">
-                    <svg class="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                    </svg>
-                </div>
-            </div>
-
-            <!-- Leg B: Short -->
-            <div class="p-3 bg-red-500/5 border border-red-500/20 rounded-xl relative">
-                <div class="absolute -left-1 top-4 w-2 h-8 bg-red-500 rounded-r opacity-50"></div>
-
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-xs font-bold text-red-400 uppercase tracking-wider">Short Leg (Sell)</span>
-                    <span class="text-[10px] text-neutral-500 font-mono">{{ selectedOpportunity.shortDex }}</span>
-                </div>
-
-                <div class="flex items-center justify-between">
-                     <span class="text-sm text-white">Market Order</span>
-
-                     <!-- Status Leg B -->
-                     <span v-if="executionLogB" :class="['text-xs px-2 py-0.5 rounded', executionLogB.success ? 'bg-emerald-500 text-white' : executionLogB.success === false ? 'bg-red-500 text-white' : 'bg-yellow-500/20 text-yellow-400']">
-                        {{ executionLogB.success ? 'FILLED' : (executionLogB.success === false ? 'FAILED' : 'PENDING') }}
-                     </span>
-                     <span v-else class="text-xs text-neutral-600">Ready</span>
-                </div>
-                 <!-- Error Message B -->
-                <div v-if="executionLogB && executionLogB.success === false" class="mt-2 text-[10px] text-red-400 bg-red-950/30 p-1.5 rounded border border-red-500/20">
-                    {{ executionLogB.message }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Size Input -->
-        <div class="mb-4">
-            <label class="text-xs text-neutral-400 mb-1.5 block">Trade Size (USD per Leg)</label>
-            <div class="relative group">
-              <span class="absolute left-3 top-2.5 text-xs text-neutral-500 group-focus-within:text-indigo-400 transition-colors">$</span>
-              <input 
-                v-model="tradeSize"
-                type="number" 
-                class="w-full pl-6 pr-3 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all font-mono"
-                placeholder="100"
-              >
-            </div>
-            <div class="text-[10px] text-neutral-600 mt-1 text-right">
-                Total Exposure: ${{ tradeSize * 2 }}
-            </div>
-        </div>
-
-        <!-- Execute Button -->
-        <div class="mt-auto pt-2">
-          <button 
-            @click="executeTrade"
-            :disabled="isExecuting || !isConnected"
-            class="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all flex items-center justify-center gap-2 group"
-          >
-            <svg v-if="isExecuting" class="animate-spin h-4 w-4 text-white/80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        
+        <!-- Title -->
+        <h4 class="text-lg font-bold text-white mb-2">
+          Fonctionnalité Pro
+        </h4>
+        
+        <!-- Description -->
+        <p class="text-sm text-neutral-400 mb-6 max-w-[280px] leading-relaxed">
+          L'exécution automatique des trades d'arbitrage n'est pas disponible dans la version <span class="text-amber-400 font-medium">open source</span>.
+        </p>
+        
+        <!-- Features List -->
+        <div class="w-full mb-6 space-y-2">
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <div v-else class="flex flex-col items-center leading-tight">
-               <span v-if="!isConnected">Connect Wallet</span>
-               <span v-else>Execute Strategy</span>
-               <span v-if="isConnected" class="text-[10px] font-normal opacity-70">Long + Short</span>
-            </div>
-          </button>
-          
-          <!-- Global Status -->
-          <div v-if="executionLogA && executionLogB && executionLogA.success && executionLogB.success" class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
-             <div class="text-sm font-bold text-emerald-400 flex items-center justify-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                Strategy Executed!
-             </div>
-             <div class="text-[10px] text-emerald-400/70 mt-1">Both legs filled. Check positions on exchanges.</div>
+            Exécution Long + Short automatique
+          </div>
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Multi-DEX en parallèle
+          </div>
+          <div class="flex items-center gap-2 text-xs text-neutral-500">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Support Hyperliquid, Paradex, Lighter
           </div>
         </div>
         
-      </div>
-
-      <!-- Empty State -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-40">
-        <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-             <svg class="w-8 h-8 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-            </svg>
-        </div>
-        <h4 class="text-white font-medium mb-1">Select Strategy</h4>
-        <p class="text-xs text-neutral-400 max-w-[200px]">
-            Choose an opportunity from the list to load execution parameters.
+        <!-- CTA Button -->
+        <a 
+          href="https://github.com/cactuszdre/crypto-arbitrage-pro" 
+          target="_blank"
+          class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          Obtenir la version Pro
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+          </svg>
+        </a>
+        
+        <!-- Footer Note -->
+        <p class="text-[10px] text-neutral-600 mt-4">
+          Accédez à toutes les fonctionnalités sur 
+          <a href="https://github.com/cactuszdre/crypto-arbitrage-pro" target="_blank" class="text-amber-500 hover:underline">crypto-arbitrage-pro</a>
         </p>
       </div>
     </div>

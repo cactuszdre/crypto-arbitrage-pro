@@ -1,2 +1,19 @@
-
 .env
+
+# Premium execution services (Pro version only)
+frontend/src/services/hyperliquid.js
+frontend/src/services/paradex.js
+frontend/src/services/lighter.js
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/target/
+
+# Build outputs
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
