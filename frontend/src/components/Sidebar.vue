@@ -1,16 +1,18 @@
 <script setup>
 import { RouterLink, useRoute } from 'vue-router'
 import { computed } from 'vue'
+import { useAuth } from '../stores/auth'
 
 const route = useRoute()
-const user = JSON.parse(localStorage.getItem('user') || '{}')
+const { state } = useAuth()
 
 const navItems = computed(() => {
   const items = [
     { path: '/', name: 'Overview', icon: 'lucide:layout-template' },
     { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
   ]
-  if (user.role === 'ADMIN') {
+  // Réactif: vérifie le state directement
+  if (state.user?.role === 'ADMIN') {
     items.push({ path: '/admin', name: 'Administration', icon: 'lucide:shield' })
   }
   return items

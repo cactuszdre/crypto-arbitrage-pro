@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
+import { useAuth } from '../stores/auth'
 
 const routes = [
     {
@@ -20,7 +21,8 @@ const routes = [
     {
         path: '/admin',
         name: 'Admin',
-        component: () => import('../views/Admin.vue')
+        component: () => import('../views/Admin.vue'),
+        meta: { requiresAdmin: true }
     },
     {
         path: '/:pathMatch(.*)*',
@@ -33,4 +35,18 @@ const router = createRouter({
     routes
 })
 
+// Navigation guard to protect admin routes
+router.beforeEach((to, from, next) => {
+    const { isAdmin } = useAuth()
+
+    if (to.meta.requiresAdmin && !isAdmin()) {
+        // Redirect non-admin users to home
+        console.warn('Access denied: Admin role required')
+        next({ path: '/' })
+    } else {
+        next()
+    }
+})
+
 export default router
+
