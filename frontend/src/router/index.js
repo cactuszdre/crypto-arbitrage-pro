@@ -10,26 +10,17 @@ const routes = [
     {
         path: '/',
         name: 'Dashboard',
-        component: Dashboard,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/history',
-        name: 'History',
-        component: () => import('../views/History.vue'),
-        meta: { requiresAuth: true }
+        component: Dashboard
     },
     {
         path: '/arbitrage',
         name: 'Arbitrage',
-        component: () => import('../views/Arbitrage.vue'),
-        meta: { requiresAuth: true }
+        component: () => import('../views/Arbitrage.vue')
     },
     {
         path: '/admin',
         name: 'Admin',
-        component: () => import('../views/Admin.vue'),
-        meta: { requiresAuth: true, requiresAdmin: true }
+        component: () => import('../views/Admin.vue')
     },
     {
         path: '/:pathMatch(.*)*',
@@ -40,15 +31,6 @@ const routes = [
 const router = createRouter({
     history: createWebHistory(),
     routes
-})
-
-router.beforeEach((to, from, next) => {
-    const user = localStorage.getItem('user')
-    if (to.meta.requiresAuth && !user) {
-        next('/login')
-    } else {
-        next()
-    }
 })
 
 export default router

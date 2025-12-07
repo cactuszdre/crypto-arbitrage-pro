@@ -8,7 +8,6 @@ const user = JSON.parse(localStorage.getItem('user') || '{}')
 const navItems = computed(() => {
   const items = [
     { path: '/', name: 'Overview', icon: 'lucide:layout-template' },
-    { path: '/history', name: 'Market Flow', icon: 'lucide:waves' },
     { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
   ]
   if (user.role === 'ADMIN') {
@@ -55,8 +54,8 @@ const navItems = computed(() => {
           C
         </div>
         <div class="hidden lg:flex flex-col">
-          <span class="text-xs font-medium text-white">Crypto Trader</span>
-          <span class="text-[10px] text-neutral-500">Pro Plan</span>
+          <span class="text-xs font-medium text-white">Powered By Cactus</span>
+          <span class="text-[10px] text-neutral-500">v1.0.0</span>
         </div>
       </div>
     </div>
