@@ -3,6 +3,8 @@ import { ref, onMounted, onUnmounted, computed, watch, unref } from 'vue'
 import { arbitrageApi } from '../services/api'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
 import { executeHyperliquidOrder } from '../services/hyperliquid'
+import { executeParadexOrder } from '../services/paradex'
+import { executeLighterOrder } from '../services/lighter'
 
 const opportunities = ref([])
 const currentPage = ref(1)
@@ -15,7 +17,6 @@ const accountData = useAppKitAccount()
 const providerData = useAppKitProvider('eip155')
 
 const provider = computed(() => {
-  // Debug to see structure
   if (providerData && providerData.walletProvider) {
       return providerData.walletProvider.value || providerData.walletProvider
   }
@@ -23,71 +24,68 @@ const provider = computed(() => {
 })
 
 const selectedOpportunity = ref(null)
-const executionSide = ref('Buy') // 'Buy' or 'Sell'
-const tradeSize = ref(100) // Default 100 USD
+// executionSide is no longer main driver, we execute BOTH.
+const tradeSize = ref(100) // Default 100 USD (per leg)
 const isExecuting = ref(false)
-const executionLog = ref(null)
+
+// Logs for Dual Execution
+const executionLogA = ref(null) // Long Leg
+const executionLogB = ref(null) // Short Leg
 
 const isConnected = computed(() => {
   if (!accountData || !accountData.value) return false
   return Boolean(accountData.value.isConnected)
 })
 
-const userAddress = computed(() => {
-  if (!accountData || !accountData.value) return null
-  return accountData.value.address
-})
-
-// Execution Logic
 const selectOpportunity = (opp) => {
   selectedOpportunity.value = opp
-  executionLog.value = null
-  
-  // Auto-select side based on where Hyperliquid is
-  if (opp.longDex.toLowerCase() === 'hyperliquid') {
-    executionSide.value = 'Buy'
-  } else if (opp.shortDex.toLowerCase() === 'hyperliquid') {
-    executionSide.value = 'Sell'
-  } else {
-    // Both or neither (fallback)
-    executionSide.value = 'Buy'
-  }
+  executionLogA.value = null
+  executionLogB.value = null
+}
+
+// Router to correct service
+const executeDexOrder = async (dexName, side, size, symbol) => {
+    const details = { symbol, isBuy: side === 'Buy', size, price: "0" }
+    
+    switch(dexName.toLowerCase()) {
+        case 'hyperliquid': 
+            return await executeHyperliquidOrder(provider.value, details)
+        case 'paradex':
+            return await executeParadexOrder(provider.value, details)
+        case 'lighter':
+             return await executeLighterOrder(provider.value, details)
+        default:
+            throw new Error(`DEX ${dexName} execution not supported`)
+    }
 }
 
 const executeTrade = async () => {
-  if (!isConnected.value) return
-  if (!selectedOpportunity.value) return
+  if (!isConnected.value || !selectedOpportunity.value) return
   
   isExecuting.value = true
-  executionLog.value = null
+  executionLogA.value = { status: 'pending', message: 'Executing...' }
+  executionLogB.value = { status: 'pending', message: 'Executing...' }
   
   try {
     const symbol = getBaseSymbol(selectedOpportunity.value.symbol).toUpperCase()
-    
-    const orderDetails = {
-      symbol: symbol,
-      isBuy: executionSide.value === 'Buy',
-      price: "0", // Market Order logic will be handled by service
-      size: tradeSize.value.toString()
-    }
+    if (!provider.value) throw new Error("Wallet not connected")
 
-    if (!provider.value) {
-        throw new Error("Wallet Provider not found. Please reconnect wallet.")
-    }
+    const opp = selectedOpportunity.value
+    const size = tradeSize.value.toString()
 
-    const result = await executeHyperliquidOrder(provider.value, orderDetails)
-    
-    executionLog.value = {
-      success: true,
-      message: `Successfully executed! Sig: ${result.signature.slice(0, 10)}...`
-    }
+    // Execute in Parallel
+    const promiseA = executeDexOrder(opp.longDex, 'Buy', size, symbol)
+        .then(res => { executionLogA.value = { success: true, message: res.message } })
+        .catch(err => { executionLogA.value = { success: false, message: err.message } })
+
+    const promiseB = executeDexOrder(opp.shortDex, 'Sell', size, symbol)
+        .then(res => { executionLogB.value = { success: true, message: res.message } })
+        .catch(err => { executionLogB.value = { success: false, message: err.message } })
+
+    await Promise.all([promiseA, promiseB])
     
   } catch (error) {
-    console.error('Execution failed:', error)
-    executionLog.value = {
-      success: false,
-      message: error.message || 'Execution failed'
-    }
+    console.error('Execution init failed:', error)
   } finally {
     isExecuting.value = false
   }
@@ -735,88 +733,150 @@ onUnmounted(() => {
     </div>
 
     <!-- Trade Execution Panel -->
-    <div class="glass-card rounded-3xl p-6 flex flex-col h-full">
-      <h3 class="text-base font-medium text-white mb-6">Trade Execution</h3>
+    <div class="glass-card rounded-3xl p-6 flex flex-col h-full border border-white/10 relative overflow-hidden">
+      <!-- Background Glow -->
+      <div v-if="selectedOpportunity" class="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
+
+      <h3 class="text-base font-medium text-white mb-6 flex items-center gap-2">
+        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        Arbitrage Execution
+      </h3>
       
       <div v-if="selectedOpportunity" class="flex-1 flex flex-col">
-        <!-- Selected Opportunity Info -->
-        <div class="mb-6 p-4 rounded-xl bg-white/5 border border-white/5">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-bold text-white">{{ selectedOpportunity.symbol }}</span>
-            <span :class="['text-xs font-medium px-2 py-0.5 rounded', selectedOpportunity.projectedDailyReturn >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400']">
-              {{ (selectedOpportunity.projectedDailyReturn || 0).toFixed(4) }}% Daily
-            </span>
-          </div>
-          <div class="flex justify-between text-xs text-neutral-400">
-            <span>Long: <span class="text-white">{{ selectedOpportunity.longDex }}</span></span>
-            <span>Short: <span class="text-white">{{ selectedOpportunity.shortDex }}</span></span>
-          </div>
+        <!-- Strategy Header -->
+        <div class="mb-6 p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
+           <div>
+              <div class="text-lg font-bold text-white tracking-wide">{{ selectedOpportunity.symbol }}</div>
+              <div class="text-xs text-neutral-400 mt-1">Neutral Strategy</div>
+           </div>
+           
+           <div class="text-right">
+             <div class="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-1 rounded">
+                +{{ (selectedOpportunity.projectedDailyReturn || 0).toFixed(4) }}% / day
+             </div>
+           </div>
         </div>
 
-        <!-- Trade Form -->
-        <div class="space-y-4">
-          <div>
-            <label class="text-xs text-neutral-400 mb-1.5 block">Side to Execute (Hyperliquid)</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button 
-                @click="executionSide = 'Buy'"
-                :disabled="selectedOpportunity.longDex.toLowerCase() !== 'hyperliquid'"
-                :class="['py-2 text-xs font-medium rounded-lg border transition-all', executionSide === 'Buy' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10']"
-              >
-                Long (Buy)
-              </button>
-              <button 
-                @click="executionSide = 'Sell'"
-                :disabled="selectedOpportunity.shortDex.toLowerCase() !== 'hyperliquid'"
-                :class="['py-2 text-xs font-medium rounded-lg border transition-all', executionSide === 'Sell' ? 'bg-red-500 text-white border-red-500' : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10']"
-              >
-                Short (Sell)
-              </button>
+        <!-- Dual Legs -->
+        <div class="space-y-4 mb-6">
+            <!-- Leg A: Long -->
+            <div class="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl relative group">
+                <div class="absolute -left-1 top-4 w-2 h-8 bg-emerald-500 rounded-r opacity-50"></div>
+                
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Long Leg (Buy)</span>
+                    <span class="text-[10px] text-neutral-500 font-mono">{{ selectedOpportunity.longDex }}</span>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                     <span class="text-sm text-white">Market Order</span>
+                     
+                     <!-- Status Leg A -->
+                     <span v-if="executionLogA" :class="['text-xs px-2 py-0.5 rounded', executionLogA.success ? 'bg-emerald-500 text-white' : executionLogA.success === false ? 'bg-red-500 text-white' : 'bg-yellow-500/20 text-yellow-400']">
+                        {{ executionLogA.success ? 'FILLED' : (executionLogA.success === false ? 'FAILED' : 'PENDING') }}
+                     </span>
+                     <span v-else class="text-xs text-neutral-600">Ready</span>
+                </div>
+                <!-- Error Message A -->
+                <div v-if="executionLogA && executionLogA.success === false" class="mt-2 text-[10px] text-red-400 bg-red-950/30 p-1.5 rounded border border-red-500/20">
+                    {{ executionLogA.message }}
+                </div>
             </div>
-          </div>
 
-          <div>
-            <label class="text-xs text-neutral-400 mb-1.5 block">Size (USD)</label>
-            <div class="relative">
-              <span class="absolute left-3 top-2.5 text-xs text-neutral-500">$</span>
+            <!-- Loop Icon -->
+            <div class="flex justify-center -my-2 relative z-10">
+                <div class="bg-[#0f0f13] border border-white/10 rounded-full p-1.5 shadow-xl">
+                    <svg class="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Leg B: Short -->
+            <div class="p-3 bg-red-500/5 border border-red-500/20 rounded-xl relative">
+                <div class="absolute -left-1 top-4 w-2 h-8 bg-red-500 rounded-r opacity-50"></div>
+
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-red-400 uppercase tracking-wider">Short Leg (Sell)</span>
+                    <span class="text-[10px] text-neutral-500 font-mono">{{ selectedOpportunity.shortDex }}</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                     <span class="text-sm text-white">Market Order</span>
+
+                     <!-- Status Leg B -->
+                     <span v-if="executionLogB" :class="['text-xs px-2 py-0.5 rounded', executionLogB.success ? 'bg-emerald-500 text-white' : executionLogB.success === false ? 'bg-red-500 text-white' : 'bg-yellow-500/20 text-yellow-400']">
+                        {{ executionLogB.success ? 'FILLED' : (executionLogB.success === false ? 'FAILED' : 'PENDING') }}
+                     </span>
+                     <span v-else class="text-xs text-neutral-600">Ready</span>
+                </div>
+                 <!-- Error Message B -->
+                <div v-if="executionLogB && executionLogB.success === false" class="mt-2 text-[10px] text-red-400 bg-red-950/30 p-1.5 rounded border border-red-500/20">
+                    {{ executionLogB.message }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Size Input -->
+        <div class="mb-4">
+            <label class="text-xs text-neutral-400 mb-1.5 block">Trade Size (USD per Leg)</label>
+            <div class="relative group">
+              <span class="absolute left-3 top-2.5 text-xs text-neutral-500 group-focus-within:text-indigo-400 transition-colors">$</span>
               <input 
                 v-model="tradeSize"
                 type="number" 
-                class="w-full pl-6 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                class="w-full pl-6 pr-3 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all font-mono"
                 placeholder="100"
               >
             </div>
-          </div>
+            <div class="text-[10px] text-neutral-600 mt-1 text-right">
+                Total Exposure: ${{ tradeSize * 2 }}
+            </div>
         </div>
 
         <!-- Execute Button -->
-        <div class="mt-auto pt-6">
+        <div class="mt-auto pt-2">
           <button 
             @click="executeTrade"
             :disabled="isExecuting || !isConnected"
-            class="w-full py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-white/10 flex items-center justify-center gap-2"
+            class="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all flex items-center justify-center gap-2 group"
           >
-            <svg v-if="isExecuting" class="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg v-if="isExecuting" class="animate-spin h-4 w-4 text-white/80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span v-if="!isConnected">Connect Wallet First</span>
-            <span v-else-if="isExecuting">Signing...</span>
-            <span v-else>Execute Trade</span>
+            <div v-else class="flex flex-col items-center leading-tight">
+               <span v-if="!isConnected">Connect Wallet</span>
+               <span v-else>Execute Strategy</span>
+               <span v-if="isConnected" class="text-[10px] font-normal opacity-70">Long + Short</span>
+            </div>
           </button>
           
-          <p v-if="executionLog" class="mt-3 text-[10px] text-center" :class="executionLog.success ? 'text-emerald-400' : 'text-red-400'">
-            {{ executionLog.message }}
-          </p>
+          <!-- Global Status -->
+          <div v-if="executionLogA && executionLogB && executionLogA.success && executionLogB.success" class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
+             <div class="text-sm font-bold text-emerald-400 flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                Strategy Executed!
+             </div>
+             <div class="text-[10px] text-emerald-400/70 mt-1">Both legs filled. Check positions on exchanges.</div>
+          </div>
         </div>
+        
       </div>
 
       <!-- Empty State -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-50">
-        <svg class="w-12 h-12 text-neutral-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-        </svg>
-        <p class="text-sm text-neutral-400">Select an opportunity to trade</p>
+      <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-6 opacity-40">
+        <div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+             <svg class="w-8 h-8 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+        </div>
+        <h4 class="text-white font-medium mb-1">Select Strategy</h4>
+        <p class="text-xs text-neutral-400 max-w-[200px]">
+            Choose an opportunity from the list to load execution parameters.
+        </p>
       </div>
     </div>
   </div>

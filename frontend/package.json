@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@nktkas/hyperliquid": "^0.29.1",
+    "@paradex/sdk": "^0.7.0",
     "@reown/appkit": "^1.8.14",
     "@reown/appkit-adapter-wagmi": "^1.8.14",
     "@tanstack/vue-query": "^5.92.1",
