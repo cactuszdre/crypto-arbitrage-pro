@@ -1,32 +1,25 @@
 <script setup>
-import { ref, computed, watchEffect, unref } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 import { useAppKit, useAppKitAccount } from '@reown/appkit/vue'
 
 const searchQuery = ref('')
 const { open } = useAppKit()
+const accountData = useAppKitAccount()
 
-// State refs
-const isConnected = ref(false)
-const userAddress = ref('')
-
-const account = useAppKitAccount()
-
-// Robustly track state changes
 watchEffect(() => {
-  // Check if properties might be refs or direct values
-  // In some versions, it's a reactive object, in others refs
-  const connected = unref(account.isConnected)
-  const addr = unref(account.address)
-  
-  console.log('Wallet Debug:', { connected, addr })
-  
-  isConnected.value = !!connected
-  userAddress.value = addr || ''
+  // Debug: Log the simplified object to understand its structure
+  console.log('DEBUG ACCOUNT DATA:', accountData)
+})
+
+const isConnected = computed(() => {
+  if (!accountData || !accountData.value) return false
+  return Boolean(accountData.value.isConnected)
 })
 
 const formattedAddress = computed(() => {
-  if (!userAddress.value) return ''
-  return `${userAddress.value.slice(0, 6)}...${userAddress.value.slice(-4)}`
+  if (!accountData || !accountData.value || !accountData.value.address) return ''
+  const addr = String(accountData.value.address)
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 })
 </script>
 
