@@ -8,6 +8,26 @@ const api = axios.create({
     }
 });
 
+// Intercepteur pour ajouter le wallet address aux requêtes
+api.interceptors.request.use(
+    config => {
+        // Get user from localStorage and add wallet to headers
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                if (user?.walletAddress) {
+                    config.headers['X-Wallet-Address'] = user.walletAddress;
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        return config;
+    },
+    error => Promise.reject(error)
+);
+
 // Intercepteur pour gérer les erreurs
 api.interceptors.response.use(
     response => response,
@@ -44,4 +64,15 @@ export const arbitrageApi = {
     calculate: (dex1, dex2) => api.get(`/arbitrage/calculate?dex1=${dex1}&dex2=${dex2}`)
 };
 
+export const userApi = {
+    getAll: () => api.get('/users'),
+    getAdmins: () => api.get('/users/admins'),
+    getByWallet: (walletAddress) => api.get(`/users/wallet/${walletAddress}`),
+    updateLastLogin: (walletAddress) => api.post(`/users/wallet/${walletAddress}/login`),
+    addAdmin: (walletAddress) => api.post('/users/admins', { walletAddress }),
+    removeAdmin: (walletAddress) => api.delete(`/users/admins/${walletAddress}`),
+    deleteUser: (id) => api.delete(`/users/${id}`)
+};
+
 export default api;
+
