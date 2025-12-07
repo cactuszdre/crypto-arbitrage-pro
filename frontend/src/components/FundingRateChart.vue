@@ -285,10 +285,10 @@ const chartOptions = computed(() => ({
             :key="dex"
             @click="selectedDex = dex"
             :class="[
-              'px-3 py-1.5 rounded-md text-xs font-medium transition-all',
+              'px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
               selectedDex === dex 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' 
-                : 'text-neutral-500 hover:text-white'
+                ? 'bg-indigo-600 text-white border-transparent shadow-lg shadow-indigo-500/25' 
+                : 'text-neutral-500 border-transparent hover:text-white'
             ]"
           >
             {{ dex }}
@@ -305,10 +305,10 @@ const chartOptions = computed(() => ({
             :key="metric.value"
             @click="selectedMetric = metric.value"
             :class="[
-              'px-3 py-1.5 rounded-md text-xs font-medium transition-all',
+              'px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
               selectedMetric === metric.value 
-                ? 'bg-white/10 text-white border border-white/10' 
-                : 'text-neutral-500 hover:text-white'
+                ? 'bg-white/10 text-white border-white/10' 
+                : 'text-neutral-500 border-transparent hover:text-white'
             ]"
           >
             {{ metric.label }}

@@ -4,7 +4,7 @@ import { arbitrageApi } from '../services/api'
 
 const opportunities = ref([])
 const currentPage = ref(1)
-const itemsPerPage = 10
+const itemsPerPage = 8
 const failedImages = ref(new Set())
 const searchQuery = ref('')
 
@@ -207,14 +207,13 @@ const getBaseSymbol = (symbol) => {
 // Get crypto icon URL with multiple fallback sources
 const getCryptoIcon = (symbol) => {
   const base = getBaseSymbol(symbol)
-  // Primary: CoinGecko assets via jsdelivr CDN (more reliable)
-  return `https://assets.coingecko.com/coins/images/lookup?symbols=${base}`
+  return `https://img.logo.dev/crypto/${base}?token=pk_UVWGxI47TA-3_B2HalawKQ`
 }
 
 // Fallback icon using crypto-icons (GitHub hosted, very reliable)
 const getFallbackIcon = (symbol) => {
   const base = getBaseSymbol(symbol)
-  return `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/32/color/${base}.png`
+  return `https://img.logo.dev/crypto/${base}?token=pk_UVWGxI47TA-3_B2HalawKQ`
 }
 
 // Handle image load error - mark as failed
@@ -238,12 +237,31 @@ const formatRate = (rate) => {
 }
 
 // Fetch opportunities
+// Fetch opportunities
 const fetchOpportunities = async () => {
   try {
     const response = await arbitrageApi.getOpportunities()
     opportunities.value = response.data
   } catch (error) {
     console.error('Failed to fetch opportunities:', error)
+  }
+}
+
+// Generate DEX URL
+const getDexUrl = (dexName, symbol) => {
+  const base = getBaseSymbol(symbol)
+  
+  switch(dexName.toLowerCase()) {
+    case 'paradex':
+      return `https://app.paradex.trade/trade/${symbol}`
+    case 'hyperliquid':
+      return `https://app.hyperliquid.xyz/trade/${base}`
+    case 'lighter':
+      return `https://app.lighter.xyz/trade/${base}_USDC`
+    case 'dydx':
+      return `https://dydx.exchange/trade/${base}-USD`
+    default:
+      return '#'
   }
 }
 
@@ -556,9 +574,23 @@ onUnmounted(() => {
               </td>
               <td class="px-6 py-4">
                 <div class="flex items-center gap-2 text-xs text-neutral-400">
-                  <span class="text-emerald-400">Long {{ opp.longDex }}</span>
-                  <span>→</span>
-                  <span class="text-red-400">Short {{ opp.shortDex }}</span>
+                  <a 
+                    :href="getDexUrl(opp.longDex, opp.symbol)" 
+                    target="_blank" 
+                    class="text-emerald-400 hover:text-emerald-300 hover:underline decoration-emerald-500/30 underline-offset-2 transition-all flex items-center gap-1"
+                  >
+                    Long {{ opp.longDex }}
+                    <svg class="w-2.5 h-2.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                  </a>
+                  <span class="text-neutral-600">→</span>
+                  <a 
+                    :href="getDexUrl(opp.shortDex, opp.symbol)" 
+                    target="_blank" 
+                    class="text-red-400 hover:text-red-300 hover:underline decoration-red-500/30 underline-offset-2 transition-all flex items-center gap-1"
+                  >
+                    Short {{ opp.shortDex }}
+                    <svg class="w-2.5 h-2.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                  </a>
                 </div>
               </td>
               <td class="px-6 py-4">
