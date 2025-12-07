@@ -29,7 +29,31 @@ Copy the example environment file and configure your secrets:
 ```bash
 cp .env.example .env
 ```
-> **Note:** Update the `ENCRYPTION_KEY` in `.env` to a secure random string for production use.
+
+Edit the `.env` file with your configuration:
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=cryptodb
+DB_USERNAME=cryptouser
+DB_PASSWORD=cryptopass
+DB_ROOT_PASSWORD=rootpassword
+
+# App Security
+ENCRYPTION_KEY=MySuperSecretKey
+
+# WalletConnect Project ID (get one at https://cloud.walletconnect.com)
+VITE_WALLETCONNECT_PROJECT_ID=your_project_id_here
+
+# First Admin Wallet (REQUIRED)
+# This wallet address will be automatically created as ADMIN with PRO plan on first startup
+APP_ADMIN_WALLET=0xYourWalletAddressHere
+```
+
+> **⚠️ Important:** 
+> - Update the `ENCRYPTION_KEY` to a secure random string for production.
+> - Set `APP_ADMIN_WALLET` to your Ethereum wallet address to become the first admin.
 
 ### 3. Start Infrastructure (Database)
 Start MySQL and phpMyAdmin using Docker Compose:
