@@ -260,9 +260,14 @@ public class ParadexService {
             // Different pairs have different funding periods:
             // - BTC/ETH: 8h (3 periods per day)
             // - MOODENG/ASTER etc: 4h (6 periods per day)
-            // 
-            // Rate for period % = rate * 100
-            BigDecimal ratePeriod = rate.multiply(BigDecimal.valueOf(100))
+            
+            // Calculate hourly rate from the period rate
+            // rateHourly = rate / fundingPeriodHours
+            BigDecimal rateHourly = rate.divide(BigDecimal.valueOf(fundingPeriodHours), 12, RoundingMode.HALF_UP);
+            
+            // Rate 8h % = rateHourly * 8 * 100 (standardized to 8h for comparison)
+            BigDecimal rate8h = rateHourly.multiply(BigDecimal.valueOf(8))
+                    .multiply(BigDecimal.valueOf(100))
                     .setScale(6, RoundingMode.HALF_UP);
             
             // Calculate periods per day based on the actual funding period
@@ -273,8 +278,8 @@ public class ParadexService {
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(2, RoundingMode.HALF_UP);
             
-            log.debug("Paradex {} calculated: ratePeriod={}%, rateAnnual={}% (periodsPerDay={})", 
-                    symbol, ratePeriod, rateAnnual, periodsPerDay);
+            log.debug("Paradex {} calculated: rateHourly={}, rate8h={}%, rateAnnual={}%", 
+                    symbol, rateHourly, rate8h, rateAnnual);
 
             // Get or create ticker
             Ticker ticker = tickerService.getOrCreate(symbol);
@@ -282,12 +287,12 @@ public class ParadexService {
             return FundingRate.builder()
                     .dex(dex)
                     .ticker(ticker)
-                    .rate(rate)
-                    .rate8h(ratePeriod) // Note: This is actually the period rate, not strictly 8h for all pairs
+                    .rate(rateHourly) // Store the hourly rate for consistency
+                    .rate8h(rate8h)
                     .rateAnnual(rateAnnual)
                     .fundingPremium(fundingPremium)
                     .fundingIndex(fundingIndex)
-                    .intervalHours(fundingPeriodHours) // Use the actual funding period, not the dex default
+                    .intervalHours(fundingPeriodHours) // Use the actual funding period
                     .timestamp(timestamp)
                     .build();
 

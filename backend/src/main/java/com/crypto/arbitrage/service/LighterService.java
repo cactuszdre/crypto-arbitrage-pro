@@ -124,17 +124,21 @@ public class LighterService {
             String symbol = baseSymbol + "-USD-PERP"; // Normalize to standardized format (e.g. BTC-USD-PERP)
             BigDecimal rate = new BigDecimal(node.get("rate").asText());
             
-            // Correction based on user feedback:
             // API returns the rate in decimal format corresponding to the displayed 8h Funding Rate.
             // Example: API -0.001248 corresponds to -0.1248% (which is the 8h rate).
-            // Even if payments are hourly, the quoted 'rate' is standard 8h.
+            // The rate is quoted as 8h equivalent, but payments are made hourly.
             
-            // Rate 8h % = rate * 100
-            BigDecimal rate8h = rate.multiply(BigDecimal.valueOf(100))
+            // Calculate hourly rate from 8h rate
+            // rateHourly = rate / 8
+            BigDecimal rateHourly = rate.divide(BigDecimal.valueOf(8), 12, RoundingMode.HALF_UP);
+            
+            // Rate 8h % = rateHourly * 8 * 100 (standardized, same as Hyperliquid)
+            BigDecimal rate8h = rateHourly.multiply(BigDecimal.valueOf(8))
+                    .multiply(BigDecimal.valueOf(100))
                     .setScale(6, RoundingMode.HALF_UP);
             
-            // Annual Rate % = rate * 3 (8h periods per day) * 365 * 100
-            BigDecimal rateAnnual = rate.multiply(BigDecimal.valueOf(3 * 365))
+            // Annual Rate % = rateHourly * 24 * 365 * 100
+            BigDecimal rateAnnual = rateHourly.multiply(BigDecimal.valueOf(24 * 365))
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(2, RoundingMode.HALF_UP);
 
@@ -144,10 +148,10 @@ public class LighterService {
             return FundingRate.builder()
                     .dex(dex)
                     .ticker(ticker)
-                    .rate(rate)
+                    .rate(rateHourly) // Store the hourly rate for consistency
                     .rate8h(rate8h)
                     .rateAnnual(rateAnnual)
-                    .intervalHours(1) // Payments are hourly, but rate is quoted as 8h equivalent
+                    .intervalHours(1) // Payments are hourly
                     .timestamp(timestamp)
                     .build();
 
