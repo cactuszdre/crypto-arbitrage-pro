@@ -96,13 +96,17 @@ const sortDirection = ref('desc') // 'asc' or 'desc'
 
 
 // Time period filter
-const selectedPeriod = ref('current') // 'current', '1d', '7d', '30d'
+const selectedPeriod = ref('current') // 'current', '1d', '7d', '30d', '3m', '6m', '1y'
 const periodOptions = [
-  { value: 'current', label: 'Current' },
-  { value: '1d', label: '1 Day Avg' },
-  { value: '7d', label: '7 Days Avg' },
-  { value: '30d', label: '30 Days Avg' }
+  { value: 'current', label: 'Live', days: 0 },
+  { value: '1d', label: '1 Day', days: 1 },
+  { value: '7d', label: '7 Days', days: 7 },
+  { value: '30d', label: '30 Days', days: 30 },
+  { value: '3m', label: '3 Months', days: 90 },
+  { value: '6m', label: '6 Months', days: 180 },
+  { value: '1y', label: '1 Year', days: 365 }
 ]
+const isLoadingHistorical = ref(false)
 
 // DEX filter - all DEXes selected by default
 const selectedDexes = ref([]) // Will be initialized with all DEXes on mount
@@ -321,7 +325,6 @@ const formatRate = (rate) => {
 }
 
 // Fetch opportunities
-// Fetch opportunities
 const fetchOpportunities = async () => {
   try {
     const response = await arbitrageApi.getOpportunities()
@@ -330,6 +333,31 @@ const fetchOpportunities = async () => {
     console.error('Failed to fetch opportunities:', error)
   }
 }
+
+// Fetch historical opportunities based on period
+const fetchHistoricalOpportunities = async (days) => {
+  isLoadingHistorical.value = true
+  try {
+    const response = await arbitrageApi.getHistoricalOpportunities(days)
+    opportunities.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch historical opportunities:', error)
+    opportunities.value = []
+  } finally {
+    isLoadingHistorical.value = false
+  }
+}
+
+// Watch period changes
+watch(selectedPeriod, (newPeriod) => {
+  currentPage.value = 1
+  const option = periodOptions.find(o => o.value === newPeriod)
+  if (option && option.days > 0) {
+    fetchHistoricalOpportunities(option.days)
+  } else {
+    fetchOpportunities()
+  }
+})
 
 // Generate DEX URL
 const getDexUrl = (dexName, symbol) => {
@@ -349,20 +377,32 @@ const getDexUrl = (dexName, symbol) => {
   }
 }
 
-// Auto-refresh every 10 seconds
+// Auto-refresh every 10 seconds (only in Live mode)
 let refreshInterval = null
+
+const startAutoRefresh = () => {
+  stopAutoRefresh()
+  refreshInterval = setInterval(() => {
+    if (selectedPeriod.value === 'current') {
+      fetchOpportunities()
+    }
+  }, 10000)
+}
+
+const stopAutoRefresh = () => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+}
 
 onMounted(() => {
   fetchOpportunities()
-  refreshInterval = setInterval(() => {
-    fetchOpportunities()
-  }, 10000)
+  startAutoRefresh()
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+  stopAutoRefresh()
 })
 </script>
 
@@ -423,8 +463,15 @@ onUnmounted(() => {
             >
               {{ option.label }}
             </button>
-            <span v-if="selectedPeriod !== 'current'" class="text-[10px] text-neutral-600 ml-2">
-              (Avg data coming soon)
+            <span v-if="selectedPeriod !== 'current' && isLoadingHistorical" class="text-[10px] text-indigo-400 ml-2">
+              <svg class="w-3 h-3 inline animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Loading...
+            </span>
+            <span v-else-if="selectedPeriod !== 'current'" class="text-[10px] text-neutral-600 ml-2">
+              (Historical avg data)
             </span>
             
             <!-- DEX Filter Dropdown -->
