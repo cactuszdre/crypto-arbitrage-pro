@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { fundingRateApi } from '../services/api'
 import FundingRateChart from '../components/FundingRateChart.vue'
 
@@ -33,7 +33,28 @@ const otherSymbols = computed(() => {
 const cryptoColors = {
   'BTC': '#F7931A',
   'ETH': '#627EEA', 
-  'SOL': '#14F195'
+  'SOL': '#14F195',
+  'XRP': '#23292F',
+  'BNB': '#F3BA2F',
+  'ADA': '#0D1E30',
+  'DOGE': '#C3A634',
+  'DOT': '#E6007A',
+  'AVAX': '#E84142',
+  'LINK': '#2A5ADA',
+  'MATIC': '#8247E5',
+  'UNI': '#FF007A',
+  'ATOM': '#2E3148',
+  'LTC': '#345D9D',
+  'NEAR': '#00C08B',
+  'APT': '#000000',
+  'ARB': '#28A0F0',
+  'OP': '#FF0420',
+  'SUI': '#4DA2FF',
+  'FTM': '#1969FF',
+  'AAVE': '#B6509E',
+  'MKR': '#1AAB9B',
+  'SNX': '#00D1FF',
+  'CRV': '#FF3A3A',
 }
 
 const getCryptoColor = (symbol) => {
@@ -95,18 +116,46 @@ const fetchData = async () => {
 }
 
 
-const fetchLatestRate = async (symbolStr) => {
+// Simply select a symbol - no need to refetch, data is already loaded and auto-refreshed
+const selectSymbol = (symbolStr) => {
   selectedSymbol.value = symbolStr
-  try {
-    await fundingRateApi.fetchAndSave(symbolStr)
-    await fetchData()
-  } catch (err) {
-    console.error('Erreur lors de la récupération:', err)
-  }
 }
 
 // Dropdown state
 const showDropdown = ref(false)
+const searchQuery = ref('')
+const searchInputRef = ref(null)
+
+// Toggle dropdown and focus search
+const toggleDropdown = async () => {
+  showDropdown.value = !showDropdown.value
+  if (showDropdown.value) {
+    await nextTick()
+    searchInputRef.value?.focus()
+  }
+}
+
+// Filtered symbols based on search
+const filteredOtherSymbols = computed(() => {
+  const query = searchQuery.value.toLowerCase().trim()
+  if (!query) return otherSymbols.value
+  return otherSymbols.value.filter(s => 
+    s.symbol.toLowerCase().includes(query)
+  )
+})
+
+// Check if selected symbol is in "other" (not pinned)
+const isSelectedInOther = computed(() => {
+  return otherSymbols.value.some(s => s.symbol === selectedSymbol.value)
+})
+
+// Close dropdown when clicking outside
+const closeDropdown = (e) => {
+  if (!e.target.closest('.asset-dropdown')) {
+    showDropdown.value = false
+    searchQuery.value = ''
+  }
+}
 
 // Auto-refresh every 10 seconds
 let refreshInterval = null
@@ -116,12 +165,14 @@ onMounted(() => {
   refreshInterval = setInterval(() => {
     fetchData()
   }, 10000)
+  document.addEventListener('click', closeDropdown)
 })
 
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
   }
+  document.removeEventListener('click', closeDropdown)
 })
 </script>
 
@@ -221,7 +272,7 @@ onUnmounted(() => {
         <button 
           v-for="item in pinnedSymbols" 
           :key="item.symbol"
-          @click="fetchLatestRate(item.symbol)"
+          @click="selectSymbol(item.symbol)"
           :class="[
             'flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all',
             selectedSymbol === item.symbol 
@@ -247,13 +298,37 @@ onUnmounted(() => {
         <div class="w-px h-6 bg-white/10 mx-1 hidden md:block"></div>
 
         <!-- Dropdown for other assets -->
-        <div class="relative">
+        <div class="relative asset-dropdown">
           <button 
-            @click="showDropdown = !showDropdown"
-            class="flex items-center justify-between w-40 px-3 py-2 rounded-lg bg-neutral-900/50 border border-white/10 text-sm text-neutral-400 hover:border-white/20 hover:text-white transition-colors"
+            @click.stop="toggleDropdown"
+            :class="[
+              'flex items-center justify-between gap-2 min-w-[160px] px-3 py-2 rounded-lg border text-sm transition-colors',
+              isSelectedInOther
+                ? 'bg-indigo-500/20 border-indigo-500/30 text-white'
+                : 'bg-neutral-900/50 border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'
+            ]"
           >
-            <span>Select Asset</span>
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="flex items-center gap-2">
+              <template v-if="isSelectedInOther && selectedSymbolObj">
+                <!-- Icon with fallback -->
+                <img 
+                  :src="selectedSymbolObj.iconUrl || getFallbackIcon(selectedSymbolObj.symbol)" 
+                  class="w-5 h-5 rounded-full bg-neutral-800"
+                  @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='flex'"
+                />
+                <span 
+                  class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] text-white font-bold hidden"
+                  :style="{ backgroundColor: getCryptoColor(selectedSymbolObj.symbol) }"
+                >
+                  {{ selectedSymbolObj.symbol.charAt(0) }}
+                </span>
+                <span>{{ selectedSymbol.replace('-USD-PERP', '') }}</span>
+              </template>
+              <template v-else>
+                <span>Other Assets</span>
+              </template>
+            </div>
+            <svg :class="['w-4 h-4 transition-transform', showDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
             </svg>
           </button>
@@ -261,26 +336,59 @@ onUnmounted(() => {
           <!-- Dropdown Panel -->
           <div 
             v-if="showDropdown" 
-            class="absolute left-0 top-full mt-2 w-56 max-h-64 overflow-y-auto bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50"
+            class="absolute left-0 top-full mt-2 w-64 bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden"
+            @click.stop
           >
-            <button 
-              v-for="item in otherSymbols" 
-              :key="item.symbol"
-              @click="fetchLatestRate(item.symbol); showDropdown = false"
-              :class="[
-                'w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors',
-                selectedSymbol === item.symbol 
-                  ? 'bg-indigo-500/20 text-white' 
-                  : 'text-neutral-400 hover:bg-white/5 hover:text-white'
-              ]"
-            >
-              <img 
-                :src="item.iconUrl || getFallbackIcon(item.symbol)" 
-                class="w-5 h-5 rounded-full bg-neutral-800"
-                @error="$event.target.style.display='none'"
-              />
-              {{ item.symbol.replace('-USD-PERP', '') }}
-            </button>
+            <!-- Search Input -->
+            <div class="p-2 border-b border-white/5">
+              <div class="relative">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input 
+                  ref="searchInputRef"
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="Search asset..."
+                  class="w-full bg-neutral-800/50 border border-white/5 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50"
+                  @keydown.stop
+                />
+              </div>
+            </div>
+            
+            <!-- Assets List -->
+            <div class="max-h-56 overflow-y-auto">
+              <button 
+                v-for="item in filteredOtherSymbols" 
+                :key="item.symbol"
+                @click="selectSymbol(item.symbol); showDropdown = false; searchQuery = ''"
+                :class="[
+                  'w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors',
+                  selectedSymbol === item.symbol 
+                    ? 'bg-indigo-500/20 text-white' 
+                    : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+                ]"
+              >
+                <!-- Icon with fallback -->
+                <img 
+                  :src="item.iconUrl || getFallbackIcon(item.symbol)" 
+                  class="w-5 h-5 rounded-full bg-neutral-800"
+                  @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='flex'"
+                />
+                <span 
+                  class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] text-white font-bold hidden"
+                  :style="{ backgroundColor: getCryptoColor(item.symbol) }"
+                >
+                  {{ item.symbol.charAt(0) }}
+                </span>
+                {{ item.symbol.replace('-USD-PERP', '') }}
+              </button>
+              
+              <!-- No results -->
+              <div v-if="filteredOtherSymbols.length === 0" class="px-4 py-6 text-center text-neutral-500 text-sm">
+                No assets found
+              </div>
+            </div>
           </div>
         </div>
       </div>

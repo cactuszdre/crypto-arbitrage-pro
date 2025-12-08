@@ -75,5 +75,9 @@ export const userApi = {
     deleteUser: (id) => api.delete(`/users/${id}`)
 };
 
+export const cryptoPriceApi = {
+    getAll: () => api.get('/crypto-prices')
+};
+
 export default api;
 
