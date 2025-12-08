@@ -51,7 +51,7 @@ public class HyperliquidService {
                 : DEFAULT_BASE_URL;
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             // POST request with JSON body { "type": "metaAndAssetCtxs" }
             Map<String, String> requestBody = new HashMap<>();
@@ -132,7 +132,7 @@ public class HyperliquidService {
                 : DEFAULT_BASE_URL;
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             Map<String, String> requestBody = new HashMap<>();
             requestBody.put("type", "meta");
@@ -145,7 +145,7 @@ public class HyperliquidService {
                     .bodyToMono(JsonNode.class)
                     .block();
 
-            if (response == null || !response.has("universe")) {
+            if (response == null || !response.has("universe") || !response.get("universe").isArray()) {
                 return List.of();
             }
 
@@ -167,6 +167,10 @@ public class HyperliquidService {
 
     private FundingRate parseFundingRate(JsonNode assetMeta, JsonNode assetCtx, Dex dex, LocalDateTime timestamp) {
         try {
+            if (assetMeta == null || assetCtx == null) {
+                return null;
+            }
+
             // assetMeta has: { "name": "BTC", "szDecimals": 4, ... }
             // assetCtx has: { "funding": "0.00012345", "openInterest": "...", "prevDayPx": "...", ... }
             
@@ -176,6 +180,12 @@ public class HyperliquidService {
 
             String coin = assetMeta.get("name").asText();
             String fundingStr = assetCtx.get("funding").asText();
+
+            // Validate that fundingStr is a number (handles "nan", "null" strings etc)
+            // Sometimes APIs return "nan" for new listings
+            if (fundingStr == null || fundingStr.isEmpty() || "nan".equalsIgnoreCase(fundingStr) || "null".equalsIgnoreCase(fundingStr)) {
+                return null;
+            }
 
             // Normalize symbol to standard format (e.g. BTC-USD-PERP)
             String symbol = coin + "-USD-PERP";

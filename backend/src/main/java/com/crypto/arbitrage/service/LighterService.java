@@ -44,7 +44,7 @@ public class LighterService {
                 : DEFAULT_BASE_URL;
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             // Endpoint: /funding-rates
             JsonNode response = webClient.get()
