@@ -52,7 +52,7 @@ public class ParadexService {
         String baseUrl = dex.getBaseUrl();
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             JsonNode response = webClient.get()
                     .uri("/markets")
@@ -109,7 +109,7 @@ public class ParadexService {
         int fundingPeriodHours = getFundingPeriodHours(symbol, baseUrl);
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             JsonNode response = webClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -177,7 +177,7 @@ public class ParadexService {
         String baseUrl = dex.getBaseUrl();
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             JsonNode response = webClient.get()
                     .uri("/markets")
@@ -219,7 +219,7 @@ public class ParadexService {
         String baseUrl = dex.getBaseUrl();
 
         try {
-            WebClient webClient = webClientBuilder.baseUrl(baseUrl).build();
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
 
             JsonNode response = webClient.get()
                     .uri("/bbo/" + symbol)

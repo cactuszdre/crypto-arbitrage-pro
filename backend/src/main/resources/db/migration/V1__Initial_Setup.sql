@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS position (
 
 -- Initial Data Seeding
 INSERT INTO dex (name, base_url, funding_interval_hours) VALUES 
-('Paradex', 'https://api.testnet.paradex.trade/v1', 8)
+('Paradex', 'https://api.prod.paradex.trade/v1', 8)
 ON DUPLICATE KEY UPDATE base_url=VALUES(base_url);
 
 INSERT INTO dex (name, base_url, funding_interval_hours) VALUES 
