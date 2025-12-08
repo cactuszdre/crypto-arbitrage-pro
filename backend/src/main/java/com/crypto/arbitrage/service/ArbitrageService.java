@@ -2,6 +2,7 @@ package com.crypto.arbitrage.service;
 
 import com.crypto.arbitrage.dto.ArbitrageOpportunityDTO;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.FundingRateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,19 +28,18 @@ public class ArbitrageService {
         List<FundingRate> allRates = fundingRateRepository.findAllLatestRates();
         info.add("Total Latest Rates Found: " + allRates.size());
         
-        Map<String, List<FundingRate>> ratesBySymbol = allRates.stream()
-                .collect(Collectors.groupingBy(FundingRate::getSymbol));
+        // Group by ticker ID for efficiency
+        Map<Integer, List<FundingRate>> ratesByTicker = allRates.stream()
+                .filter(r -> r.getTicker() != null)
+                .collect(Collectors.groupingBy(r -> r.getTicker().getId()));
         
-        info.add("Unique Symbols Found: " + ratesBySymbol.keySet().size());
+        info.add("Unique Symbols Found: " + ratesByTicker.keySet().size());
         
-        for (Map.Entry<String, List<FundingRate>> entry : ratesBySymbol.entrySet()) {
-            String symbol = entry.getKey();
+        for (Map.Entry<Integer, List<FundingRate>> entry : ratesByTicker.entrySet()) {
             List<FundingRate> rates = entry.getValue();
+            String symbol = rates.get(0).getSymbol();
             info.add("Symbol: " + symbol + " | Sources: " + rates.size());
             for(FundingRate rate : rates) {
-                // Eagerly fetch Dex name manually to avoid lazy loading issues in simple string construction if needed, 
-                // though @Transactional or OpenInView usually handles it.
-                // Assuming getName() is safe.
                 info.add("  -> DEX: " + (rate.getDex() != null ? rate.getDex().getName() : "null") 
                         + " | AnnualRate: " + rate.getRateAnnual());
             }
@@ -51,16 +51,17 @@ public class ArbitrageService {
         // 1. Get latest rates for all symbols/dexes
         List<FundingRate> allRates = fundingRateRepository.findAllLatestRates();
 
-        // 2. Group by symbol
-        Map<String, List<FundingRate>> ratesBySymbol = allRates.stream()
-                .collect(Collectors.groupingBy(FundingRate::getSymbol));
+        // 2. Group by ticker ID for efficiency
+        Map<Integer, List<FundingRate>> ratesByTicker = allRates.stream()
+                .filter(r -> r.getTicker() != null)
+                .collect(Collectors.groupingBy(r -> r.getTicker().getId()));
 
         List<ArbitrageOpportunityDTO> opportunities = new ArrayList<>();
 
         // 3. Analyze each symbol
-        for (Map.Entry<String, List<FundingRate>> entry : ratesBySymbol.entrySet()) {
-            String symbol = entry.getKey();
+        for (Map.Entry<Integer, List<FundingRate>> entry : ratesByTicker.entrySet()) {
             List<FundingRate> rates = entry.getValue();
+            String symbol = rates.get(0).getSymbol();
 
             log.info("Analyzing symbol: {} with {} rates", symbol, rates.size());
 
@@ -118,3 +119,4 @@ public class ArbitrageService {
         return opportunities;
     }
 }
+

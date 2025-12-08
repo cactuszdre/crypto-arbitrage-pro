@@ -26,8 +26,13 @@ public class DexMarket {
     @JoinColumn(name = "dex_id", nullable = false)
     private Dex dex;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "ticker_id")
+    private Ticker ticker;
+
     /**
      * The normalized symbol (e.g. BTC-USD-PERP)
+     * Kept for backwards compatibility, but ticker reference is preferred.
      */
     @Column(nullable = false)
     private String symbol;
@@ -47,3 +52,4 @@ public class DexMarket {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }
+

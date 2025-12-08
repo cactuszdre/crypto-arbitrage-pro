@@ -1,6 +1,7 @@
 package com.crypto.arbitrage.repository;
 
 import com.crypto.arbitrage.model.ArbitrageOpportunity;
+import com.crypto.arbitrage.model.Ticker;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,7 +13,7 @@ import java.util.List;
 @Repository
 public interface ArbitrageOpportunityRepository extends JpaRepository<ArbitrageOpportunity, Long> {
     
-    List<ArbitrageOpportunity> findBySymbolOrderByDetectedAtDesc(String symbol);
+    List<ArbitrageOpportunity> findByTickerOrderByDetectedAtDesc(Ticker ticker);
     
     List<ArbitrageOpportunity> findByStatusOrderByDetectedAtDesc(String status);
     
@@ -22,3 +23,4 @@ public interface ArbitrageOpportunityRepository extends JpaRepository<ArbitrageO
     @Query("SELECT a FROM ArbitrageOpportunity a WHERE a.status = 'ACTIVE' ORDER BY a.projectedDailyReturn DESC")
     List<ArbitrageOpportunity> findBestActiveOpportunities();
 }
+

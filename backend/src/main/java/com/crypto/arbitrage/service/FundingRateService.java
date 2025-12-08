@@ -3,11 +3,12 @@ package com.crypto.arbitrage.service;
 import com.crypto.arbitrage.dto.FundingRateDTO;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
+import com.crypto.arbitrage.repository.TickerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ public class FundingRateService {
 
     private final FundingRateRepository fundingRateRepository;
     private final DexRepository dexRepository;
+    private final TickerRepository tickerRepository;
     private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
 
     /**
@@ -57,12 +59,14 @@ public class FundingRateService {
      */
     public Optional<FundingRateDTO> getLatestRate(String dexName, String symbol) {
         Optional<Dex> dexOpt = dexRepository.findByName(dexName);
-        if (dexOpt.isEmpty()) {
+        Optional<Ticker> tickerOpt = tickerRepository.findByNormalizedSymbol(symbol);
+        
+        if (dexOpt.isEmpty() || tickerOpt.isEmpty()) {
             return Optional.empty();
         }
         
         return fundingRateRepository
-                .findFirstByDexAndSymbolOrderByTimestampDesc(dexOpt.get(), symbol)
+                .findFirstByDexAndTickerOrderByTimestampDesc(dexOpt.get(), tickerOpt.get())
                 .map(this::toDTO);
     }
 
@@ -71,13 +75,15 @@ public class FundingRateService {
      */
     public List<FundingRateDTO> getHistory(String dexName, String symbol, int hours) {
         Optional<Dex> dexOpt = dexRepository.findByName(dexName);
-        if (dexOpt.isEmpty()) {
+        Optional<Ticker> tickerOpt = tickerRepository.findByNormalizedSymbol(symbol);
+        
+        if (dexOpt.isEmpty() || tickerOpt.isEmpty()) {
             return List.of();
         }
         
         LocalDateTime startDate = LocalDateTime.now().minusHours(hours);
         List<FundingRate> rates = fundingRateRepository.findHistoricalData(
-                dexOpt.get(), symbol, startDate);
+                dexOpt.get(), tickerOpt.get(), startDate);
         
         return rates.stream()
                 .map(this::toDTO)
@@ -93,7 +99,9 @@ public class FundingRateService {
             return List.of();
         }
         
-        return fundingRateRepository.findDistinctSymbolsByDex(dexOpt.get());
+        return fundingRateRepository.findDistinctTickersByDex(dexOpt.get()).stream()
+                .map(Ticker::getNormalizedSymbol)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -124,7 +132,7 @@ public class FundingRateService {
         return FundingRateDTO.builder()
                 .id(rate.getId())
                 .dexName(rate.getDex().getName())
-                .symbol(rate.getSymbol())
+                .symbol(rate.getSymbol()) // Uses the helper method on FundingRate
                 .rate(rate.getRate())
                 .rate8h(rate.getRate8h())
                 .rateAnnual(rate.getRateAnnual())
@@ -135,3 +143,4 @@ public class FundingRateService {
                 .build();
     }
 }
+
