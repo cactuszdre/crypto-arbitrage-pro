@@ -234,7 +234,22 @@ const chartOptions = computed(() => ({
       padding: 12,
       displayColors: true,
       boxPadding: 4,
-      animation: false // No tooltip animation for snappy feel
+      animation: false, // No tooltip animation for snappy feel
+      callbacks: {
+        label: function(context) {
+          let label = context.dataset.label || ''
+          if (label) {
+            label += ': '
+          }
+          if (context.parsed.y !== null) {
+            // Use more decimals for 1H rate (rate is very small)
+            const decimals = selectedMetric.value === 'rate' ? 6 : 
+                            selectedMetric.value === 'rate8h' ? 4 : 2
+            label += context.parsed.y.toFixed(decimals) + '%'
+          }
+          return label
+        }
+      }
     }
   },
   scales: {
