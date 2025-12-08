@@ -1,12 +1,11 @@
 package com.crypto.arbitrage.controller;
 
 import com.crypto.arbitrage.dto.ArbitrageOpportunityDTO;
-import com.crypto.arbitrage.model.ArbitrageOpportunity;
+import com.crypto.arbitrage.dto.HistoricalArbitrageDTO;
 import com.crypto.arbitrage.service.ArbitrageService;
+import com.crypto.arbitrage.service.HistoricalArbitrageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -16,10 +15,17 @@ import java.util.List;
 public class ArbitrageController {
 
     private final ArbitrageService arbitrageService;
+    private final HistoricalArbitrageService historicalArbitrageService;
 
     @GetMapping("/opportunities")
     public List<ArbitrageOpportunityDTO> getOpportunities() {
         return arbitrageService.getArbitrageOpportunities();
+    }
+
+    @GetMapping("/opportunities/historical")
+    public List<HistoricalArbitrageDTO> getHistoricalOpportunities(
+            @RequestParam(defaultValue = "7") int days) {
+        return historicalArbitrageService.getHistoricalOpportunities(days);
     }
 
     @GetMapping("/diagnose")
@@ -27,3 +33,4 @@ public class ArbitrageController {
         return arbitrageService.getDiagnosticInfo();
     }
 }
+
