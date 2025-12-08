@@ -5,6 +5,7 @@ import com.crypto.arbitrage.model.FundingRate;
 import com.crypto.arbitrage.model.Ticker;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -42,5 +43,25 @@ public interface FundingRateRepository extends JpaRepository<FundingRate, Long> 
 
     @Query("SELECT f FROM FundingRate f WHERE f.id IN (SELECT MAX(f2.id) FROM FundingRate f2 GROUP BY f2.dex, f2.ticker)")
     List<FundingRate> findAllLatestRates();
+
+    // Cleanup methods
+    @Query("SELECT f FROM FundingRate f WHERE f.timestamp < :cutoffTime")
+    List<FundingRate> findByTimestampBefore(@Param("cutoffTime") LocalDateTime cutoffTime);
+
+    @Modifying
+    @Query("DELETE FROM FundingRate f WHERE f.timestamp < :cutoffTime")
+    int deleteByTimestampBefore(@Param("cutoffTime") LocalDateTime cutoffTime);
+
+    // Aggregation query - returns Object[] with: tickerId, dexId, avgRate, minRate, maxRate, avgRate8h, avgRateAnnual, count
+    @Query("""
+        SELECT f.ticker.id, f.dex.id, 
+               AVG(f.rate), MIN(f.rate), MAX(f.rate), 
+               AVG(f.rate8h), AVG(f.rateAnnual), COUNT(f)
+        FROM FundingRate f 
+        WHERE f.timestamp < :cutoffTime
+        GROUP BY f.ticker.id, f.dex.id
+        """)
+    List<Object[]> aggregateOldRates(@Param("cutoffTime") LocalDateTime cutoffTime);
 }
+
 
