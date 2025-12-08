@@ -29,11 +29,11 @@ public class FundingRateService {
     private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
 
     /**
-     * Récupère tous les derniers funding rates
+     * Récupère tous les derniers funding rates (un seul par dex/ticker)
      */
     public List<FundingRateDTO> getAllLatestRates() {
-        LocalDateTime since = LocalDateTime.now().minusHours(24);
-        List<FundingRate> rates = fundingRateRepository.findByTimestampAfter(since);
+        // Utilise la requête optimisée qui ne récupère que le dernier rate par paire dex/ticker
+        List<FundingRate> rates = fundingRateRepository.findAllLatestRates();
         return rates.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
