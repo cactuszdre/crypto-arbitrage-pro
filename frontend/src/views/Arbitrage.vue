@@ -348,7 +348,7 @@ const getDexUrl = (dexName, symbol) => {
     case 'hyperliquid':
       return `https://app.hyperliquid.xyz/trade/${base}`
     case 'lighter':
-      return `https://app.lighter.xyz/trade/${base}_USDC`
+      return `https://app.lighter.xyz/trade/${base}`
     case 'dydx':
       return `https://dydx.exchange/trade/${base}-USD`
     default:
