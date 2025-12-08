@@ -2,6 +2,7 @@ package com.crypto.arbitrage.service;
 
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,6 +31,7 @@ public class ParadexService {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
+    private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
     private final EncryptionService encryptionService;
 
@@ -274,9 +276,12 @@ public class ParadexService {
             log.debug("Paradex {} calculated: ratePeriod={}%, rateAnnual={}% (periodsPerDay={})", 
                     symbol, ratePeriod, rateAnnual, periodsPerDay);
 
+            // Get or create ticker
+            Ticker ticker = tickerService.getOrCreate(symbol);
+
             return FundingRate.builder()
                     .dex(dex)
-                    .symbol(symbol)
+                    .ticker(ticker)
                     .rate(rate)
                     .rate8h(ratePeriod) // Note: This is actually the period rate, not strictly 8h for all pairs
                     .rateAnnual(rateAnnual)

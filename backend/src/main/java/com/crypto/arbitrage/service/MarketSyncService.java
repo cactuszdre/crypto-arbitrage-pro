@@ -3,6 +3,7 @@ package com.crypto.arbitrage.service;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.DexMarket;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexMarketRepository;
 import com.crypto.arbitrage.repository.DexRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class MarketSyncService {
 
     private final DexRepository dexRepository;
     private final DexMarketRepository dexMarketRepository;
+    private final TickerService tickerService;
     private final ParadexService paradexService;
     private final LighterService lighterService;
     private final HyperliquidService hyperliquidService;
@@ -107,13 +109,17 @@ public class MarketSyncService {
         // Add new markets
         for (String symbol : fetchedSymbols) {
             if (!existingSymbols.contains(symbol)) {
-                // Check if it exists but inactive
+                // Get or create ticker for this symbol
+                Ticker ticker = tickerService.getOrCreate(symbol);
+                
+                // Check if market exists but inactive
                 DexMarket market = dexMarketRepository.findByDexAndSymbol(dex, symbol)
                         .orElse(DexMarket.builder()
                                 .dex(dex)
                                 .symbol(symbol)
                                 .build());
                 
+                market.setTicker(ticker);
                 market.setActive(true);
                 market.setUpdatedAt(LocalDateTime.now());
                 dexMarketRepository.save(market);
@@ -126,3 +132,4 @@ public class MarketSyncService {
         // Let's hold off on auto-deactivating for now to prevent accidental data loss visibility.
     }
 }
+

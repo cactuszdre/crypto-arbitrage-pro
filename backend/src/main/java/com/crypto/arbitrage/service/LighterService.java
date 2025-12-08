@@ -2,6 +2,7 @@ package com.crypto.arbitrage.service;
 
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,6 +27,7 @@ public class LighterService {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
+    private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
 
     private static final String DEX_NAME = "Lighter";
@@ -136,9 +138,12 @@ public class LighterService {
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(2, RoundingMode.HALF_UP);
 
+            // Get or create ticker
+            Ticker ticker = tickerService.getOrCreate(symbol);
+
             return FundingRate.builder()
                     .dex(dex)
-                    .symbol(symbol)
+                    .ticker(ticker)
                     .rate(rate)
                     .rate8h(rate8h)
                     .rateAnnual(rateAnnual)

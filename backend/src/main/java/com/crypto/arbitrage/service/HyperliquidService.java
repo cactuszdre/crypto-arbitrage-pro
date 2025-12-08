@@ -2,6 +2,7 @@ package com.crypto.arbitrage.service;
 
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,6 +29,7 @@ public class HyperliquidService {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
+    private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
 
@@ -189,6 +191,9 @@ public class HyperliquidService {
 
             // Normalize symbol to standard format (e.g. BTC-USD-PERP)
             String symbol = coin + "-USD-PERP";
+            
+            // Get or create ticker
+            Ticker ticker = tickerService.getOrCreate(symbol);
 
             // Parse funding rate
             // Hyperliquid returns hourly funding rate in decimal format
@@ -205,15 +210,20 @@ public class HyperliquidService {
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(2, RoundingMode.HALF_UP);
 
-            // Get premium if available
+            // Get premium if available and valid
             BigDecimal premium = null;
             if (assetCtx.has("premium")) {
-                premium = new BigDecimal(assetCtx.get("premium").asText());
+                String premiumStr = assetCtx.get("premium").asText();
+                if (premiumStr != null && !premiumStr.isEmpty() 
+                        && !"nan".equalsIgnoreCase(premiumStr) 
+                        && !"null".equalsIgnoreCase(premiumStr)) {
+                    premium = new BigDecimal(premiumStr);
+                }
             }
 
             return FundingRate.builder()
                     .dex(dex)
-                    .symbol(symbol)
+                    .ticker(ticker)
                     .rate(rate)
                     .rate8h(rate8h)
                     .rateAnnual(rateAnnual)

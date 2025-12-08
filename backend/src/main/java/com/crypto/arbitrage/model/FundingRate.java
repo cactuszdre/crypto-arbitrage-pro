@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "funding_rate", indexes = {
-    @Index(name = "idx_dex_symbol_time", columnList = "dex_id, symbol, timestamp"),
+    @Index(name = "idx_dex_ticker_time", columnList = "dex_id, ticker_id, timestamp"),
     @Index(name = "idx_timestamp", columnList = "timestamp")
 })
 @Data
@@ -28,8 +28,9 @@ public class FundingRate {
     @JoinColumn(name = "dex_id", nullable = false)
     private Dex dex;
 
-    @Column(nullable = false, length = 20)
-    private String symbol;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "ticker_id", nullable = false)
+    private Ticker ticker;
 
     @Column(nullable = false, precision = 20, scale = 12)
     private BigDecimal rate;
@@ -55,4 +56,12 @@ public class FundingRate {
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Helper method to get the normalized symbol from the ticker.
+     */
+    public String getSymbol() {
+        return ticker != null ? ticker.getNormalizedSymbol() : null;
+    }
 }
+

@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "arbitrage_opportunity", indexes = {
-    @Index(name = "idx_symbol_time", columnList = "symbol, detected_at")
+    @Index(name = "idx_ticker_time", columnList = "ticker_id, detected_at")
 })
 @Data
 @NoArgsConstructor
@@ -31,8 +31,9 @@ public class ArbitrageOpportunity {
     @JoinColumn(name = "dex2_id", nullable = false)
     private Dex dex2;
 
-    @Column(nullable = false, length = 20)
-    private String symbol;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "ticker_id", nullable = false)
+    private Ticker ticker;
 
     @Column(name = "dex1_rate", nullable = false, precision = 20, scale = 12)
     private BigDecimal dex1Rate;
@@ -58,4 +59,12 @@ public class ArbitrageOpportunity {
     @Column(length = 20)
     @Builder.Default
     private String status = "ACTIVE";
+
+    /**
+     * Helper method to get the normalized symbol from the ticker.
+     */
+    public String getSymbol() {
+        return ticker != null ? ticker.getNormalizedSymbol() : null;
+    }
 }
+
