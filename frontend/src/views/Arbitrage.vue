@@ -9,6 +9,7 @@ const currentPage = ref(1)
 const itemsPerPage = 8
 const failedImages = ref(new Set())
 const searchQuery = ref('')
+const isLoadingOpportunities = ref(true)
 
 // Wallet & Execution State
 const accountData = useAppKitAccount()
@@ -123,11 +124,20 @@ const availableDexes = computed(() => {
   return Array.from(dexSet).sort()
 })
 
-// Initialize selectedDexes with all available DEXes when data loads
+// Sync selectedDexes with availableDexes when data changes
 watch(availableDexes, (newDexes) => {
-  if (!dexFilterInitialized.value && newDexes.length > 0) {
+  if (newDexes.length === 0) {
+    // No data available, reset selection
+    selectedDexes.value = []
+  } else if (!dexFilterInitialized.value) {
+    // First load: select all DEXes
     selectedDexes.value = [...newDexes]
     dexFilterInitialized.value = true
+  } else {
+    // Data changed: keep only DEXes that still exist, add new ones
+    const existingSelection = selectedDexes.value.filter(d => newDexes.includes(d))
+    const newOnes = newDexes.filter(d => !selectedDexes.value.includes(d))
+    selectedDexes.value = [...existingSelection, ...newOnes]
   }
 }, { immediate: true })
 
@@ -325,12 +335,15 @@ const formatRate = (rate) => {
 }
 
 // Fetch opportunities
-const fetchOpportunities = async () => {
+const fetchOpportunities = async (silent = false) => {
+  if (!silent) isLoadingOpportunities.value = true
   try {
     const response = await arbitrageApi.getOpportunities()
     opportunities.value = response.data
   } catch (error) {
     console.error('Failed to fetch opportunities:', error)
+  } finally {
+    isLoadingOpportunities.value = false
   }
 }
 
@@ -384,7 +397,7 @@ const startAutoRefresh = () => {
   stopAutoRefresh()
   refreshInterval = setInterval(() => {
     if (selectedPeriod.value === 'current') {
-      fetchOpportunities()
+      fetchOpportunities(true) // Silent refresh
     }
   }, 10000)
 }
@@ -415,7 +428,7 @@ onUnmounted(() => {
         <div class="px-6 py-5 border-b border-white/5">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-base font-medium text-white">Live Opportunities</h3>
-            <span class="text-xs text-indigo-400">
+            <span class="text-xs text-emerald-400">
               {{ filteredOpportunities.length }} 
               <span v-if="searchQuery.trim()">/ {{ opportunities.length }}</span> found
             </span>
@@ -433,7 +446,7 @@ onUnmounted(() => {
               @input="handleSearch"
               type="text" 
               placeholder="Search by ticker (BTC, ETH, SOL...) or DEX..."
-              class="w-full pl-10 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
+              class="w-full pl-10 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
             >
             <!-- Clear button -->
             <button 
@@ -457,13 +470,13 @@ onUnmounted(() => {
               :class="[
                 'px-3 py-1.5 text-xs font-medium rounded-lg transition-all',
                 selectedPeriod === option.value 
-                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
                   : 'bg-white/5 text-neutral-400 border border-white/10 hover:bg-white/10 hover:text-white'
               ]"
             >
               {{ option.label }}
             </button>
-            <span v-if="selectedPeriod !== 'current' && isLoadingHistorical" class="text-[10px] text-indigo-400 ml-2">
+            <span v-if="selectedPeriod !== 'current' && isLoadingHistorical" class="text-[10px] text-emerald-400 ml-2">
               <svg class="w-3 h-3 inline animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -493,7 +506,7 @@ onUnmounted(() => {
                   v-if="selectedDexes.length !== availableDexes.length" 
                   :class="[
                     'text-[10px] px-1.5 py-0.5 rounded-full',
-                    hasEnoughDexes ? 'bg-indigo-500 text-white' : 'bg-red-500 text-white'
+                    hasEnoughDexes ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
                   ]"
                 >
                   {{ selectedDexes.length }}/{{ availableDexes.length }}
@@ -529,7 +542,7 @@ onUnmounted(() => {
                     <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                     </svg>
-                    Sélectionnez au moins 2 DEX
+                    Select at least 2 DEXes
                   </p>
                 </div>
                 
@@ -543,7 +556,7 @@ onUnmounted(() => {
                       type="checkbox" 
                       :checked="isDexSelected(dex)"
                       @change="toggleDex(dex)"
-                      class="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500/50"
+                      class="w-4 h-4 rounded border-emerald-500/30 bg-white/5 text-emerald-500 focus:ring-emerald-500/50 accent-emerald-500"
                     >
                     <span :class="isDexSelected(dex) ? 'text-white' : 'text-neutral-500'">{{ dex }}</span>
                   </label>
@@ -553,15 +566,31 @@ onUnmounted(() => {
           </div>
         </div>
         
+        <!-- Skeleton Loading State -->
+        <div v-if="isLoadingOpportunities && opportunities.length === 0" class="divide-y divide-white/5">
+          <div v-for="i in 8" :key="i" class="px-6 py-4 animate-pulse">
+            <div class="flex items-center gap-4">
+              <div class="w-8 h-8 rounded-full bg-white/10"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-4 bg-white/10 rounded w-1/4"></div>
+                <div class="h-3 bg-white/5 rounded w-1/3"></div>
+              </div>
+              <div class="h-4 bg-white/10 rounded w-16"></div>
+              <div class="h-4 bg-white/5 rounded w-20"></div>
+              <div class="h-4 bg-white/10 rounded w-12"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Empty State: No data at all -->
-        <div v-if="opportunities.length === 0" class="p-12 text-center">
+        <div v-else-if="opportunities.length === 0" class="p-12 text-center">
           <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
             <svg class="w-8 h-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
             </svg>
           </div>
-          <p class="text-neutral-500 text-sm">Pas assez de données pour le moment</p>
-          <p class="text-neutral-600 text-xs mt-1">Attendez le prochain cycle de fetch ou ajoutez plus de DEX</p>
+          <p class="text-neutral-500 text-sm">Not enough data available yet</p>
+          <p class="text-neutral-600 text-xs mt-1">Wait for the next fetch cycle or add more DEXes</p>
         </div>
 
         <!-- Empty State: Not enough DEXes selected -->
@@ -571,13 +600,13 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
             </svg>
           </div>
-          <p class="text-neutral-500 text-sm">Sélectionnez au moins 2 DEX</p>
-          <p class="text-neutral-600 text-xs mt-1">L'arbitrage nécessite au moins 2 plateformes pour comparer les taux</p>
+          <p class="text-neutral-500 text-sm">Select at least 2 DEXes</p>
+          <p class="text-neutral-600 text-xs mt-1">Arbitrage requires at least 2 platforms to compare rates</p>
           <button 
             @click="selectAllDexes"
-            class="mt-4 px-4 py-2 text-xs font-medium text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/10 transition-colors"
+            class="mt-4 px-4 py-2 text-xs font-medium text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors"
           >
-            Sélectionner tous les DEX
+            Select All DEXes
           </button>
         </div>
 
@@ -588,13 +617,13 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
           </div>
-          <p class="text-neutral-500 text-sm">Aucun résultat trouvé</p>
-          <p class="text-neutral-600 text-xs mt-1">Essayez un autre ticker ou modifiez les filtres DEX</p>
+          <p class="text-neutral-500 text-sm">No results found</p>
+          <p class="text-neutral-600 text-xs mt-1">Try a different ticker or adjust the DEX filters</p>
           <button 
             @click="searchQuery = ''; selectAllDexes(); handleSearch()"
-            class="mt-4 px-4 py-2 text-xs font-medium text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/10 transition-colors"
+            class="mt-4 px-4 py-2 text-xs font-medium text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors"
           >
-            Réinitialiser les filtres
+            Reset Filters
           </button>
         </div>
 
