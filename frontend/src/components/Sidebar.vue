@@ -23,7 +23,7 @@ const navItems = computed(() => {
 <template>
   <aside class="hidden md:flex flex-col w-20 lg:w-64 h-full z-10 glass border-r-0">
     <!-- Logo -->
-    <div class="p-6 mb-2">
+    <div class="p-6 mb-6">
       <div class="flex items-center gap-3">
         <img src="@/assets/logo.png" alt="CactusFund Logo" class="w-8 h-8 rounded-xl shadow-lg shadow-green-500/20" />
         <span class="hidden lg:block text-sm font-semibold tracking-tight text-white">CactusFund</span>
@@ -31,7 +31,7 @@ const navItems = computed(() => {
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 px-4 space-y-2">
+    <nav class="flex-1 px-4 space-y-1">
       <RouterLink 
         v-for="item in navItems" 
         :key="item.path"
