@@ -26,7 +26,7 @@ public class FundingRateScheduler {
     /**
      * Récupère les funding rates toutes les 10 secondes
      */
-    @Scheduled(fixedRate = 10000) // 10 secondes
+    @Scheduled(fixedDelay = 10000) // 10 secondes APRÈS la fin de l'exécution précédente
     public void fetchFundingRatesLoop() {
         log.debug("=== Start periodic funding rate fetch ===");
 
