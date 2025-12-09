@@ -885,17 +885,11 @@ onUnmounted(() => {
             </svg>
             Multi-DEX en parallèle
           </div>
-          <div class="flex items-center gap-2 text-xs text-neutral-500">
-            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            Support Hyperliquid, Paradex, Lighter
-          </div>
         </div>
         
         <!-- CTA Button -->
         <a 
-          href="https://cactusfund.io" 
+          href="https://cactusfund.app" 
           target="_blank"
           class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
@@ -911,7 +905,7 @@ onUnmounted(() => {
         <!-- Footer Note -->
         <p class="text-[10px] text-neutral-600 mt-4">
           Accédez à toutes les fonctionnalités sur 
-          <a href="https://cactusfund.io" target="_blank" class="text-amber-500 hover:underline">cactusfund.io</a>
+          <a href="https://cactusfund.app" target="_blank" class="text-amber-500 hover:underline">cactusfund.app</a>
         </p>
       </div>
     </div>
