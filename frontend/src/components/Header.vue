@@ -366,9 +366,8 @@ onUnmounted(() => {
 /* ===== HEADER ===== */
 .header-main {
   height: 72px;
-  margin-bottom: 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(12px);
   display: flex;
   align-items: center;

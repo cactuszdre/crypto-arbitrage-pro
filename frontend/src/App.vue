@@ -31,7 +31,7 @@ import Header from './components/Header.vue'
     <!-- Main Content -->
     <main class="flex-1 flex flex-col h-full overflow-hidden relative z-10">
       <Header v-if="$route.name !== 'Login'" />
-      <div :class="['flex-1 overflow-y-auto', $route.name !== 'Login' ? 'px-8 pb-8 space-y-6' : '']">
+      <div :class="['flex-1 overflow-y-auto', $route.name !== 'Login' ? 'px-8 pt-6 pb-8 space-y-6' : '']">
         <RouterView />
       </div>
     </main>
