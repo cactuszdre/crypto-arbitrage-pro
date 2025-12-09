@@ -2,7 +2,7 @@
 -- This table stores daily averages of funding rates to reduce storage while keeping historical data
 
 CREATE TABLE funding_rate_daily (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     ticker_id INT NOT NULL,
     dex_id BIGINT NOT NULL,
     date DATE NOT NULL,
@@ -14,9 +14,10 @@ CREATE TABLE funding_rate_daily (
     sample_count INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    UNIQUE KEY uk_ticker_dex_date (ticker_id, dex_id, date),
+    UNIQUE (ticker_id, dex_id, date),
     FOREIGN KEY (ticker_id) REFERENCES ticker(id),
-    FOREIGN KEY (dex_id) REFERENCES dex(id),
-    INDEX idx_date (date),
-    INDEX idx_ticker_date (ticker_id, date)
+    FOREIGN KEY (dex_id) REFERENCES dex(id)
 );
+
+CREATE INDEX idx_funding_daily_date ON funding_rate_daily (date);
+CREATE INDEX idx_funding_daily_ticker_date ON funding_rate_daily (ticker_id, date);
