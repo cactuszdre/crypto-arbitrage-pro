@@ -889,33 +889,24 @@ onUnmounted(() => {
             </svg>
             Multi-DEX parallel execution
           </div>
-          <div class="flex items-center gap-2 text-xs text-neutral-500">
-            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            Supports Hyperliquid, Paradex, Lighter
-          </div>
+
         </div>
         
         <!-- CTA Button -->
-        <a 
-          href="https://cactusfund.io/pro" 
-          target="_blank"
+        <router-link 
+          to="/billing"
           class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
           </svg>
           Upgrade to Pro
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-          </svg>
-        </a>
+        </router-link>
         
         <!-- Footer Note -->
         <p class="text-[10px] text-neutral-600 mt-4">
           Access all features on 
-          <a href="https://cactusfund.io" target="_blank" class="text-amber-500 hover:underline">cactusfund.io</a>
+          <a href="https://cactusfund.app" target="_blank" class="text-amber-500 hover:underline">cactusfund.app</a>
         </p>
       </div>
       
