@@ -24,6 +24,11 @@ const routes = [
         component: () => import('../views/Swap.vue')
     },
     {
+        path: '/billing',
+        name: 'Billing',
+        component: () => import('../views/Billing.vue')
+    },
+    {
         path: '/admin',
         name: 'Admin',
         component: () => import('../views/Admin.vue'),
