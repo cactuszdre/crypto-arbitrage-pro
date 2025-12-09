@@ -1,43 +1,41 @@
 version: '3.8'
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: crypto-mysql
+  postgres:
+    image: postgres:17-alpine
+    container_name: crypto-postgres
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "${DB_PORT}:3306"
+      - "${DB_PORT}:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
     networks:
       - crypto-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: crypto-phpmyadmin
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: crypto-pgadmin
     environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: ${DB_ROOT_PASSWORD}
-      UPLOAD_LIMIT: 50M
+      PGADMIN_DEFAULT_EMAIL: admin@crypto.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
       - "8081:80"
     networks:
       - crypto-network
     depends_on:
-      - mysql
+      - postgres
 
 volumes:
-  mysql-data:
+  postgres-data:
 
 networks:
   crypto-network:

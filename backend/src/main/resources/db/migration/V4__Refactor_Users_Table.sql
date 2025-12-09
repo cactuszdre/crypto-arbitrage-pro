@@ -6,20 +6,20 @@ DROP TABLE IF EXISTS users;
 
 -- Create new users table with wallet-based authentication
 CREATE TABLE users (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     wallet_address VARCHAR(42) NOT NULL UNIQUE,
-    role ENUM('USER', 'ADMIN') NOT NULL DEFAULT 'USER',
-    plan ENUM('FREE', 'PRO') NOT NULL DEFAULT 'FREE',
-    plan_expires_at DATETIME NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_login_at DATETIME NULL,
-    nonce VARCHAR(255) NULL,
-    
-    INDEX idx_wallet (wallet_address),
-    INDEX idx_role (role),
-    INDEX idx_plan (plan),
-    INDEX idx_plan_expires (plan_expires_at)
+    role VARCHAR(10) NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'ADMIN')),
+    plan VARCHAR(10) NOT NULL DEFAULT 'FREE' CHECK (plan IN ('FREE', 'PRO')),
+    plan_expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP NULL,
+    nonce VARCHAR(255) NULL
 );
+
+CREATE INDEX idx_users_wallet ON users (wallet_address);
+CREATE INDEX idx_users_role ON users (role);
+CREATE INDEX idx_users_plan ON users (plan);
+CREATE INDEX idx_users_plan_expires ON users (plan_expires_at);
 
 -- Optional: Insert a default admin wallet (uncomment and replace with your wallet)
 -- INSERT INTO users (wallet_address, role, plan) VALUES 
