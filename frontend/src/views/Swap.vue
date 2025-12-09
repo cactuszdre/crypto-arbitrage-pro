@@ -148,7 +148,7 @@ onMounted(() => {
             Balance: {{ formatBalance(fromBalance) }} {{ fromToken }}
             <button 
               @click="setMax" 
-              class="ml-1 text-indigo-400 hover:text-indigo-300 transition-colors"
+              class="ml-1 text-emerald-400 hover:text-emerald-300 transition-colors"
             >MAX</button>
           </span>
         </div>
@@ -186,7 +186,7 @@ onMounted(() => {
       <div class="flex justify-center -my-2 relative z-10">
         <button 
           @click="switchDirection"
-          class="w-10 h-10 rounded-full bg-[#0f0f13] border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:border-indigo-500/50 transition-all hover:rotate-180 duration-300"
+          class="w-10 h-10 rounded-full bg-[#0f0f13] border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:border-emerald-500/50 transition-all hover:rotate-180 duration-300"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
@@ -247,7 +247,7 @@ onMounted(() => {
       <button 
         @click="executeSwapAction"
         :disabled="!isConnected || !amount || parseFloat(amount) <= 0 || isLoading"
-        class="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-2xl hover:shadow-lg hover:shadow-indigo-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all flex items-center justify-center gap-2"
+        class="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-2xl hover:shadow-lg hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all flex items-center justify-center gap-2"
       >
         <svg v-if="isLoading" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

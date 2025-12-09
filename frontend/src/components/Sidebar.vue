@@ -39,7 +39,7 @@ const navItems = computed(() => {
         :class="[
           'group flex items-center gap-3 px-3 py-3 text-sm rounded-xl transition-colors border',
           route.path === item.path 
-            ? 'text-white bg-white/5 border-white/5 shadow-sm hover:shadow-md hover:shadow-indigo-500/10' 
+            ? 'text-white bg-white/5 border-white/5 shadow-sm hover:shadow-md hover:shadow-emerald-500/10' 
             : 'text-neutral-400 border-transparent hover:text-white hover:bg-white/5'
         ]"
       >
