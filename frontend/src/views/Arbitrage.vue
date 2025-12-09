@@ -776,15 +776,41 @@ onUnmounted(() => {
                 </span>
               </td>
               <td class="px-6 py-4 text-right">
-                <button 
-                  @click="selectOpportunity(opp)"
-                  class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
-                  :class="{ 'bg-indigo-500 text-white border-indigo-500': selectedOpportunity?.symbol === opp.symbol }"
-                >
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                </button>
+                <div class="relative inline-block">
+                  <button 
+                    @click="isPro ? selectOpportunity(opp) : null"
+                    :class="[
+                      'w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 peer',
+                      selectedOpportunity?.symbol === opp.symbol 
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/30' 
+                        : isPro 
+                          ? 'border-white/10 text-neutral-400 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:scale-110'
+                          : 'border-white/10 text-neutral-500 hover:text-neutral-400 cursor-not-allowed'
+                    ]"
+                  >
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </button>
+                  <!-- Small lock badge for non-Pro -->
+                  <div 
+                    v-if="!isPro"
+                    class="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-md"
+                  >
+                    <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                  </div>
+                  <!-- Pro Feature Tooltip - only on button hover -->
+                  <div 
+                    v-if="!isPro"
+                    class="absolute right-0 bottom-full mb-2 opacity-0 invisible peer-hover:opacity-100 peer-hover:visible transition-all duration-150 z-50"
+                  >
+                    <div class="px-2.5 py-1 bg-neutral-800 text-amber-400 text-[10px] font-semibold rounded-md border border-amber-500/30 whitespace-nowrap shadow-xl">
+                      Pro
+                    </div>
+                  </div>
+                </div>
               </td>
             </tr>
           </tbody>
