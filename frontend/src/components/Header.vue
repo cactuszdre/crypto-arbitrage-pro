@@ -464,9 +464,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.375rem 0.75rem;
+  height: 36px;
   background: #18181b;
   border: 1px solid #27272a;
-  border-radius: 4px;
+  border-radius: 10px;
   transition: all 0.2s ease;
 }
 
@@ -506,7 +507,8 @@ onUnmounted(() => {
   background: #ffffff;
   color: #000000;
   padding: 0.375rem 1rem;
-  border-radius: 4px;
+  height: 36px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 600;
   border: none;

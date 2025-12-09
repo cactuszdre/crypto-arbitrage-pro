@@ -302,7 +302,7 @@ const chartOptions = computed(() => ({
             :class="[
               'px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
               selectedDex === dex 
-                ? 'bg-indigo-600 text-white border-transparent shadow-lg shadow-indigo-500/25' 
+                ? 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-500/25' 
                 : 'text-neutral-500 border-transparent hover:text-white'
             ]"
           >

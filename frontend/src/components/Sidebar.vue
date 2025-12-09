@@ -51,7 +51,7 @@ const navItems = computed(() => {
     <!-- User Profile -->
     <div class="p-4 mt-auto">
       <div class="glass-card p-3 rounded-2xl flex items-center gap-3 cursor-pointer hover:bg-white/5 transition-colors">
-        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white text-xs font-bold">
           C
         </div>
         <div class="hidden lg:flex flex-col">
