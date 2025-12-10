@@ -673,10 +673,10 @@ onUnmounted(() => {
             </div>
 
             <!-- Card Header: Symbol + Daily Return -->
-            <div class="relative flex items-center justify-between mb-3">
-              <div class="flex items-center gap-3">
+            <div class="relative flex items-center justify-between gap-2 mb-3">
+              <div class="flex items-center gap-3 min-w-0 flex-1">
                 <!-- Icon -->
-                <div class="relative">
+                <div class="relative shrink-0">
                   <img
                     v-if="!isImageFailed(opp.symbol)"
                     :src="getFallbackIcon(opp.symbol)"
@@ -701,8 +701,8 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <!-- Symbol name -->
-                <div>
-                  <h4 class="text-sm font-semibold text-white group-hover:text-emerald-300 transition-colors">
+                <div class="min-w-0">
+                  <h4 class="text-sm font-semibold text-white group-hover:text-emerald-300 transition-colors truncate">
                     {{ opp.symbol.replace('-USD-PERP', '') }}
                   </h4>
                   <p class="text-[10px] text-neutral-500">Perpetual</p>
@@ -741,19 +741,25 @@ onUnmounted(() => {
             </div>
 
             <!-- Route: Long -> Short -->
-            <div class="relative flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+            <div class="relative flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2 mb-3 p-2 sm:p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
               <a
                 :href="getDexUrl(opp.longDex, opp.symbol)"
                 target="_blank"
                 @click.stop
-                class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                class="flex-1 flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors min-w-0"
               >
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span class="text-[10px] text-emerald-400 font-medium">LONG</span>
-                <span class="text-xs text-white font-semibold ml-auto">{{ opp.longDex }}</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span class="text-[10px] text-emerald-400 font-medium shrink-0">LONG</span>
+                <span class="text-xs text-white font-semibold ml-auto truncate">{{ opp.longDex }}</span>
               </a>
-              <div class="flex items-center justify-center w-6 h-6 rounded-full bg-white/5">
-                <svg class="w-3 h-3 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <!-- Arrow: vertical on mobile, horizontal on desktop -->
+              <div class="flex items-center justify-center w-6 h-6 rounded-full bg-white/5 shrink-0 self-center">
+                <!-- Down arrow (mobile) -->
+                <svg class="w-3 h-3 text-neutral-500 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                </svg>
+                <!-- Right arrow (desktop) -->
+                <svg class="w-3 h-3 text-neutral-500 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                 </svg>
               </div>
@@ -761,11 +767,11 @@ onUnmounted(() => {
                 :href="getDexUrl(opp.shortDex, opp.symbol)"
                 target="_blank"
                 @click.stop
-                class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                class="flex-1 flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors min-w-0"
               >
-                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                <span class="text-[10px] text-red-400 font-medium">SHORT</span>
-                <span class="text-xs text-white font-semibold ml-auto">{{ opp.shortDex }}</span>
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></span>
+                <span class="text-[10px] text-red-400 font-medium shrink-0">SHORT</span>
+                <span class="text-xs text-white font-semibold ml-auto truncate">{{ opp.shortDex }}</span>
               </a>
             </div>
 
@@ -846,7 +852,7 @@ onUnmounted(() => {
               </th>
               <th
                 @click="toggleSort('projectedDailyReturn')"
-                class="px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                class="px-2 py-3 font-medium cursor-pointer hover:text-white transition-colors select-none"
               >
                 <span class="flex items-center gap-1">
                   Daily Return
@@ -861,7 +867,7 @@ onUnmounted(() => {
                   </svg>
                 </span>
               </th>
-              <th class="px-4 py-3 font-medium text-center"></th>
+              <th class="w-16 pl-2 pr-4 py-3 font-medium"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
@@ -921,12 +927,12 @@ onUnmounted(() => {
                   {{ formatRate(opp.shortRate).value }}
                 </span>
               </td>
-              <td class="px-4 py-3">
+              <td class="px-2 py-3">
                 <span :class="['text-xs font-medium', opp.projectedDailyReturn >= 0 ? 'text-emerald-400' : 'text-red-400']">
                   {{ opp.projectedDailyReturn >= 0 ? '+' : '' }}{{ (opp.projectedDailyReturn).toFixed(4) }}%
                 </span>
               </td>
-              <td class="px-4 py-3 text-center">
+              <td class="w-16 pl-2 pr-4 py-3">
                 <div class="inline-block relative">
                   <button
                     @click="isPro ? selectOpportunity(opp) : null"
