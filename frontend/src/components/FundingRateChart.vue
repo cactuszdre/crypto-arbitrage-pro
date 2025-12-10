@@ -38,6 +38,7 @@ const chartKey = ref(0) // Used to force chart re-render
 const historyData = ref([])
 const selectedDex = ref('All') // 'All', 'Paradex', 'Lighter', 'Hyperliquid'
 const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
+const isChangingMetric = ref(false) // Loading state for metric changes
 
 const metrics = [
   { label: '1H Rate', value: 'rate' },
@@ -141,7 +142,17 @@ const fetchData = async (silent = false) => {
 }
 
 // Watch for prop/selection changes - show loading on these
+// Watch for symbol/dex changes - show loading
 watch(() => [props.symbol, selectedDex.value], () => fetchData(false), { immediate: true })
+
+// Watch for metric changes - show brief loading indicator
+watch(() => selectedMetric.value, async () => {
+  isChangingMetric.value = true
+  // Small delay to show loading feedback
+  await new Promise(resolve => setTimeout(resolve, 150))
+  chartKey.value++
+  isChangingMetric.value = false
+})
 
 // Auto-refresh every 10 seconds (silent - no loading spinner)
 let refreshInterval = null
@@ -186,7 +197,9 @@ const unifiedChartData = computed(() => {
             data: metricsData,
             tension: 0.4,
             spanGaps: true,
+            pointStyle: 'circle', // Points are circles (also affects tooltip indicators)
             pointRadius: 2,
+            pointBackgroundColor: color, // Fill circle with dataset color (affects tooltip too)
             pointHoverRadius: 6,
             pointHoverBackgroundColor: color,
             pointHoverBorderColor: '#000',
@@ -210,6 +223,33 @@ const unifiedChartData = computed(() => {
     return { labels, datasets }
 })
 
+// Crosshair plugin for vertical line on hover
+const crosshairPlugin = {
+  id: 'crosshair',
+  afterDraw: (chart) => {
+    if (chart.tooltip?._active?.length) {
+      const ctx = chart.ctx
+      const activePoint = chart.tooltip._active[0]
+      const x = activePoint.element.x
+      const topY = chart.scales.y.top
+      const bottomY = chart.scales.y.bottom
+      
+      ctx.save()
+      ctx.beginPath()
+      ctx.moveTo(x, topY)
+      ctx.lineTo(x, bottomY)
+      ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'
+      ctx.setLineDash([4, 4])
+      ctx.stroke()
+      ctx.restore()
+    }
+  }
+}
+
+// Register crosshair plugin
+ChartJS.register(crosshairPlugin)
+
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -225,7 +265,7 @@ const chartOptions = computed(() => ({
       display: false 
     },
     tooltip: {
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
       titleColor: '#fff',
       bodyColor: '#9CA3AF',
       borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -233,6 +273,7 @@ const chartOptions = computed(() => ({
       cornerRadius: 8,
       padding: 12,
       displayColors: true,
+      usePointStyle: true, // Use circles instead of squares for color indicators
       boxPadding: 4,
       animation: false, // No tooltip animation for snappy feel
       callbacks: {
@@ -348,7 +389,7 @@ const chartOptions = computed(() => ({
       </div>
     </div>
 
-    <!-- Loading State (only on initial load) -->
+    <!-- Loading State (initial load or changing metric) -->
     <div v-if="loading && isInitialLoad" class="flex-1 flex items-center justify-center">
       <div class="flex flex-col items-center gap-3">
         <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -358,7 +399,17 @@ const chartOptions = computed(() => ({
 
     <!-- Chart (show after initial load, even during background refresh) -->
     <div v-else class="flex-1 relative w-full min-h-[360px] mt-4">
-      <Line :data="unifiedChartData" :options="chartOptions" />
+      <!-- Overlay loading for metric changes -->
+      <div 
+        v-if="isChangingMetric" 
+        class="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg transition-opacity duration-150"
+      >
+        <div class="flex items-center gap-3">
+          <div class="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-sm text-neutral-300">Updating...</span>
+        </div>
+      </div>
+      <Line :key="chartKey" :data="unifiedChartData" :options="chartOptions" />
     </div>
   </div>
 </template>

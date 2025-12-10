@@ -1,9 +1,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, unref } from 'vue'
+import { useRoute } from 'vue-router'
 import { arbitrageApi } from '../services/api'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
 import { executeHyperliquidOrder, executeParadexOrder, executeLighterOrder } from '../services/execution'
 import { useAuth } from '../stores/auth'
+
+// Route for reading query params
+const route = useRoute()
 
 // Auth store for Pro plan check
 const { state: authState } = useAuth()
@@ -415,8 +419,20 @@ const stopAutoRefresh = () => {
 }
 
 onMounted(() => {
+  // Initialize search from URL query param
+  if (route.query.search) {
+    searchQuery.value = route.query.search
+  }
   fetchOpportunities()
   startAutoRefresh()
+})
+
+// Watch for route query changes (when search is updated from Header)
+watch(() => route.query.search, (newSearch) => {
+  if (newSearch !== undefined) {
+    searchQuery.value = newSearch || ''
+    handleSearch()
+  }
 })
 
 onUnmounted(() => {
@@ -721,13 +737,13 @@ onUnmounted(() => {
                       v-if="!isImageFailed(opp.symbol)"
                       :src="getFallbackIcon(opp.symbol)"
                       :alt="getBaseSymbol(opp.symbol)"
-                      class="w-6 h-6 rounded-full border border-black transition-all bg-neutral-800"
+                      class="w-6 h-6 rounded-full border border-black transition-all bg-neutral-800 shrink-0 object-cover"
                       @error="(e) => handleImageError(opp.symbol, e)"
                     >
                     <!-- Fallback: styled letter placeholder -->
                     <div 
                       v-if="isImageFailed(opp.symbol)"
-                      class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[10px] text-white font-bold border border-black shadow-sm"
+                      class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[10px] text-white font-bold border border-black shadow-sm shrink-0"
                     >
                       {{ getBaseSymbol(opp.symbol).charAt(0).toUpperCase() }}
                     </div>
