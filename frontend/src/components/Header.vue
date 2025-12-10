@@ -143,7 +143,6 @@ const formatChange = (change) => {
 watch(
   () => accountData.value,
   async (newAccount) => {
-    console.log('🔄 Account changed:', newAccount)
     
     if (newAccount?.isConnected && newAccount?.address) {
       // Extract clean address (remove CAIP prefix like "eip155:1:")
@@ -152,13 +151,11 @@ watch(
         cleanAddress = cleanAddress.split(':').pop()
       }
       
-      console.log('🔑 Clean wallet address:', cleanAddress)
       
       try {
         // Login or register user with wallet, then get their role from backend
         const response = await userApi.updateLastLogin(cleanAddress)
         setUser(response.data)
-        console.log('✅ User synced with backend:', response.data)
         
         // If user is on admin page but not admin, redirect to home
         if (route.path === '/admin' && response.data.role !== 'ADMIN') {
@@ -178,7 +175,6 @@ watch(
     } else {
       // Wallet disconnected
       logout()
-      console.log('👋 User logged out')
       
       // Redirect from admin page if disconnected
       if (route.path === '/admin') {

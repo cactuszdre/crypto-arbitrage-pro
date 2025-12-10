@@ -5,7 +5,6 @@ import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 // 1. Get a project ID at https://cloud.reown.com
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
 
-console.log('AppKit Config - ProjectID loaded:', projectId ? 'YES (Length: ' + projectId.length + ')' : 'NO')
 
 if (!projectId) {
     console.error('VITE_WALLETCONNECT_PROJECT_ID is not set in .env file')

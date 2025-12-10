@@ -79,5 +79,32 @@ export const cryptoPriceApi = {
     getAll: () => api.get('/crypto-prices')
 };
 
+// Chart API - Pre-aggregated 5-minute data for charts
+export const chartApi = {
+    // Get chart data for a specific symbol and DEX
+    getChartData: (symbol, dex, hours = 24) =>
+        api.get(`/charts/funding-rate/${symbol}/${dex}`, { params: { hours } }),
+
+    // Get chart data for a symbol across all DEXs
+    getChartDataBySymbol: (symbol, hours = 24) =>
+        api.get(`/charts/funding-rate/${symbol}`, { params: { hours } }),
+
+    // Get chart data for all symbols on a specific DEX
+    getChartDataByDex: (dex, hours = 24) =>
+        api.get(`/charts/funding-rate/dex/${dex}`, { params: { hours } }),
+
+    // Get latest N data points for real-time updates
+    getLatestDataPoints: (symbol, dex, count = 12) =>
+        api.get(`/charts/funding-rate/${symbol}/${dex}/latest`, { params: { count } }),
+
+    // Get comparison data across DEXs
+    getComparisonData: (symbol, hours = 24) =>
+        api.get(`/charts/funding-rate/${symbol}/compare`, { params: { hours } }),
+
+    // Get statistics summary
+    getStatsSummary: (symbol, hours = 24) =>
+        api.get(`/charts/funding-rate/${symbol}/stats`, { params: { hours } })
+};
+
 export default api;
 

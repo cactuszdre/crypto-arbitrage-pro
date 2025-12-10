@@ -33,6 +33,18 @@ public class FundingRateCleanupService {
     private final DexRepository dexRepository;
 
     /**
+     * Helper method to convert numeric types from DB to BigDecimal.
+     * PostgreSQL returns Double for AVG() functions.
+     */
+    private BigDecimal toBigDecimal(Object value) {
+        if (value == null) return null;
+        if (value instanceof BigDecimal) return (BigDecimal) value;
+        if (value instanceof Double) return BigDecimal.valueOf((Double) value);
+        if (value instanceof Number) return BigDecimal.valueOf(((Number) value).doubleValue());
+        return new BigDecimal(value.toString());
+    }
+
+    /**
      * Runs every day at 1:00 AM to clean up old funding rate data.
      * 1. Aggregates data older than 24 hours into daily averages
      * 2. Deletes the old raw data
@@ -56,11 +68,11 @@ public class FundingRateCleanupService {
                 try {
                     Integer tickerId = (Integer) row[0];
                     Long dexId = (Long) row[1];
-                    BigDecimal avgRate = (BigDecimal) row[2];
-                    BigDecimal minRate = (BigDecimal) row[3];
-                    BigDecimal maxRate = (BigDecimal) row[4];
-                    BigDecimal avgRate8h = (BigDecimal) row[5];
-                    BigDecimal avgRateAnnual = (BigDecimal) row[6];
+                    BigDecimal avgRate = toBigDecimal(row[2]);
+                    BigDecimal minRate = toBigDecimal(row[3]);
+                    BigDecimal maxRate = toBigDecimal(row[4]);
+                    BigDecimal avgRate8h = toBigDecimal(row[5]);
+                    BigDecimal avgRateAnnual = toBigDecimal(row[6]);
                     Long sampleCount = (Long) row[7];
                     
                     // Get entities

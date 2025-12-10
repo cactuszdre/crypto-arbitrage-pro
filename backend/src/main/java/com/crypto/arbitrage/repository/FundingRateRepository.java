@@ -62,6 +62,57 @@ public interface FundingRateRepository extends JpaRepository<FundingRate, Long> 
         GROUP BY f.ticker.id, f.dex.id
         """)
     List<Object[]> aggregateOldRates(@Param("cutoffTime") LocalDateTime cutoffTime);
+
+    /**
+     * Aggregation query for 5-minute buckets.
+     * Returns Object[] with: tickerId, dexId, avgRate, minRate, maxRate, avgRate8h, avgRateAnnual, count, firstRate, lastRate
+     */
+    @Query("""
+        SELECT f.ticker.id, f.dex.id, 
+               AVG(f.rate), MIN(f.rate), MAX(f.rate), 
+               AVG(f.rate8h), AVG(f.rateAnnual), COUNT(f)
+        FROM FundingRate f 
+        WHERE f.timestamp >= :startTime AND f.timestamp < :endTime
+        GROUP BY f.ticker.id, f.dex.id
+        """)
+    List<Object[]> aggregateForBucket(
+        @Param("startTime") LocalDateTime startTime,
+        @Param("endTime") LocalDateTime endTime
+    );
+
+    /**
+     * Get the first rate in a time bucket for open rate calculation
+     */
+    @Query("""
+        SELECT f FROM FundingRate f 
+        WHERE f.ticker.id = :tickerId AND f.dex.id = :dexId 
+        AND f.timestamp >= :startTime AND f.timestamp < :endTime
+        ORDER BY f.timestamp ASC
+        """)
+    List<FundingRate> findFirstInBucket(
+        @Param("tickerId") Integer tickerId,
+        @Param("dexId") Long dexId,
+        @Param("startTime") LocalDateTime startTime,
+        @Param("endTime") LocalDateTime endTime,
+        Pageable pageable
+    );
+
+    /**
+     * Get the last rate in a time bucket for close rate calculation
+     */
+    @Query("""
+        SELECT f FROM FundingRate f 
+        WHERE f.ticker.id = :tickerId AND f.dex.id = :dexId 
+        AND f.timestamp >= :startTime AND f.timestamp < :endTime
+        ORDER BY f.timestamp DESC
+        """)
+    List<FundingRate> findLastInBucket(
+        @Param("tickerId") Integer tickerId,
+        @Param("dexId") Long dexId,
+        @Param("startTime") LocalDateTime startTime,
+        @Param("endTime") LocalDateTime endTime,
+        Pageable pageable
+    );
 }
 
 
