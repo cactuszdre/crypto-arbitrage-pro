@@ -106,5 +106,10 @@ export const chartApi = {
         api.get(`/charts/funding-rate/${symbol}/stats`, { params: { hours } })
 };
 
+export const chatApi = {
+    // Send message to AI assistant
+    sendMessage: (messages) => api.post('/chat', { messages })
+};
+
 export default api;
 

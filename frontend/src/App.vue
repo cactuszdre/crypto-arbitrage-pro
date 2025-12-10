@@ -24,6 +24,7 @@ const navItems = [
   { path: '/', name: 'Overview', icon: 'lucide:layout-template' },
   { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
   { path: '/swap', name: 'Swap', icon: 'lucide:repeat' },
+  { path: '/learn', name: 'Learn', icon: 'lucide:graduation-cap' },
 ]
 </script>
 
