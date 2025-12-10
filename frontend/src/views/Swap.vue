@@ -46,7 +46,7 @@ const toBalance = computed(() => direction.value === 'wrap' ? wethBalance.value 
 // Fetch balances
 const fetchBalances = async () => {
   if (!isConnected.value || !userAddress.value) return
-  
+
   try {
     ethBalance.value = await getTokenBalance(provider.value, 'ETH', userAddress.value)
     wethBalance.value = await getTokenBalance(provider.value, 'WETH', userAddress.value)
@@ -83,31 +83,31 @@ const setMax = () => {
 // Execute swap
 const executeSwapAction = async () => {
   if (!isConnected.value || !amount.value || parseFloat(amount.value) <= 0) return
-  
+
   isLoading.value = true
   txStatus.value = { pending: true, message: 'Waiting for confirmation...' }
-  
+
   try {
     const tx = await executeSwap(provider.value, fromToken.value, toToken.value, amount.value)
-    
+
     txStatus.value = { pending: true, hash: tx.hash, message: 'Transaction pending...' }
-    
+
     await tx.wait()
-    
-    txStatus.value = { 
-      success: true, 
-      hash: tx.hash, 
+
+    txStatus.value = {
+      success: true,
+      hash: tx.hash,
       message: direction.value === 'wrap' ? 'ETH wrapped successfully!' : 'WETH unwrapped successfully!'
     }
-    
+
     // Refresh balances
     await fetchBalances()
     amount.value = ''
-    
+
   } catch (error) {
     console.error('Swap failed:', error)
-    txStatus.value = { 
-      success: false, 
+    txStatus.value = {
+      success: false,
       message: error.reason || error.message || 'Transaction failed'
     }
   } finally {
@@ -130,124 +130,124 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-lg mx-auto">
+  <div class="w-full max-w-md lg:max-w-lg mx-auto px-3 sm:px-0">
     <!-- Header -->
-    <div class="mb-8 text-center">
-      <h1 class="text-2xl font-bold text-white mb-2">Swap</h1>
-      <p class="text-sm text-neutral-500">Wrap or unwrap your ETH instantly</p>
+    <div class="mb-4 sm:mb-6 lg:mb-8 text-center">
+      <h1 class="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">Swap</h1>
+      <p class="text-xs sm:text-sm text-neutral-500">Wrap or unwrap your ETH instantly</p>
     </div>
 
     <!-- Swap Card -->
-    <div class="glass-card rounded-3xl p-6 border border-white/10">
-      
+    <div class="glass-card rounded-2xl sm:rounded-3xl p-4 sm:p-5 lg:p-6 border border-white/10">
+
       <!-- From Token -->
-      <div class="mb-4">
-        <div class="flex items-center justify-between mb-2">
+      <div class="mb-3 sm:mb-4">
+        <div class="flex items-center justify-between mb-1.5 sm:mb-2">
           <span class="text-xs text-neutral-500">From</span>
           <span class="text-xs text-neutral-500">
             Balance: {{ formatBalance(fromBalance) }} {{ fromToken }}
-            <button 
-              @click="setMax" 
+            <button
+              @click="setMax"
               class="ml-1 text-emerald-400 hover:text-emerald-300 transition-colors"
             >MAX</button>
           </span>
         </div>
-        <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+        <div class="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
           <!-- Token Icon - ETH or WETH -->
-          <div class="w-10 h-10 rounded-full overflow-hidden bg-neutral-800 flex items-center justify-center flex-shrink-0">
-            <img 
-              v-if="fromToken === 'ETH'" 
-              src="https://app.paradex.trade/static/market/ETH.svg" 
-              alt="ETH" 
-              class="w-full h-full object-cover" 
+          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-neutral-800 flex items-center justify-center flex-shrink-0">
+            <img
+              v-if="fromToken === 'ETH'"
+              src="https://app.paradex.trade/static/market/ETH.svg"
+              alt="ETH"
+              class="w-full h-full object-cover"
             />
-            <img 
-              v-else 
-              src="https://etherscan.io/token/images/weth_28.png?v=2" 
-              alt="WETH" 
-              class="w-full h-full object-cover" 
+            <img
+              v-else
+              src="https://etherscan.io/token/images/weth_28.png?v=2"
+              alt="WETH"
+              class="w-full h-full object-cover"
             />
           </div>
           <!-- Amount Input -->
-          <input 
+          <input
             v-model="amount"
             type="number"
             step="0.0001"
             min="0"
             placeholder="0.0"
-            class="flex-1 bg-transparent text-2xl font-mono text-white placeholder-neutral-600 focus:outline-none"
+            class="flex-1 bg-transparent text-xl sm:text-2xl font-mono text-white placeholder-neutral-600 focus:outline-none min-w-0"
           />
           <!-- Token Symbol -->
-          <span class="text-lg font-semibold text-white">{{ fromToken }}</span>
+          <span class="text-base sm:text-lg font-semibold text-white">{{ fromToken }}</span>
         </div>
       </div>
 
       <!-- Switch Button -->
-      <div class="flex justify-center -my-2 relative z-10">
-        <button 
+      <div class="flex justify-center -my-1.5 sm:-my-2 relative z-10">
+        <button
           @click="switchDirection"
-          class="w-10 h-10 rounded-full bg-[#0f0f13] border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:border-emerald-500/50 transition-all hover:rotate-180 duration-300"
+          class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0f0f13] border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:border-emerald-500/50 transition-all hover:rotate-180 duration-300"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
           </svg>
         </button>
       </div>
 
       <!-- To Token -->
-      <div class="mt-4 mb-6">
-        <div class="flex items-center justify-between mb-2">
+      <div class="mt-3 sm:mt-4 mb-4 sm:mb-5 lg:mb-6">
+        <div class="flex items-center justify-between mb-1.5 sm:mb-2">
           <span class="text-xs text-neutral-500">To</span>
           <span class="text-xs text-neutral-500">
             Balance: {{ formatBalance(toBalance) }} {{ toToken }}
           </span>
         </div>
-        <div class="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+        <div class="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
           <!-- Token Icon - ETH or WETH -->
-          <div class="w-10 h-10 rounded-full overflow-hidden bg-neutral-800 flex items-center justify-center flex-shrink-0">
-            <img 
-              v-if="toToken === 'ETH'" 
-              src="https://app.paradex.trade/static/market/ETH.svg" 
-              alt="ETH" 
-              class="w-full h-full object-cover" 
+          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-neutral-800 flex items-center justify-center flex-shrink-0">
+            <img
+              v-if="toToken === 'ETH'"
+              src="https://app.paradex.trade/static/market/ETH.svg"
+              alt="ETH"
+              class="w-full h-full object-cover"
             />
-            <img 
-              v-else 
-              src="https://etherscan.io/token/images/weth_28.png?v=2" 
-              alt="WETH" 
-              class="w-full h-full object-cover" 
+            <img
+              v-else
+              src="https://etherscan.io/token/images/weth_28.png?v=2"
+              alt="WETH"
+              class="w-full h-full object-cover"
             />
           </div>
           <!-- Amount Display -->
-          <span class="flex-1 text-2xl font-mono text-white">
+          <span class="flex-1 text-xl sm:text-2xl font-mono text-white">
             {{ amount || '0.0' }}
           </span>
           <!-- Token Symbol -->
-          <span class="text-lg font-semibold text-white">{{ toToken }}</span>
+          <span class="text-base sm:text-lg font-semibold text-white">{{ toToken }}</span>
         </div>
       </div>
 
       <!-- Info Box -->
-      <div class="bg-white/5 border border-white/5 rounded-xl p-3 mb-6">
+      <div class="bg-white/5 border border-white/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 mb-4 sm:mb-5 lg:mb-6">
         <div class="flex items-center justify-between text-xs">
           <span class="text-neutral-500">Rate</span>
           <span class="text-white font-mono">1 {{ fromToken }} = 1 {{ toToken }}</span>
         </div>
-        <div class="flex items-center justify-between text-xs mt-2">
+        <div class="flex items-center justify-between text-xs mt-1.5 sm:mt-2">
           <span class="text-neutral-500">Network</span>
           <span class="text-white">Ethereum</span>
         </div>
-        <div class="flex items-center justify-between text-xs mt-2">
+        <div class="flex items-center justify-between text-xs mt-1.5 sm:mt-2">
           <span class="text-neutral-500">Fee</span>
           <span class="text-emerald-400">Gas only (no protocol fee)</span>
         </div>
       </div>
 
       <!-- Action Button -->
-      <button 
+      <button
         @click="executeSwapAction"
         :disabled="!isConnected || !amount || parseFloat(amount) <= 0 || isLoading"
-        class="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold rounded-2xl hover:shadow-lg hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all flex items-center justify-center gap-2"
+        class="w-full py-3 sm:py-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm sm:text-base font-bold rounded-xl sm:rounded-2xl hover:shadow-lg hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none transition-all flex items-center justify-center gap-2"
       >
         <svg v-if="isLoading" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -269,7 +269,7 @@ onMounted(() => {
             </svg>
             {{ txStatus.message }}
           </div>
-          <a 
+          <a
             v-if="txStatus.hash"
             :href="getExplorerTxUrl(txStatus.hash)"
             target="_blank"
@@ -278,7 +278,7 @@ onMounted(() => {
             View on Etherscan →
           </a>
         </div>
-        
+
         <!-- Success -->
         <div v-else-if="txStatus.success" class="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
           <div class="flex items-center gap-2 text-sm text-emerald-400">
@@ -287,7 +287,7 @@ onMounted(() => {
             </svg>
             {{ txStatus.message }}
           </div>
-          <a 
+          <a
             v-if="txStatus.hash"
             :href="getExplorerTxUrl(txStatus.hash)"
             target="_blank"
@@ -296,7 +296,7 @@ onMounted(() => {
             View on Etherscan →
           </a>
         </div>
-        
+
         <!-- Error -->
         <div v-else-if="txStatus.success === false" class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
           <div class="flex items-center gap-2 text-sm text-red-400">
@@ -310,8 +310,8 @@ onMounted(() => {
     </div>
 
     <!-- Info Footer -->
-    <div class="mt-6 text-center">
-      <p class="text-xs text-neutral-600">
+    <div class="mt-4 sm:mt-6 text-center">
+      <p class="text-[10px] sm:text-xs text-neutral-600 px-2">
         WETH (Wrapped Ether) is an ERC-20 version of ETH used in DeFi protocols.
         <br/>
         Wrapping and unwrapping is always 1:1 with no fees beyond gas.
