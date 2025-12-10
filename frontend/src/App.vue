@@ -44,10 +44,14 @@ const navItems = [
         class="absolute bottom-16 left-0 w-56 glass rounded-2xl shadow-2xl border border-white/10 overflow-hidden mb-2"
       >
         <!-- Logo Header -->
-        <div class="flex items-center gap-3 p-4 border-b border-white/10">
+        <RouterLink 
+          to="/" 
+          @click="closeMobileMenu"
+          class="flex items-center gap-3 p-4 border-b border-white/10 hover:bg-white/5 transition-colors"
+        >
           <img src="@/assets/logo.png" alt="CactusFund Logo" class="w-8 h-8 rounded-xl shadow-lg shadow-green-500/20" />
           <span class="text-sm font-semibold tracking-tight text-white">CactusFund</span>
-        </div>
+        </RouterLink>
 
         <!-- Navigation -->
         <nav class="p-2 space-y-1">

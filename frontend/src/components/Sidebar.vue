@@ -24,10 +24,10 @@ const navItems = computed(() => {
   <aside class="hidden md:flex flex-col w-20 lg:w-52 h-full z-10 glass border-r-0">
     <!-- Logo -->
     <div class="p-6 mb-6">
-      <div class="flex items-center gap-3">
+      <RouterLink to="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
         <img src="@/assets/logo.png" alt="CactusFund Logo" class="w-8 h-8 rounded-xl shadow-lg shadow-green-500/20" />
         <span class="hidden lg:block text-sm font-semibold tracking-tight text-white">CactusFund</span>
-      </div>
+      </RouterLink>
     </div>
 
     <!-- Navigation -->

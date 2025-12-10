@@ -245,10 +245,10 @@ onUnmounted(() => {
   <header class="header-main">
     <div class="header-left">
       <!-- Logo CactusFund (visible on mobile only) -->
-      <div class="mobile-logo">
+      <RouterLink to="/" class="mobile-logo">
         <img src="@/assets/logo.png" alt="CactusFund" class="mobile-logo-img" />
         <span class="mobile-logo-text">CactusFund</span>
-      </div>
+      </RouterLink>
 
       <!-- System Status Badge (hidden on mobile) -->
       <div class="status-badge">
