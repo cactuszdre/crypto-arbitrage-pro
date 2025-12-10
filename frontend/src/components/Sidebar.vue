@@ -21,7 +21,7 @@ const navItems = computed(() => {
 </script>
 
 <template>
-  <aside class="hidden md:flex flex-col w-20 lg:w-64 h-full z-10 glass border-r-0">
+  <aside class="hidden md:flex flex-col w-20 lg:w-52 h-full z-10 glass border-r-0">
     <!-- Logo -->
     <div class="p-6 mb-6">
       <div class="flex items-center gap-3">
