@@ -8,6 +8,7 @@ const loading = ref(true)
 const error = ref(null)
 const selectedSymbol = ref('BTC-USD-PERP')
 const symbols = ref([]) // Now contains objects { symbol: '...', iconUrl: '...' }
+const isChangingAsset = ref(false) // Loading state when switching assets
 
 // Helper to get selected symbol object
 const selectedSymbolObj = computed(() => {
@@ -32,7 +33,7 @@ const otherSymbols = computed(() => {
 // Crypto brand colors
 const cryptoColors = {
   'BTC': '#F7931A',
-  'ETH': '#627EEA', 
+  'ETH': '#627EEA',
   'SOL': '#14F195',
   'XRP': '#23292F',
   'BNB': '#F3BA2F',
@@ -95,12 +96,12 @@ const fetchData = async () => {
       fundingRateApi.getAllSymbols()
     ])
     fundingRates.value = ratesResponse.data
-    
+
     if (symbolsResponse.data && symbolsResponse.data.length > 0) {
       // Deduplicate and ensure icons
       symbols.value = processSymbols(symbolsResponse.data)
     }
-    
+
     // Default safety
     const exists = symbols.value.some(s => s.symbol === selectedSymbol.value)
     if (!exists && symbols.value.length > 0) {
@@ -115,10 +116,14 @@ const fetchData = async () => {
   }
 }
 
-
-// Simply select a symbol - no need to refetch, data is already loaded and auto-refreshed
-const selectSymbol = (symbolStr) => {
+// Select a symbol with loading feedback
+const selectSymbol = async (symbolStr) => {
+  if (symbolStr === selectedSymbol.value) return
+  isChangingAsset.value = true
   selectedSymbol.value = symbolStr
+  // Brief delay for visual feedback
+  await new Promise(resolve => setTimeout(resolve, 300))
+  isChangingAsset.value = false
 }
 
 // Dropdown state
@@ -139,7 +144,7 @@ const toggleDropdown = async () => {
 const filteredOtherSymbols = computed(() => {
   const query = searchQuery.value.toLowerCase().trim()
   if (!query) return otherSymbols.value
-  return otherSymbols.value.filter(s => 
+  return otherSymbols.value.filter(s =>
     s.symbol.toLowerCase().includes(query)
   )
 })
@@ -166,6 +171,7 @@ onMounted(() => {
     fetchData()
   }, 10000)
   document.addEventListener('click', closeDropdown)
+  document.addEventListener('touchend', closeDropdown)
 })
 
 onUnmounted(() => {
@@ -173,33 +179,38 @@ onUnmounted(() => {
     clearInterval(refreshInterval)
   }
   document.removeEventListener('click', closeDropdown)
+  document.removeEventListener('touchend', closeDropdown)
 })
 </script>
 
 <template>
   <!-- Metrics Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
     <!-- Card 1: Current Funding Rate -->
-    <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+    <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+      <!-- Loading overlay -->
+      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
       <div class="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors"></div>
-      <div class="flex justify-between items-start mb-4">
-        <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Current Funding Rate</h3>
-        <svg class="w-5 h-5 text-indigo-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
+        <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">Current Funding Rate</h3>
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
         </svg>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-3xl font-semibold text-white tracking-tight">
+        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
           {{ latestRate ? (latestRate.rate * 100).toFixed(6) + '%' : '--' }}
         </span>
       </div>
-      <div class="mt-4 flex items-center gap-2">
-        <span 
+      <div class="mt-2 sm:mt-3 lg:mt-4 flex items-center gap-2">
+        <span
           v-if="latestRate"
           :class="[
-            'px-2 py-1 rounded text-xs font-medium border',
-            latestRate.rate > 0 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+            'px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium border',
+            latestRate.rate > 0
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
               : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
           ]"
         >
@@ -209,20 +220,24 @@ onUnmounted(() => {
     </div>
 
     <!-- Card 2: 8h Rate -->
-    <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
+    <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+      <!-- Loading overlay -->
+      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div class="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
       <div class="absolute right-0 top-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
-      <div class="flex justify-between items-start mb-4">
-        <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-500">8H Funding Rate</h3>
-        <svg class="w-5 h-5 text-orange-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
+        <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">8H Funding Rate</h3>
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-3xl font-semibold text-white tracking-tight">
+        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
           {{ latestRate ? latestRate.rate8h?.toFixed(4) + '%' : '--' }}
         </span>
       </div>
-      <div class="mt-4 flex items-center gap-2 text-xs text-neutral-500">
+      <div class="mt-2 sm:mt-3 lg:mt-4 flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-neutral-500">
         <span>{{ latestRate?.dexName || 'Paradex' }}</span>
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
@@ -235,25 +250,29 @@ onUnmounted(() => {
     </div>
 
     <!-- Card 3: Annual Rate -->
-    <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
-      <div class="absolute right-0 top-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors"></div>
-      <div class="flex justify-between items-start mb-4">
-        <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-500">Annualized Rate</h3>
-        <svg class="w-5 h-5 text-emerald-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group sm:col-span-2 lg:col-span-1">
+      <!-- Loading overlay -->
+      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div class="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+      <div class="absolute right-0 top-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors"></div>
+      <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
+        <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">Annualized Rate</h3>
+        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
         </svg>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-3xl font-semibold text-white tracking-tight">
+        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
           {{ latestRate ? latestRate.rateAnnual?.toFixed(2) + '%' : '--' }}
         </span>
       </div>
-      <div class="mt-4 flex items-center gap-2">
-        <span 
+      <div class="mt-2 sm:mt-3 lg:mt-4 flex items-center gap-2">
+        <span
           :class="[
-            'px-2 py-1 rounded text-xs font-medium border',
-            latestRate && latestRate.rateAnnual > 0 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+            'px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium border',
+            latestRate && latestRate.rateAnnual > 0
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
               : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
           ]"
         >
@@ -264,29 +283,29 @@ onUnmounted(() => {
   </div>
 
   <!-- Control Bar -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-    <div class="space-y-3">
-      <h2 class="text-lg font-medium text-white tracking-tight">Select Asset to Monitor</h2>
-      <div class="flex items-center gap-3 flex-wrap">
+  <div class="flex flex-col gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
+    <div class="space-y-2 sm:space-y-3">
+      <h2 class="text-base sm:text-lg font-medium text-white tracking-tight">Select Asset to Monitor</h2>
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
         <!-- Pinned Assets (Pills) -->
-        <button 
-          v-for="item in pinnedSymbols" 
+        <button
+          v-for="item in pinnedSymbols"
           :key="item.symbol"
           @click="selectSymbol(item.symbol)"
           :class="[
-            'flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all',
-            selectedSymbol === item.symbol 
-              ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105' 
+            'flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-medium text-xs sm:text-sm transition-all',
+            selectedSymbol === item.symbol
+              ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105'
               : 'bg-white/5 border border-white/5 text-neutral-400 hover:bg-white/10 hover:text-white hover:border-white/20'
           ]"
         >
-          <img 
-            :src="item.iconUrl || getFallbackIcon(item.symbol)" 
-            class="w-5 h-5 rounded-full bg-neutral-800"
+          <img
+            :src="item.iconUrl || getFallbackIcon(item.symbol)"
+            class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-neutral-800"
             @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='flex'"
           />
-          <span 
-            class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] text-white font-bold hidden"
+          <span
+            class="w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] text-white font-bold hidden"
             :style="{ backgroundColor: getCryptoColor(item.symbol) }"
           >
             {{ item.symbol.charAt(0) }}
@@ -295,14 +314,15 @@ onUnmounted(() => {
         </button>
 
         <!-- Separator -->
-        <div class="w-px h-6 bg-white/10 mx-1 hidden md:block"></div>
+        <div class="w-px h-5 sm:h-6 bg-white/10 mx-0.5 sm:mx-1 hidden sm:block"></div>
 
         <!-- Dropdown for other assets -->
-        <div class="relative asset-dropdown">
-          <button 
-            @click.stop="toggleDropdown"
+        <div class="relative asset-dropdown w-full sm:w-auto mt-2 sm:mt-0">
+          <button
+            @click.stop.prevent="toggleDropdown"
+            type="button"
             :class="[
-              'flex items-center justify-between gap-2 min-w-[160px] px-3 py-2 rounded-lg border text-sm transition-colors',
+              'flex items-center justify-between gap-2 w-full sm:min-w-[160px] px-3 py-2.5 sm:py-2 rounded-lg border text-xs sm:text-sm transition-colors',
               isSelectedInOther
                 ? 'bg-indigo-500/20 border-indigo-500/30 text-white'
                 : 'bg-neutral-900/50 border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'
@@ -311,12 +331,12 @@ onUnmounted(() => {
             <div class="flex items-center gap-2">
               <template v-if="isSelectedInOther && selectedSymbolObj">
                 <!-- Icon with fallback -->
-                <img 
-                  :src="selectedSymbolObj.iconUrl || getFallbackIcon(selectedSymbolObj.symbol)" 
+                <img
+                  :src="selectedSymbolObj.iconUrl || getFallbackIcon(selectedSymbolObj.symbol)"
                   class="w-5 h-5 rounded-full bg-neutral-800"
                   @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='flex'"
                 />
-                <span 
+                <span
                   class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] text-white font-bold hidden"
                   :style="{ backgroundColor: getCryptoColor(selectedSymbolObj.symbol) }"
                 >
@@ -332,12 +352,13 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
             </svg>
           </button>
-          
+
           <!-- Dropdown Panel -->
-          <div 
-            v-if="showDropdown" 
-            class="absolute left-0 top-full mt-2 w-64 bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden"
+          <div
+            v-if="showDropdown"
+            class="absolute left-0 right-0 sm:left-auto sm:right-0 top-full mt-2 w-full sm:w-64 bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden"
             @click.stop
+            @touchstart.stop
           >
             <!-- Search Input -->
             <div class="p-2 border-b border-white/5">
@@ -345,7 +366,7 @@ onUnmounted(() => {
                 <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <input 
+                <input
                   ref="searchInputRef"
                   v-model="searchQuery"
                   type="text"
@@ -355,27 +376,28 @@ onUnmounted(() => {
                 />
               </div>
             </div>
-            
+
             <!-- Assets List -->
-            <div class="max-h-56 overflow-y-auto">
-              <button 
-                v-for="item in filteredOtherSymbols" 
+            <div class="max-h-56 overflow-y-auto overscroll-contain">
+              <button
+                v-for="item in filteredOtherSymbols"
                 :key="item.symbol"
-                @click="selectSymbol(item.symbol); showDropdown = false; searchQuery = ''"
+                @click.stop="selectSymbol(item.symbol); showDropdown = false; searchQuery = ''"
+                type="button"
                 :class="[
-                  'w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors',
-                  selectedSymbol === item.symbol 
-                    ? 'bg-indigo-500/20 text-white' 
-                    : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+                  'w-full text-left px-4 py-3 sm:py-2.5 text-sm flex items-center gap-3 transition-colors touch-manipulation',
+                  selectedSymbol === item.symbol
+                    ? 'bg-indigo-500/20 text-white'
+                    : 'text-neutral-400 hover:bg-white/5 hover:text-white active:bg-white/10'
                 ]"
               >
                 <!-- Icon with fallback -->
-                <img 
-                  :src="item.iconUrl || getFallbackIcon(item.symbol)" 
+                <img
+                  :src="item.iconUrl || getFallbackIcon(item.symbol)"
                   class="w-5 h-5 rounded-full bg-neutral-800"
                   @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='flex'"
                 />
-                <span 
+                <span
                   class="w-5 h-5 rounded-full flex items-center justify-center text-[8px] text-white font-bold hidden"
                   :style="{ backgroundColor: getCryptoColor(item.symbol) }"
                 >
@@ -383,7 +405,7 @@ onUnmounted(() => {
                 </span>
                 {{ item.symbol.replace('-USD-PERP', '') }}
               </button>
-              
+
               <!-- No results -->
               <div v-if="filteredOtherSymbols.length === 0" class="px-4 py-6 text-center text-neutral-500 text-sm">
                 No assets found
@@ -394,11 +416,11 @@ onUnmounted(() => {
       </div>
     </div>
     <div class="flex items-end">
-      <p class="text-xs text-neutral-600 font-mono">{{ symbols.length }} Assets Available</p>
+      <p class="text-[10px] sm:text-xs text-neutral-600 font-mono">{{ symbols.length }} Assets Available</p>
     </div>
   </div>
 
   <!-- Analytics Chart -->
   <FundingRateChart :symbol="selectedSymbol" />
-  
+
 </template>
