@@ -99,7 +99,6 @@ public class MarketSyncService {
     }
 
     private void updateMarketsForDex(Dex dex, List<String> fetchedSymbols) {
-        log.info("Updating markets for {}. Found {} symbols.", dex.getName(), fetchedSymbols.size());
         
         List<DexMarket> existingMarkets = dexMarketRepository.findByDexAndActiveTrue(dex);
         Set<String> existingSymbols = existingMarkets.stream()

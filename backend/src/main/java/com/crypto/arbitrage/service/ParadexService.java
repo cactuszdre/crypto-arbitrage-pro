@@ -31,6 +31,7 @@ public class ParadexService {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
+    private final LastFundingService lastFundingService;
     private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
     private final EncryptionService encryptionService;
@@ -161,6 +162,9 @@ public class ParadexService {
         // Sauvegarde en base
         FundingRate saved = fundingRateRepository.save(latestRate);
         
+        // Update last_funding table
+        lastFundingService.upsertFromFundingRate(saved);
+        
         return Optional.of(saved);
     }
 
@@ -197,7 +201,6 @@ public class ParadexService {
                 }
             }
 
-            log.info("Trouvé {} symboles PERP sur Paradex", symbols.size());
             return symbols;
 
         } catch (Exception e) {

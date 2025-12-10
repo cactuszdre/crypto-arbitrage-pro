@@ -3,12 +3,15 @@ package com.crypto.arbitrage.service;
 import com.crypto.arbitrage.dto.FundingRateDTO;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.LastFunding;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
+import com.crypto.arbitrage.repository.LastFundingRepository;
 import com.crypto.arbitrage.repository.TickerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,16 +27,21 @@ import java.util.stream.Collectors;
 public class FundingRateService {
 
     private final FundingRateRepository fundingRateRepository;
+    private final LastFundingRepository lastFundingRepository;
     private final DexRepository dexRepository;
     private final TickerRepository tickerRepository;
     private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
 
     /**
      * Récupère tous les derniers funding rates (un seul par dex/ticker)
+     * Uses the optimized last_funding table instead of expensive subquery
+     * Cached for 10 seconds to reduce DB load
      */
+    @Cacheable(value = "latestFundingRates")
     public List<FundingRateDTO> getAllLatestRates() {
-        // Utilise la requête optimisée qui ne récupère que le dernier rate par paire dex/ticker
-        List<FundingRate> rates = fundingRateRepository.findAllLatestRates();
+        log.info("Cache MISS - Fetching latest funding rates");
+        // Use the optimized last_funding table
+        List<LastFunding> rates = lastFundingRepository.findAll();
         return rates.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -132,7 +140,26 @@ public class FundingRateService {
         return FundingRateDTO.builder()
                 .id(rate.getId())
                 .dexName(rate.getDex().getName())
-                .symbol(rate.getSymbol()) // Uses the helper method on FundingRate
+                .symbol(rate.getSymbol())
+                .rate(rate.getRate())
+                .rate8h(rate.getRate8h())
+                .rateAnnual(rate.getRateAnnual())
+                .fundingPremium(rate.getFundingPremium())
+                .intervalHours(rate.getIntervalHours())
+                .timestamp(rate.getTimestamp())
+                .direction(direction)
+                .build();
+    }
+
+    private FundingRateDTO toDTO(LastFunding rate) {
+        String direction = rate.getRate().compareTo(BigDecimal.ZERO) > 0 
+                ? "LONGS_PAY" 
+                : "SHORTS_PAY";
+        
+        return FundingRateDTO.builder()
+                .id(rate.getId())
+                .dexName(rate.getDexName())
+                .symbol(rate.getSymbol())
                 .rate(rate.getRate())
                 .rate8h(rate.getRate8h())
                 .rateAnnual(rate.getRateAnnual())

@@ -1,11 +1,12 @@
 package com.crypto.arbitrage.service;
 
 import com.crypto.arbitrage.dto.ArbitrageOpportunityDTO;
-import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.LastFunding;
 import com.crypto.arbitrage.model.Ticker;
-import com.crypto.arbitrage.repository.FundingRateRepository;
+import com.crypto.arbitrage.repository.LastFundingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -21,25 +22,25 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ArbitrageService {
 
-    private final FundingRateRepository fundingRateRepository;
+    private final LastFundingRepository lastFundingRepository;
 
     public List<String> getDiagnosticInfo() {
         List<String> info = new ArrayList<>();
-        List<FundingRate> allRates = fundingRateRepository.findAllLatestRates();
+        List<LastFunding> allRates = lastFundingRepository.findAll();
         info.add("Total Latest Rates Found: " + allRates.size());
         
         // Group by ticker ID for efficiency
-        Map<Integer, List<FundingRate>> ratesByTicker = allRates.stream()
+        Map<Integer, List<LastFunding>> ratesByTicker = allRates.stream()
                 .filter(r -> r.getTicker() != null)
                 .collect(Collectors.groupingBy(r -> r.getTicker().getId()));
         
         info.add("Unique Symbols Found: " + ratesByTicker.keySet().size());
         
-        for (Map.Entry<Integer, List<FundingRate>> entry : ratesByTicker.entrySet()) {
-            List<FundingRate> rates = entry.getValue();
+        for (Map.Entry<Integer, List<LastFunding>> entry : ratesByTicker.entrySet()) {
+            List<LastFunding> rates = entry.getValue();
             String symbol = rates.get(0).getSymbol();
             info.add("Symbol: " + symbol + " | Sources: " + rates.size());
-            for(FundingRate rate : rates) {
+            for(LastFunding rate : rates) {
                 info.add("  -> DEX: " + (rate.getDex() != null ? rate.getDex().getName() : "null") 
                         + " | AnnualRate: " + rate.getRateAnnual());
             }
@@ -47,34 +48,35 @@ public class ArbitrageService {
         return info;
     }
 
+    @Cacheable(value = "arbitrageOpportunities")
     public List<ArbitrageOpportunityDTO> getArbitrageOpportunities() {
-        // 1. Get latest rates for all symbols/dexes
-        List<FundingRate> allRates = fundingRateRepository.findAllLatestRates();
+        log.info("Cache MISS - Recalculating arbitrage opportunities");
+        // 1. Get latest rates from the optimized last_funding table
+        List<LastFunding> allRates = lastFundingRepository.findAll();
 
         // 2. Group by ticker ID for efficiency
-        Map<Integer, List<FundingRate>> ratesByTicker = allRates.stream()
+        Map<Integer, List<LastFunding>> ratesByTicker = allRates.stream()
                 .filter(r -> r.getTicker() != null)
                 .collect(Collectors.groupingBy(r -> r.getTicker().getId()));
 
         List<ArbitrageOpportunityDTO> opportunities = new ArrayList<>();
 
         // 3. Analyze each symbol
-        for (Map.Entry<Integer, List<FundingRate>> entry : ratesByTicker.entrySet()) {
-            List<FundingRate> rates = entry.getValue();
+        for (Map.Entry<Integer, List<LastFunding>> entry : ratesByTicker.entrySet()) {
+            List<LastFunding> rates = entry.getValue();
             String symbol = rates.get(0).getSymbol();
 
-            log.info("Analyzing symbol: {} with {} rates", symbol, rates.size());
+            log.debug("Analyzing symbol: {} with {} rates", symbol, rates.size());
 
             if (rates.size() < 2) {
-                log.info("Skipping {} - insufficient data sources (count={})", symbol, rates.size());
                 continue; // Need at least 2 exchanges to compare
             }
 
             // Find best Long (Lowest Funding Rate) and best Short (Highest Funding Rate)
-            FundingRate bestLong = rates.get(0);
-            FundingRate bestShort = rates.get(0);
+            LastFunding bestLong = rates.get(0);
+            LastFunding bestShort = rates.get(0);
 
-            for (FundingRate rate : rates) {
+            for (LastFunding rate : rates) {
                 if (rate.getRateAnnual().compareTo(bestLong.getRateAnnual()) < 0) {
                     bestLong = rate;
                 }
@@ -119,4 +121,3 @@ public class ArbitrageService {
         return opportunities;
     }
 }
-

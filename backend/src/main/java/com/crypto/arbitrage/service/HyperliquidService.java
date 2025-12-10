@@ -29,6 +29,7 @@ public class HyperliquidService {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
+    private final LastFundingService lastFundingService;
     private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
@@ -108,6 +109,8 @@ public class HyperliquidService {
             // Save all fetched rates
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
+                // Update last_funding table
+                lastFundingService.upsertAll(rates);
             }
 
             return rates;

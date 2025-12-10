@@ -6,6 +6,7 @@ import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.FundingRateDailyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -26,15 +27,17 @@ public class HistoricalArbitrageService {
 
     /**
      * Get historical arbitrage opportunities for a given time period.
+     * Cached for 5 minutes since historical data doesn't change frequently.
      *
      * @param days Number of days to look back (1, 7, 30, 90, 180, 365)
      * @return List of arbitrage opportunities averaged over the period
      */
+    @Cacheable(value = "historicalArbitrage", key = "#days")
     public List<HistoricalArbitrageDTO> getHistoricalOpportunities(int days) {
         LocalDate startDate = LocalDate.now().minusDays(days);
         LocalDate endDate = LocalDate.now().minusDays(1); // Up to yesterday (today's data is still being collected)
         
-        log.info("Calculating historical arbitrage for {} days (from {} to {})", days, startDate, endDate);
+        log.info("Cache MISS - Calculating historical arbitrage for {} days (from {} to {})", days, startDate, endDate);
         
         // Get all daily data for the period
         List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(startDate);
