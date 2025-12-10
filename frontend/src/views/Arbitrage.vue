@@ -649,14 +649,152 @@ onUnmounted(() => {
             Reset Filters
           </button>
         </div>
+        <!-- ========== DATA VIEWS (Cards on mobile, Table on desktop) ========== -->
+        <div v-else>
+          <!-- CARDS VIEW (Small screens < lg) -->
+          <div class="lg:hidden p-3 sm:p-4 space-y-3">
+          <div
+            v-for="opp in paginatedOpportunities"
+            :key="'card-' + opp.symbol"
+            @click="isPro ? selectOpportunity(opp) : null"
+            :class="[
+              'group relative p-4 rounded-2xl border backdrop-blur-xl transition-all duration-300 cursor-pointer',
+              'bg-gradient-to-br from-white/[0.08] to-white/[0.02]',
+              'hover:from-white/[0.12] hover:to-white/[0.05]',
+              'hover:shadow-lg hover:shadow-emerald-500/5',
+              selectedOpportunity?.symbol === opp.symbol
+                ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20'
+                : 'border-white/10 hover:border-white/20'
+            ]"
+          >
+            <!-- Glass reflection effect -->
+            <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+              <div class="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-white/10 to-transparent rotate-12 opacity-50"></div>
+            </div>
 
-        <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[600px]">
+            <!-- Card Header: Symbol + Daily Return -->
+            <div class="relative flex items-center justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <!-- Icon -->
+                <div class="relative">
+                  <img
+                    v-if="!isImageFailed(opp.symbol)"
+                    :src="getFallbackIcon(opp.symbol)"
+                    :alt="getBaseSymbol(opp.symbol)"
+                    class="w-10 h-10 rounded-xl border border-white/10 bg-neutral-800/50 object-cover shadow-lg"
+                    @error="(e) => handleImageError(opp.symbol, e)"
+                  >
+                  <div
+                    v-else
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-sm text-white font-bold border border-white/10 shadow-lg"
+                  >
+                    {{ getBaseSymbol(opp.symbol).charAt(0).toUpperCase() }}
+                  </div>
+                  <!-- Selection indicator -->
+                  <div
+                    v-if="selectedOpportunity?.symbol === opp.symbol"
+                    class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center ring-2 ring-neutral-900"
+                  >
+                    <svg class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                  </div>
+                </div>
+                <!-- Symbol name -->
+                <div>
+                  <h4 class="text-sm font-semibold text-white group-hover:text-emerald-300 transition-colors">
+                    {{ opp.symbol.replace('-USD-PERP', '') }}
+                  </h4>
+                  <p class="text-[10px] text-neutral-500">Perpetual</p>
+                </div>
+              </div>
+
+              <!-- Pro Badge (only for non-Pro users) -->
+              <div
+                v-if="!isPro"
+                class="group/pro relative flex items-center gap-1 px-2 py-1 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 cursor-pointer hover:from-amber-500/30 hover:to-orange-500/30 transition-all"
+              >
+                <svg class="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                </svg>
+                <span class="text-[9px] font-bold text-amber-400 uppercase tracking-wide">Pro</span>
+                <!-- Tooltip on hover -->
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 invisible group-hover/pro:opacity-100 group-hover/pro:visible transition-all duration-200 z-50 pointer-events-none">
+                  <div class="px-3 py-2 bg-neutral-800 border border-amber-500/30 rounded-xl shadow-xl whitespace-nowrap">
+                    <p class="text-[10px] font-semibold text-amber-400 mb-0.5">Pro Feature</p>
+                    <p class="text-[9px] text-neutral-400">Arbitrage Execution requires Pro plan</p>
+                  </div>
+                  <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-neutral-800"></div>
+                </div>
+              </div>
+
+              <!-- Daily Return Badge -->
+              <div :class="[
+                'px-3 py-1.5 rounded-xl text-xs font-bold',
+                opp.projectedDailyReturn >= 0
+                  ? 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30'
+                  : 'bg-red-500/15 text-red-400 ring-1 ring-red-500/30'
+              ]">
+                {{ opp.projectedDailyReturn >= 0 ? '+' : '' }}{{ (opp.projectedDailyReturn).toFixed(4) }}%
+                <span class="text-[9px] opacity-70 ml-0.5">/day</span>
+              </div>
+            </div>
+
+            <!-- Route: Long -> Short -->
+            <div class="relative flex items-center gap-2 mb-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+              <a
+                :href="getDexUrl(opp.longDex, opp.symbol)"
+                target="_blank"
+                @click.stop
+                class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+              >
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-[10px] text-emerald-400 font-medium">LONG</span>
+                <span class="text-xs text-white font-semibold ml-auto">{{ opp.longDex }}</span>
+              </a>
+              <div class="flex items-center justify-center w-6 h-6 rounded-full bg-white/5">
+                <svg class="w-3 h-3 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+              </div>
+              <a
+                :href="getDexUrl(opp.shortDex, opp.symbol)"
+                target="_blank"
+                @click.stop
+                class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+              >
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                <span class="text-[10px] text-red-400 font-medium">SHORT</span>
+                <span class="text-xs text-white font-semibold ml-auto">{{ opp.shortDex }}</span>
+              </a>
+            </div>
+
+            <!-- Rates -->
+            <div class="relative grid grid-cols-2 gap-2">
+              <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Long Rate</p>
+                <p :class="['text-sm font-semibold', formatRate(opp.longRate).class]">
+                  {{ formatRate(opp.longRate).value }}
+                </p>
+              </div>
+              <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Short Rate</p>
+                <p :class="['text-sm font-semibold', formatRate(opp.shortRate).class]">
+                  {{ formatRate(opp.shortRate).value }}
+                </p>
+              </div>
+            </div>
+          </div>
+          </div>
+
+          <!-- TABLE VIEW (Large screens >= lg) -->
+          <div class="hidden lg:block overflow-x-auto">
+          <table class="w-full">
           <thead class="bg-white/5">
-            <tr class="text-left text-[9px] sm:text-[10px] uppercase tracking-wider text-neutral-500">
+            <tr class="text-left text-[10px] uppercase tracking-wider text-neutral-500">
               <th
                 @click="toggleSort('symbol')"
-                class="px-3 sm:px-6 py-3 sm:py-4 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                class="px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors select-none"
               >
                 <span class="flex items-center gap-1">
                   Pair
@@ -671,10 +809,10 @@ onUnmounted(() => {
                   </svg>
                 </span>
               </th>
-              <th class="px-3 sm:px-6 py-3 sm:py-4 font-medium">Route</th>
+              <th class="px-4 py-3 font-medium">Route</th>
               <th
                 @click="toggleSort('longRate')"
-                class="px-3 sm:px-6 py-3 sm:py-4 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                class="px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors select-none"
               >
                 <span class="flex items-center gap-1">
                   Long Rate
@@ -691,7 +829,7 @@ onUnmounted(() => {
               </th>
               <th
                 @click="toggleSort('shortRate')"
-                class="px-3 sm:px-6 py-3 sm:py-4 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                class="px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors select-none"
               >
                 <span class="flex items-center gap-1">
                   Short Rate
@@ -708,7 +846,7 @@ onUnmounted(() => {
               </th>
               <th
                 @click="toggleSort('projectedDailyReturn')"
-                class="px-3 sm:px-6 py-3 sm:py-4 font-medium cursor-pointer hover:text-white transition-colors select-none"
+                class="px-4 py-3 font-medium cursor-pointer hover:text-white transition-colors select-none"
               >
                 <span class="flex items-center gap-1">
                   Daily Return
@@ -723,81 +861,77 @@ onUnmounted(() => {
                   </svg>
                 </span>
               </th>
-              <th class="px-3 sm:px-6 py-3 sm:py-4 font-medium text-right"></th>
+              <th class="px-4 py-3 font-medium text-right"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
             <tr
               v-for="opp in paginatedOpportunities"
-              :key="opp.symbol"
+              :key="'table-' + opp.symbol"
               class="group hover:bg-white/5 transition-colors"
             >
-              <td class="px-3 sm:px-6 py-3 sm:py-4">
-                <div class="flex items-center gap-2 sm:gap-3">
-                  <div class="flex -space-x-2">
-                    <!-- Primary icon attempt -->
-                    <img
-                      v-if="!isImageFailed(opp.symbol)"
-                      :src="getFallbackIcon(opp.symbol)"
-                      :alt="getBaseSymbol(opp.symbol)"
-                      class="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-black transition-all bg-neutral-800 shrink-0 object-cover"
-                      @error="(e) => handleImageError(opp.symbol, e)"
-                    >
-                    <!-- Fallback: styled letter placeholder -->
-                    <div
-                      v-if="isImageFailed(opp.symbol)"
-                      class="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[8px] sm:text-[10px] text-white font-bold border border-black shadow-sm shrink-0"
-                    >
-                      {{ getBaseSymbol(opp.symbol).charAt(0).toUpperCase() }}
-                    </div>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <img
+                    v-if="!isImageFailed(opp.symbol)"
+                    :src="getFallbackIcon(opp.symbol)"
+                    :alt="getBaseSymbol(opp.symbol)"
+                    class="w-6 h-6 rounded-full border border-black bg-neutral-800 shrink-0 object-cover"
+                    @error="(e) => handleImageError(opp.symbol, e)"
+                  >
+                  <div
+                    v-else
+                    class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[10px] text-white font-bold border border-black shrink-0"
+                  >
+                    {{ getBaseSymbol(opp.symbol).charAt(0).toUpperCase() }}
                   </div>
-                  <span class="text-[10px] sm:text-xs font-medium text-neutral-300 group-hover:text-white">
+                  <span class="text-xs font-medium text-neutral-300 group-hover:text-white">
                     {{ opp.symbol.replace('-USD-PERP', '') }}
                   </span>
                 </div>
               </td>
-              <td class="px-3 sm:px-6 py-3 sm:py-4">
-                <div class="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-neutral-400">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2 text-xs text-neutral-400">
                   <a
                     :href="getDexUrl(opp.longDex, opp.symbol)"
                     target="_blank"
-                    class="text-emerald-400 hover:text-emerald-300 hover:underline decoration-emerald-500/30 underline-offset-2 transition-all flex items-center gap-0.5 sm:gap-1"
+                    class="text-emerald-400 hover:text-emerald-300 hover:underline transition-all flex items-center gap-1"
                   >
-                    <span class="hidden sm:inline">Long</span> {{ opp.longDex }}
-                    <svg class="w-2 h-2 sm:w-2.5 sm:h-2.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    Long {{ opp.longDex }}
+                    <svg class="w-2.5 h-2.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                   </a>
                   <span class="text-neutral-600">→</span>
                   <a
                     :href="getDexUrl(opp.shortDex, opp.symbol)"
                     target="_blank"
-                    class="text-red-400 hover:text-red-300 hover:underline decoration-red-500/30 underline-offset-2 transition-all flex items-center gap-0.5 sm:gap-1"
+                    class="text-red-400 hover:text-red-300 hover:underline transition-all flex items-center gap-1"
                   >
-                    <span class="hidden sm:inline">Short</span> {{ opp.shortDex }}
-                    <svg class="w-2 h-2 sm:w-2.5 sm:h-2.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    Short {{ opp.shortDex }}
+                    <svg class="w-2.5 h-2.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                   </a>
                 </div>
               </td>
-              <td class="px-3 sm:px-6 py-3 sm:py-4">
-                <span :class="['text-[10px] sm:text-xs font-medium', formatRate(opp.longRate).class]">
+              <td class="px-4 py-3">
+                <span :class="['text-xs font-medium', formatRate(opp.longRate).class]">
                   {{ formatRate(opp.longRate).value }}
                 </span>
               </td>
-              <td class="px-3 sm:px-6 py-3 sm:py-4">
-                <span :class="['text-[10px] sm:text-xs font-medium', formatRate(opp.shortRate).class]">
+              <td class="px-4 py-3">
+                <span :class="['text-xs font-medium', formatRate(opp.shortRate).class]">
                   {{ formatRate(opp.shortRate).value }}
                 </span>
               </td>
-              <td class="px-3 sm:px-6 py-3 sm:py-4">
-                <span :class="['text-[10px] sm:text-xs font-medium', opp.projectedDailyReturn >= 0 ? 'text-emerald-400' : 'text-red-400']">
+              <td class="px-4 py-3">
+                <span :class="['text-xs font-medium', opp.projectedDailyReturn >= 0 ? 'text-emerald-400' : 'text-red-400']">
                   {{ opp.projectedDailyReturn >= 0 ? '+' : '' }}{{ (opp.projectedDailyReturn).toFixed(4) }}%
                 </span>
               </td>
-              <td class="px-3 sm:px-6 py-3 sm:py-4 text-right">
+              <td class="px-4 py-3 text-right">
                 <div class="relative inline-block">
                   <button
                     @click="isPro ? selectOpportunity(opp) : null"
                     :class="[
-                      'w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center transition-all duration-200 peer',
+                      'w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 peer',
                       selectedOpportunity?.symbol === opp.symbol
                         ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/30'
                         : isPro
@@ -809,7 +943,6 @@ onUnmounted(() => {
                       <path d="M8 5v14l11-7z"/>
                     </svg>
                   </button>
-                  <!-- Small lock badge for non-Pro -->
                   <div
                     v-if="!isPro"
                     class="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-md"
@@ -818,7 +951,6 @@ onUnmounted(() => {
                       <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
                     </svg>
                   </div>
-                  <!-- Pro Feature Tooltip - only on button hover -->
                   <div
                     v-if="!isPro"
                     class="absolute right-0 bottom-full mb-2 opacity-0 invisible peer-hover:opacity-100 peer-hover:visible transition-all duration-150 z-50"
@@ -832,6 +964,7 @@ onUnmounted(() => {
             </tr>
           </tbody>
         </table>
+          </div>
         </div>
 
         <!-- Pagination Controls -->
