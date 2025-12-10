@@ -24,6 +24,40 @@ const cryptoPrices = ref([])
 const pricesLoading = ref(true)
 let priceInterval = null
 
+// OS Detection for keyboard shortcut
+const isMac = ref(false)
+onMounted(() => {
+  isMac.value = navigator.platform.toUpperCase().indexOf('MAC') >= 0 || 
+                navigator.userAgent.toUpperCase().indexOf('MAC') >= 0
+})
+
+const searchShortcut = computed(() => isMac.value ? '⌘K' : 'Ctrl+K')
+
+// Search functionality - redirect to arbitrage page
+const handleSearch = () => {
+  if (searchQuery.value.trim()) {
+    router.push({ path: '/arbitrage', query: { search: searchQuery.value.trim() } })
+  } else {
+    router.push('/arbitrage')
+  }
+}
+
+// Handle keyboard shortcut (Ctrl+K or Cmd+K)
+const handleKeyboardShortcut = (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    document.querySelector('.search-input')?.focus()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyboardShortcut)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcut)
+})
+
 const formatTime = computed(() => {
   const time = currentTime.value
   return time.toLocaleTimeString('fr-FR', { 
@@ -235,14 +269,15 @@ onUnmounted(() => {
     <div class="header-right">
       <!-- Search -->
       <div class="search-box">
-        <span class="iconify search-icon" data-icon="lucide:search" data-width="14"></span>
+        <span class="iconify search-icon" data-icon="lucide:search" data-width="14" @click="handleSearch" style="cursor: pointer;"></span>
         <input 
           v-model="searchQuery"
           type="text" 
           placeholder="Search assets..." 
           class="search-input"
+          @keyup.enter="handleSearch"
         >
-        <span class="search-shortcut">⌘K</span>
+        <span class="search-shortcut" @click="handleSearch" style="cursor: pointer;">{{ searchShortcut }}</span>
       </div>
 
       <!-- Connect Wallet Button -->
