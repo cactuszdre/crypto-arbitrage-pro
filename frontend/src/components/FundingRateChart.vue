@@ -39,6 +39,8 @@ const historyData = ref([])
 const selectedDex = ref('All') // 'All', 'Paradex', 'Lighter', 'Hyperliquid'
 const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
 const isChangingMetric = ref(false) // Loading state for metric changes
+const isChangingDex = ref(false) // Loading state for DEX changes
+const isChangingSymbol = ref(false) // Loading state for symbol changes
 
 const metrics = [
   { label: '1H Rate', value: 'rate' },
@@ -141,9 +143,24 @@ const fetchData = async (silent = false) => {
   }
 }
 
-// Watch for prop/selection changes - show loading on these
-// Watch for symbol/dex changes - show loading
-watch(() => [props.symbol, selectedDex.value], () => fetchData(false), { immediate: true })
+// Watch for symbol changes - show loading overlay
+watch(() => props.symbol, async () => {
+  isChangingSymbol.value = true
+  await fetchData(false)
+  isChangingSymbol.value = false
+})
+
+// Watch for DEX changes - show loading overlay
+watch(() => selectedDex.value, async () => {
+  isChangingDex.value = true
+  await fetchData(false)
+  isChangingDex.value = false
+})
+
+// Initial fetch
+onMounted(() => {
+  fetchData(false)
+})
 
 // Watch for metric changes - show brief loading indicator
 watch(() => selectedMetric.value, async () => {
@@ -424,14 +441,16 @@ const chartOptions = computed(() => ({
 
     <!-- Chart (show after initial load, even during background refresh) -->
     <div v-else class="flex-1 relative w-full min-h-[250px] sm:min-h-[320px] lg:min-h-[360px]">
-      <!-- Overlay loading for metric changes -->
+      <!-- Overlay loading for changes -->
       <div
-        v-if="isChangingMetric"
+        v-if="isChangingMetric || isChangingDex || isChangingSymbol"
         class="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg transition-opacity duration-150"
       >
         <div class="flex items-center gap-2 sm:gap-3">
           <div class="w-4 h-4 sm:w-5 sm:h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-          <span class="text-xs sm:text-sm text-neutral-300">Updating...</span>
+          <span class="text-xs sm:text-sm text-neutral-300">
+            {{ isChangingSymbol ? 'Loading asset...' : isChangingDex ? 'Loading platform...' : 'Updating...' }}
+          </span>
         </div>
       </div>
       <Line :key="chartKey" :data="unifiedChartData" :options="chartOptions" />

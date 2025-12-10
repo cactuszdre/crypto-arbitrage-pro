@@ -8,6 +8,7 @@ const loading = ref(true)
 const error = ref(null)
 const selectedSymbol = ref('BTC-USD-PERP')
 const symbols = ref([]) // Now contains objects { symbol: '...', iconUrl: '...' }
+const isChangingAsset = ref(false) // Loading state when switching assets
 
 // Helper to get selected symbol object
 const selectedSymbolObj = computed(() => {
@@ -115,10 +116,14 @@ const fetchData = async () => {
   }
 }
 
-
-// Simply select a symbol - no need to refetch, data is already loaded and auto-refreshed
-const selectSymbol = (symbolStr) => {
+// Select a symbol with loading feedback
+const selectSymbol = async (symbolStr) => {
+  if (symbolStr === selectedSymbol.value) return
+  isChangingAsset.value = true
   selectedSymbol.value = symbolStr
+  // Brief delay for visual feedback
+  await new Promise(resolve => setTimeout(resolve, 300))
+  isChangingAsset.value = false
 }
 
 // Dropdown state
@@ -183,6 +188,10 @@ onUnmounted(() => {
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
     <!-- Card 1: Current Funding Rate -->
     <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+      <!-- Loading overlay -->
+      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
       <div class="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors"></div>
       <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
         <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">Current Funding Rate</h3>
@@ -212,6 +221,10 @@ onUnmounted(() => {
 
     <!-- Card 2: 8h Rate -->
     <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
+      <!-- Loading overlay -->
+      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div class="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
       <div class="absolute right-0 top-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
       <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
         <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">8H Funding Rate</h3>
@@ -238,6 +251,10 @@ onUnmounted(() => {
 
     <!-- Card 3: Annual Rate -->
     <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group sm:col-span-2 lg:col-span-1">
+      <!-- Loading overlay -->
+      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div class="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
       <div class="absolute right-0 top-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors"></div>
       <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
         <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">Annualized Rate</h3>
