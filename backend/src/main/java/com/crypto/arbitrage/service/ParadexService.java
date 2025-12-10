@@ -138,7 +138,6 @@ public class ParadexService {
                 }
             }
 
-            log.info("Récupéré {} funding rates pour {} sur Paradex (period={}h)", rates.size(), symbol, fundingPeriodHours);
             return rates;
 
         } catch (Exception e) {
@@ -161,7 +160,6 @@ public class ParadexService {
         
         // Sauvegarde en base
         FundingRate saved = fundingRateRepository.save(latestRate);
-        log.info("Sauvegardé funding rate pour {} : rate={}", symbol, saved.getRate());
         
         return Optional.of(saved);
     }

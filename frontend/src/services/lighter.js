@@ -8,7 +8,6 @@ export const executeLighterOrder = async (walletProvider, orderDetails) => {
     return new Promise((resolve, reject) => {
         const { symbol, isBuy, size } = orderDetails
 
-        console.log(`[Lighter.xyz] Initiating Order: ${isBuy ? 'BUY' : 'SELL'} ${size} USD of ${symbol}`)
 
         if (!walletProvider) {
             return reject(new Error("Wallet not connected"))
@@ -24,7 +23,6 @@ export const executeLighterOrder = async (walletProvider, orderDetails) => {
             // Success Response
             const mockTxHash = "0x" + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('')
 
-            console.log(`[Lighter.xyz] Order Filled! Hash: ${mockTxHash}`)
 
             resolve({
                 success: true,

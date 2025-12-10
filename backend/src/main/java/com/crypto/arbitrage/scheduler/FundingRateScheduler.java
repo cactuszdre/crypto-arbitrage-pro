@@ -54,7 +54,6 @@ public class FundingRateScheduler {
 
                     // Wait for all Paradex requests to complete
                     java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
-                    log.info("Paradex sync completed for {} markets", markets.size());
                 });
             } catch (Exception e) {
                 log.error("Error in Paradex fetch loop", e);
@@ -82,8 +81,6 @@ public class FundingRateScheduler {
         // Wait for all DEXes to complete
         java.util.concurrent.CompletableFuture.allOf(paradexFuture, lighterFuture, hyperliquidFuture).join();
 
-        long duration = System.currentTimeMillis() - startTime;
-        log.info("Total funding rate sync took {} ms", duration);
     }
 
     @Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE)

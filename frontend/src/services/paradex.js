@@ -1,6 +1,5 @@
 
 export const executeParadexOrder = async (walletProvider, orderDetails) => {
-    console.log("EXECUTING PARADEX ORDER (WIP)", orderDetails)
 
     // TODO: Implement Real Paradex SDK logic
     // 1. Derive Starknet Keys from Ethereum Signature (Get-Starknet or similar?)

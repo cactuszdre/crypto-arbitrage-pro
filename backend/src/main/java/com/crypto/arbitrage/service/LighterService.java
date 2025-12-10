@@ -93,7 +93,6 @@ public class LighterService {
             // Save all fetched rates
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
-                log.info("Récupéré et sauvegardé {} funding rates pour Lighter", rates.size());
             }
 
             return rates;

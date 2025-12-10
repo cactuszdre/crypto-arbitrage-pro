@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { fundingRateApi } from '../services/api'
+import { fundingRateApi, chartApi } from '../services/api'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,6 +41,7 @@ const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
 const isChangingMetric = ref(false) // Loading state for metric changes
 const isChangingDex = ref(false) // Loading state for DEX changes
 const isChangingSymbol = ref(false) // Loading state for symbol changes
+const usingPreAggregated = ref(false) // Track if using pre-aggregated data
 
 const metrics = [
   { label: '1H Rate', value: 'rate' },
@@ -57,6 +58,7 @@ const dexColors = {
 }
 
 // Aggregate data by 30-minute intervals - takes the latest value for each 30-min bucket
+// Used as fallback when pre-aggregated data isn't available
 const aggregateByInterval = (data) => {
   const buckets = new Map()
   const INTERVAL_MINUTES = 10
@@ -83,60 +85,109 @@ const aggregateByInterval = (data) => {
   return Array.from(buckets.values())
 }
 
-// Fetch data with optional silent mode (no loading spinner)
+// Try to fetch from pre-aggregated API, fallback to raw data if needed
 const fetchData = async (silent = false) => {
   if (!silent) {
     loading.value = true
   }
   try {
     const data = []
+    let usedPreAggregated = false
 
-    // Fetch for Paradex
-    if (selectedDex.value === 'All' || selectedDex.value === 'Paradex') {
-      try {
-        const pResponse = await fundingRateApi.getHistory({
-          dex: 'Paradex',
-          symbol: props.symbol,
-          hours: 24
-        })
-        data.push(...pResponse.data.map(d => ({ ...d, dex: 'Paradex' })))
-      } catch (e) {
-        console.error("No Paradex data", e)
+    // First, try the pre-aggregated 5-minute chart API
+    try {
+      if (selectedDex.value === 'All') {
+        // Use comparison endpoint for all DEXs
+        const response = await chartApi.getComparisonData(props.symbol, 24)
+        if (response.data && Object.keys(response.data).length > 0) {
+          // Transform comparison data to flat array
+          for (const [dexName, dexData] of Object.entries(response.data)) {
+            for (const item of dexData) {
+              data.push({
+                dex: dexName,
+                timestamp: item.bucketTime,
+                rate: item.avgRate,
+                rate8h: item.avgRate8h,
+                rateAnnual: item.avgRateAnnual
+              })
+            }
+          }
+          usedPreAggregated = true
+        }
+      } else {
+        // Fetch for specific DEX
+        const response = await chartApi.getChartData(props.symbol, selectedDex.value, 24)
+        if (response.data && response.data.length > 0) {
+          for (const item of response.data) {
+            data.push({
+              dex: item.dexName || selectedDex.value,
+              timestamp: item.bucketTime,
+              rate: item.avgRate,
+              rate8h: item.avgRate8h,
+              rateAnnual: item.avgRateAnnual
+            })
+          }
+          usedPreAggregated = true
+        }
       }
+    } catch (e) {
+      console.log('[Chart] Pre-aggregated API not available, falling back to raw data')
     }
 
-    // Fetch for Lighter
-    if (selectedDex.value === 'All' || selectedDex.value === 'Lighter') {
-       try {
-        const lResponse = await fundingRateApi.getHistory({
-          dex: 'Lighter',
-          symbol: props.symbol,
-          hours: 24
-        })
-        data.push(...lResponse.data.map(d => ({ ...d, dex: 'Lighter' })))
-       } catch (e) {
-         console.error("No Lighter data", e)
-       }
+    // Fallback to raw data if pre-aggregated didn't return data
+    if (data.length === 0) {
+      // Fetch for Paradex
+      if (selectedDex.value === 'All' || selectedDex.value === 'Paradex') {
+        try {
+          const pResponse = await fundingRateApi.getHistory({
+            dex: 'Paradex',
+            symbol: props.symbol,
+            hours: 24
+          })
+          data.push(...pResponse.data.map(d => ({ ...d, dex: 'Paradex' })))
+        } catch (e) {
+          console.error("No Paradex data", e)
+        }
+      }
+
+      // Fetch for Lighter
+      if (selectedDex.value === 'All' || selectedDex.value === 'Lighter') {
+         try {
+          const lResponse = await fundingRateApi.getHistory({
+            dex: 'Lighter',
+            symbol: props.symbol,
+            hours: 24
+          })
+          data.push(...lResponse.data.map(d => ({ ...d, dex: 'Lighter' })))
+         } catch (e) {
+           console.error("No Lighter data", e)
+         }
+      }
+
+      // Fetch for Hyperliquid
+      if (selectedDex.value === 'All' || selectedDex.value === 'Hyperliquid') {
+         try {
+          const hResponse = await fundingRateApi.getHistory({
+            dex: 'Hyperliquid',
+            symbol: props.symbol,
+            hours: 24
+          })
+          data.push(...hResponse.data.map(d => ({ ...d, dex: 'Hyperliquid' })))
+         } catch (e) {
+           console.error("No Hyperliquid data", e)
+         }
+      }
+
+      // Aggregate by 10-minute intervals when using raw data
+      const aggregated = aggregateByInterval(data)
+      historyData.value = aggregated.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    } else {
+      // Pre-aggregated data is already in 5-minute buckets, just sort
+      historyData.value = data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
     }
 
-    // Fetch for Hyperliquid
-    if (selectedDex.value === 'All' || selectedDex.value === 'Hyperliquid') {
-       try {
-        const hResponse = await fundingRateApi.getHistory({
-          dex: 'Hyperliquid',
-          symbol: props.symbol,
-          hours: 24
-        })
-        data.push(...hResponse.data.map(d => ({ ...d, dex: 'Hyperliquid' })))
-       } catch (e) {
-         console.error("No Hyperliquid data", e)
-       }
-    }
-
-    // Aggregate by 30-minute intervals and sort by timestamp asc
-    const aggregated = aggregateByInterval(data)
-    historyData.value = aggregated.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-
+    usingPreAggregated.value = usedPreAggregated
+    
     // Increment key to force chart re-render
     chartKey.value++
   } catch (error) {
@@ -178,15 +229,13 @@ watch(() => selectedMetric.value, async () => {
 // Auto-refresh every 10 seconds (silent - no loading spinner)
 let refreshInterval = null
 onMounted(() => {
-  console.log('[Chart] Setting up auto-refresh interval (10s)')
+  
   refreshInterval = setInterval(() => {
-    console.log('[Chart] Auto-refreshing data...')
     fetchData(true) // Silent refresh
   }, 10000)
 })
 
 onUnmounted(() => {
-  console.log('[Chart] Cleaning up refresh interval')
   if (refreshInterval) {
     clearInterval(refreshInterval)
     refreshInterval = null

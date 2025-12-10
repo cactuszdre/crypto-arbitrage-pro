@@ -16,7 +16,6 @@ export const executeHyperliquidOrder = async (walletProvider, orderDetails) => {
     })
     const [account] = await client.getAddresses()
 
-    console.log(`SDK Execution: Initializing for ${symbol} order. Account: ${account}`)
 
     // 2. Transports & Clients
     const transport = new HttpTransport({
@@ -39,7 +38,6 @@ export const executeHyperliquidOrder = async (walletProvider, orderDetails) => {
     const info = new InfoClient({ transport })
 
     // 3. Fetch Metadata (Universe) & Prices (Mids) in parallel
-    console.log("Fetching Market Data...")
     const [meta, mids] = await Promise.all([
         info.meta(),
         info.allMids()
@@ -64,7 +62,6 @@ export const executeHyperliquidOrder = async (walletProvider, orderDetails) => {
     }
 
     const szDecimals = assetInfo.szDecimals
-    console.log(`Asset Found: ${symbol} (ID: ${assetIndex}, Decimals: ${szDecimals})`)
 
     // 5. Get Market Price
     // mids is object { "ETH": "3000.50", "BTC": ... } or similar depending on SDK.
@@ -74,7 +71,6 @@ export const executeHyperliquidOrder = async (walletProvider, orderDetails) => {
         throw new Error(`Could not fetch price for ${symbol}`)
     }
     const currentPrice = parseFloat(rawPrice)
-    console.log(`Current Market Price for ${symbol}: ${currentPrice}`)
 
     // 6. Calculate Execution Price (Market Order Emulation)
     // 5% slippage to ensure fill
@@ -94,15 +90,6 @@ export const executeHyperliquidOrder = async (walletProvider, orderDetails) => {
         throw new Error(`Calculated size is too small for this asset. Min size not met with $${sizeUsd} at price ${currentPrice}`)
     }
 
-    console.log("Preparing Market Order:", {
-        symbol,
-        isBuy,
-        currentPrice,
-        executionPrice: formattedPrice,
-        sizeUsd,
-        sizeTokens,
-        roundedSize
-    })
 
     // 8. Send Order
     try {
@@ -118,7 +105,6 @@ export const executeHyperliquidOrder = async (walletProvider, orderDetails) => {
             grouping: 'na'
         })
 
-        console.log("SDK Response:", result)
 
         if (result.status === 'err') {
             throw new Error("Hyperliquid API Error: " + JSON.stringify(result.response))

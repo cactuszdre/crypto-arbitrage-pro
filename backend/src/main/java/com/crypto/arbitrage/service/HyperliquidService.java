@@ -108,7 +108,6 @@ public class HyperliquidService {
             // Save all fetched rates
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
-                log.info("Récupéré et sauvegardé {} funding rates pour Hyperliquid", rates.size());
             }
 
             return rates;
