@@ -56,22 +56,26 @@ const dexColors = {
   'Hyperliquid': '#F59E0B' // Amber
 }
 
-// Aggregate data by minute - takes the latest value for each minute bucket
-const aggregateByMinute = (data) => {
+// Aggregate data by 30-minute intervals - takes the latest value for each 30-min bucket
+const aggregateByInterval = (data) => {
   const buckets = new Map()
+  const INTERVAL_MINUTES = 10
 
   for (const item of data) {
     const date = new Date(item.timestamp)
-    // Create a key for the minute bucket (year-month-day-hour-minute)
-    const minuteKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`
-    const bucketKey = `${item.dex}-${minuteKey}`
+    // Calculate which 30-minute bucket this falls into (0 for 0-29, 1 for 30-59)
+    const intervalBucket = Math.floor(date.getMinutes() / INTERVAL_MINUTES)
+    // Create a key for the 30-minute bucket (year-month-day-hour-interval)
+    const intervalKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${intervalBucket}`
+    const bucketKey = `${item.dex}-${intervalKey}`
 
-    // Keep the latest entry for each dex per minute
+    // Keep the latest entry for each dex per 30-minute interval
     if (!buckets.has(bucketKey) || new Date(buckets.get(bucketKey).timestamp) < date) {
+      // Normalize timestamp to the start of the 30-minute interval
+      const normalizedMinute = intervalBucket * INTERVAL_MINUTES
       buckets.set(bucketKey, {
         ...item,
-        // Normalize timestamp to the start of the minute
-        timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes()).toISOString()
+        timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), normalizedMinute).toISOString()
       })
     }
   }
@@ -129,8 +133,8 @@ const fetchData = async (silent = false) => {
        }
     }
 
-    // Aggregate by minute and sort by timestamp asc
-    const aggregated = aggregateByMinute(data)
+    // Aggregate by 30-minute intervals and sort by timestamp asc
+    const aggregated = aggregateByInterval(data)
     historyData.value = aggregated.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
 
     // Increment key to force chart re-render
