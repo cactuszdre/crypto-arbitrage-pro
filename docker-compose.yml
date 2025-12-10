@@ -24,7 +24,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: crypto-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@crypto.local
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
