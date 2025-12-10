@@ -1,0 +1,35 @@
+# CactusFund - Robots.txt
+# https://cactusfund.app/robots.txt
+
+# Allow all search engines
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://cactusfund.app/sitemap.xml
+
+# Disallow API endpoints (not useful for search engines)
+Disallow: /api/
+
+# Disallow admin area
+Disallow: /admin
+
+# Disallow billing (private)
+Disallow: /billing
+
+# Allow main pages
+Allow: /
+Allow: /arbitrage
+Allow: /learn
+Allow: /swap
+
+# Crawl delay (optional, be nice to your server)
+Crawl-delay: 1
+
+# Google specific
+User-agent: Googlebot
+Allow: /
+
+# Bing specific
+User-agent: Bingbot
+Allow: /
