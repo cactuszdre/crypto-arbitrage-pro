@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { fundingRateApi } from '../services/api'
 import FundingRateChart from '../components/FundingRateChart.vue'
 
@@ -10,6 +10,73 @@ const selectedSymbol = ref('BTC-USD-PERP')
 const symbols = ref([]) // Now contains objects { symbol: '...', iconUrl: '...' }
 const isChangingAsset = ref(false) // Loading state when switching assets
 
+// ===== ANIMATED COUNTER SYSTEM =====
+// Display values (what's shown in UI, animated)
+const displayRate = ref(0)
+const displayRate8h = ref(0)
+const displayRateAnnual = ref(0)
+
+// Target values (actual data)
+const targetRate = ref(0)
+const targetRate8h = ref(0)
+const targetRateAnnual = ref(0)
+
+// Animation config
+const ANIMATION_DURATION = 800 // ms
+const ANIMATION_STEPS = 30
+
+// Easing function for smooth deceleration (easeOutExpo)
+const easeOutExpo = (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t))
+
+// Animate a value from current to target
+const animateValue = (displayRef, startValue, endValue, duration = ANIMATION_DURATION) => {
+  const startTime = performance.now()
+  const difference = endValue - startValue
+  
+  const animate = (currentTime) => {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    const easedProgress = easeOutExpo(progress)
+    
+    displayRef.value = startValue + (difference * easedProgress)
+    
+    if (progress < 1) {
+      requestAnimationFrame(animate)
+    } else {
+      displayRef.value = endValue // Ensure exact final value
+    }
+  }
+  
+  requestAnimationFrame(animate)
+}
+
+// Watch for target changes and trigger animations
+watch(targetRate, (newVal, oldVal) => {
+  animateValue(displayRate, oldVal || 0, newVal || 0)
+})
+
+watch(targetRate8h, (newVal, oldVal) => {
+  animateValue(displayRate8h, oldVal || 0, newVal || 0)
+})
+
+watch(targetRateAnnual, (newVal, oldVal) => {
+  animateValue(displayRateAnnual, oldVal || 0, newVal || 0)
+})
+
+// Format display values for UI
+const formattedRate = computed(() => {
+  return (displayRate.value * 100).toFixed(6) + '%'
+})
+
+const formattedRate8h = computed(() => {
+  return displayRate8h.value.toFixed(4) + '%'
+})
+
+const formattedRateAnnual = computed(() => {
+  return displayRateAnnual.value.toFixed(2) + '%'
+})
+// ===== END ANIMATED COUNTER SYSTEM =====
+
 // Helper to get selected symbol object
 const selectedSymbolObj = computed(() => {
     return symbols.value.find(s => s.symbol === selectedSymbol.value)
@@ -19,6 +86,15 @@ const latestRate = computed(() => {
   if (fundingRates.value.length === 0) return null
   return fundingRates.value.find(r => r.symbol === selectedSymbol.value) || fundingRates.value[0]
 })
+
+// Update targets when latestRate changes
+watch(latestRate, (newRate) => {
+  if (newRate) {
+    targetRate.value = newRate.rate || 0
+    targetRate8h.value = newRate.rate8h || 0
+    targetRateAnnual.value = newRate.rateAnnual || 0
+  }
+}, { immediate: true })
 
 const pinnedSymbols = computed(() => {
   return symbols.value.filter(s => ['BTC-USD-PERP', 'ETH-USD-PERP', 'SOL-USD-PERP'].includes(s.symbol))
@@ -88,7 +164,6 @@ const processSymbols = (rawSymbols) => {
 }
 
 const fetchData = async () => {
-  loading.value = true
   error.value = null
   try {
     const [ratesResponse, symbolsResponse] = await Promise.all([
@@ -188,10 +263,6 @@ onUnmounted(() => {
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
     <!-- Card 1: Current Funding Rate -->
     <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
-      <!-- Loading overlay -->
-      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
-        <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
       <div class="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-colors"></div>
       <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
         <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">Current Funding Rate</h3>
@@ -200,8 +271,8 @@ onUnmounted(() => {
         </svg>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-          {{ latestRate ? (latestRate.rate * 100).toFixed(6) + '%' : '--' }}
+        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight font-mono">
+          {{ formattedRate }}
         </span>
       </div>
       <div class="mt-2 sm:mt-3 lg:mt-4 flex items-center gap-2">
@@ -221,10 +292,6 @@ onUnmounted(() => {
 
     <!-- Card 2: 8h Rate -->
     <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group">
-      <!-- Loading overlay -->
-      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
-        <div class="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
       <div class="absolute right-0 top-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
       <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
         <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">8H Funding Rate</h3>
@@ -233,8 +300,8 @@ onUnmounted(() => {
         </svg>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-          {{ latestRate ? latestRate.rate8h?.toFixed(4) + '%' : '--' }}
+        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight font-mono">
+          {{ formattedRate8h }}
         </span>
       </div>
       <div class="mt-2 sm:mt-3 lg:mt-4 flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-neutral-500">
@@ -251,10 +318,6 @@ onUnmounted(() => {
 
     <!-- Card 3: Annual Rate -->
     <div class="glass-card rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 relative overflow-hidden group sm:col-span-2 lg:col-span-1">
-      <!-- Loading overlay -->
-      <div v-if="isChangingAsset" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl sm:rounded-2xl">
-        <div class="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
       <div class="absolute right-0 top-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors"></div>
       <div class="flex justify-between items-start mb-2 sm:mb-3 lg:mb-4">
         <h3 class="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-neutral-500">Annualized Rate</h3>
@@ -263,8 +326,8 @@ onUnmounted(() => {
         </svg>
       </div>
       <div class="flex items-baseline gap-2">
-        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-          {{ latestRate ? latestRate.rateAnnual?.toFixed(2) + '%' : '--' }}
+        <span class="text-2xl sm:text-3xl font-semibold text-white tracking-tight font-mono">
+          {{ formattedRateAnnual }}
         </span>
       </div>
       <div class="mt-2 sm:mt-3 lg:mt-4 flex items-center gap-2">

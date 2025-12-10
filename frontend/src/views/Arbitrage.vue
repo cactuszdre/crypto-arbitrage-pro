@@ -861,7 +861,7 @@ onUnmounted(() => {
                   </svg>
                 </span>
               </th>
-              <th class="px-4 py-3 font-medium text-right"></th>
+              <th class="px-4 py-3 font-medium text-center"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/5">
@@ -926,8 +926,8 @@ onUnmounted(() => {
                   {{ opp.projectedDailyReturn >= 0 ? '+' : '' }}{{ (opp.projectedDailyReturn).toFixed(4) }}%
                 </span>
               </td>
-              <td class="px-4 py-3 text-right">
-                <div class="relative inline-block">
+              <td class="px-4 py-3 text-center">
+                <div class="inline-block relative">
                   <button
                     @click="isPro ? selectOpportunity(opp) : null"
                     :class="[
