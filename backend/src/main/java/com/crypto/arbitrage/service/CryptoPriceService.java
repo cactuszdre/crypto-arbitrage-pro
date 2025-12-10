@@ -114,7 +114,6 @@ public class CryptoPriceService {
                 if (!newPrices.isEmpty()) {
                     cachedPrices.clear();
                     cachedPrices.addAll(newPrices);
-                    log.info("Fetched {} crypto prices from CoinGecko", newPrices.size());
                 }
             }
         } catch (Exception e) {
