@@ -22,6 +22,9 @@ const failedImages = ref(new Set())
 const searchQuery = ref('')
 const isLoadingOpportunities = ref(true)
 
+// Pro Plan Modal
+const showProModal = ref(false)
+
 // Wallet & Execution State
 const accountData = useAppKitAccount()
 const providerData = useAppKitProvider('eip155')
@@ -1045,15 +1048,15 @@ onUnmounted(() => {
         </div>
 
         <!-- CTA Button -->
-        <router-link
-          to="/billing"
+        <button
+          @click="showProModal = true"
           class="w-full py-3 sm:py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
           </svg>
           Upgrade to Pro
-        </router-link>
+        </button>
 
         <!-- Footer Note -->
         <p class="text-[10px] text-neutral-600 mt-4">
@@ -1199,6 +1202,128 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- Pro Plan Modal -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div 
+        v-if="showProModal" 
+        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        @click.self="showProModal = false"
+      >
+        <!-- Backdrop -->\n        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showProModal = false"></div>
+        
+        <!-- Modal Content -->
+        <div class="relative w-full max-w-lg glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/20 overflow-hidden animate-modal-enter">
+          <!-- Background Glow -->
+          <div class="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -z-10"></div>
+          <div class="absolute bottom-0 left-0 w-48 h-48 bg-orange-500/10 rounded-full blur-3xl -z-10"></div>
+          
+          <!-- Close Button -->
+          <button 
+            @click="showProModal = false"
+            class="absolute top-4 right-4 w-8 h-8 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+
+          <!-- Coming Soon Badge -->
+          <div class="flex justify-center mb-5">
+            <span class="px-4 py-1.5 text-sm font-bold uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full">
+              Coming Soon
+            </span>
+          </div>
+
+          <!-- Main Message -->
+          <div class="text-center mb-6">
+            <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center ring-2 ring-amber-500/30">
+              <svg class="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2">Pro Plan</h2>
+            <p class="text-neutral-400 text-sm leading-relaxed max-w-sm mx-auto">
+              We're working hard to bring you the Pro plan. Stay tuned for the official launch!
+            </p>
+          </div>
+
+          <!-- Features Preview -->
+          <div class="bg-white/5 rounded-2xl p-5 mb-6">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+              <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              Included Features
+            </h3>
+            <ul class="space-y-2.5">
+              <li class="flex items-center gap-3 text-sm text-neutral-300">
+                <div class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                </div>
+                Automatic Arbitrage Execution (Long + Short)
+              </li>
+              <li class="flex items-center gap-3 text-sm text-neutral-300">
+                <div class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                </div>
+                Multi-DEX Parallel Execution
+              </li>
+              <li class="flex items-center gap-3 text-sm text-neutral-300">
+                <div class="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-3 h-3 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                </div>
+                More features coming soon...
+              </li>
+            </ul>
+          </div>
+
+          <!-- Close CTA -->
+          <button 
+            @click="showProModal = false"
+            class="w-full py-3 bg-white/5 border border-white/10 text-neutral-400 text-sm font-medium rounded-xl hover:bg-white/10 hover:text-white transition-colors"
+          >
+            Got it!
+          </button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+/* Modal animations */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: modal-enter 0.3s ease-out;
+}
+</style>
 
 
