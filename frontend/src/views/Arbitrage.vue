@@ -135,6 +135,9 @@ const availableDexes = computed(() => {
   return Array.from(dexSet).sort()
 })
 
+// Track if user has manually changed the filter
+const userHasFilteredDexes = ref(false)
+
 // Sync selectedDexes with availableDexes when data changes
 watch(availableDexes, (newDexes) => {
   if (newDexes.length === 0) {
@@ -144,16 +147,20 @@ watch(availableDexes, (newDexes) => {
     // First load: select all DEXes
     selectedDexes.value = [...newDexes]
     dexFilterInitialized.value = true
-  } else {
-    // Data changed: keep only DEXes that still exist, add new ones
+  } else if (!userHasFilteredDexes.value) {
+    // User hasn't manually filtered yet, add new DEXes automatically
     const existingSelection = selectedDexes.value.filter(d => newDexes.includes(d))
     const newOnes = newDexes.filter(d => !selectedDexes.value.includes(d))
     selectedDexes.value = [...existingSelection, ...newOnes]
+  } else {
+    // User has manually filtered - only keep valid DEXes, don't add new ones
+    selectedDexes.value = selectedDexes.value.filter(d => newDexes.includes(d))
   }
 }, { immediate: true })
 
 // Toggle DEX selection - simple add/remove
 const toggleDex = (dex) => {
+  userHasFilteredDexes.value = true // Mark as manually filtered
   const index = selectedDexes.value.indexOf(dex)
   if (index === -1) {
     selectedDexes.value.push(dex)
@@ -174,11 +181,13 @@ const hasEnoughDexes = computed(() => {
 
 // Select all DEXes
 const selectAllDexes = () => {
+  userHasFilteredDexes.value = false // Reset - user wants all
   selectedDexes.value = [...availableDexes.value]
 }
 
 // Deselect all DEXes
 const deselectAllDexes = () => {
+  userHasFilteredDexes.value = true // Mark as manually filtered
   selectedDexes.value = []
 }
 
