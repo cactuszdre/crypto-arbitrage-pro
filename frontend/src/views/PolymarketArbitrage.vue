@@ -22,9 +22,9 @@ const selectedMarket = ref(null)
 const viewMode = ref('opportunities') // 'opportunities' | 'all'
 
 // Fetch all 15-min crypto markets
-const fetchMarkets = async () => {
+const fetchMarkets = async (silent = false) => {
   try {
-    isLoading.value = true
+    if (!silent) isLoading.value = true
     error.value = null
     
     const response = await polymarketApi.getActiveMarkets()
@@ -82,7 +82,7 @@ let refreshInterval = null
 const startAutoRefresh = () => {
   stopAutoRefresh()
   refreshInterval = setInterval(() => {
-    fetchMarkets()
+    fetchMarkets(true) // Silent refresh - no loading animation
   }, 10000) // Every 10 seconds
 }
 

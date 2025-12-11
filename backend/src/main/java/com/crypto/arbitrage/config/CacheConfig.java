@@ -53,7 +53,16 @@ public class CacheConfig {
                 .recordStats()
                 .build());
         
-        cacheManager.setCaches(Arrays.asList(arbitrageCache, fundingRatesCache, historicalCache));
+        // Polymarket 15-min crypto markets cache - 10 seconds TTL
+        CaffeineCache polymarketCache = new CaffeineCache("polymarketCrypto15Min",
+            Caffeine.newBuilder()
+                .expireAfterWrite(10, TimeUnit.SECONDS)
+                .maximumSize(10)
+                .recordStats()
+                .build());
+        
+        cacheManager.setCaches(Arrays.asList(
+            arbitrageCache, fundingRatesCache, historicalCache, polymarketCache));
         
         return cacheManager;
     }

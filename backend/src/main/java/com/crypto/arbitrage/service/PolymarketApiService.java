@@ -41,7 +41,7 @@ public class PolymarketApiService {
         log.info("Fetching 15-min crypto markets from Polymarket");
         
         try {
-            WebClient client = webClientBuilder.baseUrl(GAMMA_API).build();
+            WebClient client = webClientBuilder.clone().baseUrl(GAMMA_API).build();
             
             // Fetch markets with crypto tag
             JsonNode response = client.get()
@@ -103,7 +103,7 @@ public class PolymarketApiService {
      * Useful for checking liquidity before trading.
      */
     public Mono<JsonNode> getOrderBook(String tokenId) {
-        WebClient client = webClientBuilder.baseUrl(CLOB_API).build();
+        WebClient client = webClientBuilder.clone().baseUrl(CLOB_API).build();
         
         return client.get()
                 .uri(uriBuilder -> uriBuilder
