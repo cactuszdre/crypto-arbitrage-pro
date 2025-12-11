@@ -1,7 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { fundingRateApi } from '../services/api'
 import FundingRateChart from '../components/FundingRateChart.vue'
+
+// Welcome popup for first-time visitors
+const showWelcomePopup = ref(false)
+const STORAGE_KEY = 'cactusfund_visited'
 
 const fundingRates = ref([])
 const loading = ref(true)
@@ -247,7 +252,21 @@ onMounted(() => {
   }, 10000)
   document.addEventListener('click', closeDropdown)
   document.addEventListener('touchend', closeDropdown)
+  
+  // Check if first visit using localStorage
+  if (!localStorage.getItem(STORAGE_KEY)) {
+    // Show popup after a short delay for better UX
+    setTimeout(() => {
+      showWelcomePopup.value = true
+    }, 1500)
+  }
 })
+
+// Dismiss welcome popup and mark as visited
+const dismissWelcomePopup = () => {
+  showWelcomePopup.value = false
+  localStorage.setItem(STORAGE_KEY, 'true')
+}
 
 onUnmounted(() => {
   if (refreshInterval) {
@@ -486,4 +505,81 @@ onUnmounted(() => {
   <!-- Analytics Chart -->
   <FundingRateChart :symbol="selectedSymbol" />
 
+  <!-- Welcome Popup for First-Time Visitors -->
+  <Transition name="slide-up">
+    <div 
+      v-if="showWelcomePopup"
+      class="fixed bottom-6 right-6 z-50 max-w-xs"
+    >
+      <div class="glass-card rounded-2xl p-4 border border-emerald-500/20 shadow-xl shadow-emerald-500/10 animate-gentle-bounce">
+        <!-- Close Button -->
+        <button 
+          @click="dismissWelcomePopup"
+          class="absolute -top-2 -right-2 w-6 h-6 bg-neutral-800 border border-white/10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
+        >
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+        
+        <!-- Content -->
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white mb-1">New here?</h4>
+            <p class="text-xs text-neutral-400 mb-3">
+              Learn how CactusFund works and start earning from funding rates!
+            </p>
+            <RouterLink 
+              to="/learn"
+              @click="dismissWelcomePopup"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-500/30 transition-colors"
+            >
+              <span>Go to Learn</span>
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+              </svg>
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
 </template>
+
+<style scoped>
+/* Slide up animation */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(100px);
+}
+
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* Gentle bounce animation */
+@keyframes gentle-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-gentle-bounce {
+  animation: gentle-bounce 3s ease-in-out infinite;
+}
+</style>
