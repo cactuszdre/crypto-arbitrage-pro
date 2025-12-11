@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -35,53 +36,97 @@ public class PolymarketApiService {
     /**
      * Fetch active 15-minute crypto markets (BTC/ETH up/down).
      * These are the markets suitable for the gabagool arbitrage strategy.
+     * 
+     * Polymarket creates these markets with slugs like "btc-updown-15m-{timestamp}"
+     * where timestamp is Unix epoch rounded to 15-min (900s) intervals.
+     * Since the API doesn't support wildcard filtering, we generate exact timestamps
+     * and query each upcoming 15-min window individually.
      */
     @Cacheable(value = "polymarketCrypto15Min", unless = "#result.isEmpty()")
     public List<PolymarketMarketDTO> fetch15MinCryptoMarkets() {
         log.info("Fetching 15-min crypto markets from Polymarket");
         
-        try {
-            WebClient client = webClientBuilder.clone().baseUrl(GAMMA_API).build();
+        List<PolymarketMarketDTO> allMarkets = new ArrayList<>();
+        
+        // Generate timestamps for 15-min windows
+        // Start from i=-1 to include the currently ending market (timestamp in the past but not resolved yet)
+        // Go up to i=6 for upcoming windows (1.5 hours ahead)
+        long nowSeconds = Instant.now().getEpochSecond();
+        long roundedNow = (nowSeconds / 900) * 900; // Round down to 15-min interval
+        
+        log.debug("Current time: {}, rounded timestamp: {}", nowSeconds, roundedNow);
+        
+        // Fetch BTC and ETH markets for current and upcoming 15-min windows
+        for (int i = -1; i <= 6; i++) {
+            long windowTimestamp = roundedNow + (i * 900);
             
-            // Fetch markets with crypto tag
+            // Fetch BTC 15-min up/down market for this window
+            PolymarketMarketDTO btcMarket = fetchSingleMarket("btc-updown-15m-" + windowTimestamp);
+            if (btcMarket != null) {
+                allMarkets.add(btcMarket);
+            }
+            
+            // Fetch ETH 15-min up/down market for this window
+            PolymarketMarketDTO ethMarket = fetchSingleMarket("eth-updown-15m-" + windowTimestamp);
+            if (ethMarket != null) {
+                allMarkets.add(ethMarket);
+            }
+        }
+        
+        log.info("Found {} active 15-min crypto markets", allMarkets.size());
+        return allMarkets;
+    }
+    
+    /**
+     * Fetch a single market by its exact slug.
+     * Returns null if not found or expired.
+     */
+    private PolymarketMarketDTO fetchSingleMarket(String slug) {
+        try {
+            WebClient client = webClientBuilder.clone()
+                    .baseUrl(GAMMA_API)
+                    .codecs(configurer -> configurer
+                            .defaultCodecs()
+                            .maxInMemorySize(1024 * 1024)) // 1MB buffer is enough for single event
+                    .build();
+            
             JsonNode response = client.get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/markets")
-                            .queryParam("active", "true")
-                            .queryParam("closed", "false")
+                            .path("/events")
+                            .queryParam("slug", slug)
                             .build())
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
             
-            if (response == null || !response.isArray()) {
-                log.warn("No markets returned from Polymarket API");
-                return new ArrayList<>();
+            if (response == null || !response.isArray() || response.isEmpty()) {
+                log.debug("Market not found for slug: {}", slug);
+                return null;
             }
             
-            List<PolymarketMarketDTO> markets = new ArrayList<>();
+            JsonNode eventNode = response.get(0);
+            JsonNode marketsNode = eventNode.path("markets");
             
-            for (JsonNode marketNode : response) {
-                String question = marketNode.path("question").asText("");
-                String category = marketNode.path("category").asText("");
-                
-                // Filter for 15-minute crypto markets
-                if (is15MinCryptoMarket(question, category)) {
-                    PolymarketMarketDTO market = parseMarket(marketNode);
-                    if (market != null) {
-                        market.calculateArbitrageMetrics();
-                        market.calculateTimeRemaining();
-                        markets.add(market);
+            if (marketsNode.isArray() && !marketsNode.isEmpty()) {
+                // Get the first market (the main UP/DOWN market)
+                PolymarketMarketDTO market = parseMarket(marketsNode.get(0));
+                if (market != null) {
+                    market.calculateArbitrageMetrics();
+                    market.calculateTimeRemaining();
+                    
+                    // Only return if market has time remaining
+                    if (market.getSecondsRemaining() != null && market.getSecondsRemaining() > 0) {
+                        log.debug("Found active market: {} ({}s remaining)", slug, market.getSecondsRemaining());
+                        return market;
                     }
                 }
             }
             
-            log.info("Found {} active 15-min crypto markets", markets.size());
-            return markets;
+            return null;
             
         } catch (Exception e) {
-            log.error("Error fetching Polymarket markets: {}", e.getMessage());
-            return new ArrayList<>();
+            log.debug("Error fetching market {}: {}", slug, e.getMessage());
+            return null;
         }
     }
     
@@ -116,7 +161,28 @@ public class PolymarketApiService {
     }
     
     /**
-     * Check if a market is a 15-minute crypto up/down market.
+     * Check if a market is crypto-related (BTC, ETH, or crypto category).
+     * Gabagool strategy works best on 15-min up/down markets, but we show all crypto.
+     */
+    private boolean isCryptoMarket(String question, String category) {
+        if (question == null) return false;
+        
+        String q = question.toLowerCase();
+        String cat = category != null ? category.toLowerCase() : "";
+        
+        // Check for crypto keywords in question or category
+        boolean isCrypto = q.contains("bitcoin") || q.contains("btc") || 
+                          q.contains("ethereum") || q.contains("eth") ||
+                          q.contains("crypto") || q.contains("solana") ||
+                          q.contains("doge") || q.contains("xrp") ||
+                          cat.contains("crypto") || cat.contains("bitcoin") || cat.contains("ethereum");
+        
+        return isCrypto;
+    }
+    
+    /**
+     * Check if a market is a 15-minute crypto up/down market (ideal for Gabagool).
+     * These have patterns like "Bitcoin Up or Down - Nov 24, 10:45AM"
      */
     private boolean is15MinCryptoMarket(String question, String category) {
         if (question == null) return false;
@@ -181,13 +247,13 @@ public class PolymarketApiService {
                 }
             }
             
-            // Parse end date
-            LocalDateTime endDate = null;
+            // Parse end date (as Instant to preserve UTC timezone)
+            Instant endDate = null;
             String endDateStr = node.path("endDate").asText("");
             if (!endDateStr.isEmpty()) {
                 try {
                     ZonedDateTime zdt = ZonedDateTime.parse(endDateStr);
-                    endDate = zdt.toLocalDateTime();
+                    endDate = zdt.toInstant();  // Convert to Instant (UTC) for proper timezone handling
                 } catch (Exception e) {
                     log.debug("Could not parse end date: {}", endDateStr);
                 }

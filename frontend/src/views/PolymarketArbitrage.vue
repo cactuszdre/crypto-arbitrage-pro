@@ -63,6 +63,16 @@ const formatProfit = (profit) => {
   return '+' + (profit * 100).toFixed(2) + '¢'
 }
 
+// Get entry quality badge class
+const getEntryQualityClass = (quality) => {
+  switch(quality) {
+    case 'EXCELLENT': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    case 'GOOD': return 'bg-green-500/20 text-green-400 border-green-500/30'
+    case 'FAIR': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    default: return 'bg-neutral-500/20 text-neutral-400 border-neutral-500/30'
+  }
+}
+
 // Get risk level color
 const getRiskLevelClass = (seconds) => {
   if (!seconds) return 'text-neutral-500'
@@ -276,12 +286,19 @@ const displayedMarkets = computed(() => {
                 </div>
               </div>
 
-              <!-- Profit Badge -->
-              <div v-if="market.hasArbitrageOpportunity" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30">
-                <span class="text-sm font-bold text-emerald-400">{{ formatProfit(market.potentialProfit) }}</span>
-              </div>
-              <div v-else class="px-3 py-1.5 rounded-lg bg-white/5">
-                <span class="text-sm font-medium text-neutral-400">{{ formatPrice(market.combinedPrice) }}</span>
+              <!-- Entry Quality Badge -->
+              <div class="flex items-center gap-2">
+                <div v-if="market.entryQuality" :class="[
+                  'px-2 py-1 rounded-md text-[10px] font-bold border',
+                  getEntryQualityClass(market.entryQuality)
+                ]">
+                  {{ market.entryQuality }}
+                </div>
+                <div v-if="market.cheapSide && market.cheapSide !== 'BALANCED'" class="text-xs">
+                  <span :class="market.cheapSide === 'YES' ? 'text-emerald-400' : 'text-red-400'">
+                    {{ market.cheapSide }} cheap
+                  </span>
+                </div>
               </div>
             </div>
           </div>
