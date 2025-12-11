@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, unref } from 'vue'
 import { useRoute } from 'vue-router'
-import { arbitrageApi } from '../services/api'
+import { arbitrageApi, dexApi } from '../services/api'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
 import { executeHyperliquidOrder } from '../services/hyperliquid'
 import { executeParadexOrder } from '../services/paradex'
@@ -123,34 +123,25 @@ const isLoadingHistorical = ref(false)
 // DEX filter - all DEXes selected by default
 const selectedDexes = ref([]) // Will be initialized with all DEXes on mount
 const showDexFilter = ref(false)
-const dexFilterInitialized = ref(false)
 
-// Get unique DEXes from opportunities
-const availableDexes = computed(() => {
-  const dexSet = new Set()
-  opportunities.value.forEach(opp => {
-    if (opp.longDex) dexSet.add(opp.longDex)
-    if (opp.shortDex) dexSet.add(opp.shortDex)
-  })
-  return Array.from(dexSet).sort()
-})
+// Available DEXes loaded from database (loaded once at mount)
+const availableDexes = ref([])
 
-// Sync selectedDexes with availableDexes when data changes
-watch(availableDexes, (newDexes) => {
-  if (newDexes.length === 0) {
-    // No data available, reset selection
-    selectedDexes.value = []
-  } else if (!dexFilterInitialized.value) {
-    // First load: select all DEXes
-    selectedDexes.value = [...newDexes]
-    dexFilterInitialized.value = true
-  } else {
-    // Data changed: keep only DEXes that still exist, add new ones
-    const existingSelection = selectedDexes.value.filter(d => newDexes.includes(d))
-    const newOnes = newDexes.filter(d => !selectedDexes.value.includes(d))
-    selectedDexes.value = [...existingSelection, ...newOnes]
+// Load DEX list from database (called once at mount)
+const loadAvailableDexes = async () => {
+  try {
+    const response = await dexApi.getAll()
+    // Extract DEX names from response
+    availableDexes.value = response.data.map(dex => dex.name).sort()
+    // Initialize selection with all DEXes
+    selectedDexes.value = [...availableDexes.value]
+  } catch (error) {
+    console.error('Failed to load DEX list:', error)
+    // Fallback to known DEXes if API fails
+    availableDexes.value = ['Hyperliquid', 'Paradex', 'Lighter']
+    selectedDexes.value = [...availableDexes.value]
   }
-}, { immediate: true })
+}
 
 // Toggle DEX selection - simple add/remove
 const toggleDex = (dex) => {
@@ -420,7 +411,9 @@ const stopAutoRefresh = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Load DEX list from database first
+  await loadAvailableDexes()
   // Initialize search from URL query param
   if (route.query.search) {
     searchQuery.value = route.query.search
