@@ -11,6 +11,36 @@ const toggleSection = (id) => {
 
 const isOpen = (id) => openSections.value[id]
 
+// Open a specific section and scroll to it
+const openAndScrollTo = (questionId) => {
+  // Open the section
+  openSections.value[questionId] = true
+  
+  // Wait for DOM update then scroll
+  nextTick(() => {
+    const element = document.getElementById(`question-${questionId}`)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Flash effect to highlight the section
+      element.classList.add('highlight-flash')
+      setTimeout(() => element.classList.remove('highlight-flash'), 1500)
+    }
+  })
+}
+
+// Parse answer text and convert [[term|questionId]] to clickable links
+const parseAnswer = (answer) => {
+  // Pattern: [[display text|question-id]]
+  return answer.replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, (match, text, id) => {
+    return `<button class="faq-link" onclick="window.openFaqSection('${id}')">${text}</button>`
+  })
+}
+
+// Expose function to window for onclick handlers
+if (typeof window !== 'undefined') {
+  window.openFaqSection = (id) => openAndScrollTo(id)
+}
+
 // Chat state
 const chatOpen = ref(false)
 const chatInput = ref('')
@@ -75,6 +105,77 @@ const sendMessage = async () => {
 // FAQ Data
 const faqCategories = [
   {
+    id: 'cactusfund',
+    title: 'What is CactusFund?',
+    icon: 'lucide:leaf',
+    questions: [
+      {
+        id: 'what-is-cactusfund',
+        question: "What is CactusFund?",
+        answer: `CactusFund is your all-in-one platform for earning passive income from [[crypto|what-is-crypto]].
+
+We find the best [[funding rate|what-is-funding]] opportunities across multiple exchanges and show you exactly how to profit from them.
+
+No complex charts. No guessing if prices go up or down. Just steady, low-risk earnings.`
+      },
+      {
+        id: 'how-cactusfund-works',
+        question: "How does CactusFund work?",
+        answer: `CactusFund scans multiple [[DEXs|what-is-dex]] (decentralized exchanges) every few seconds.
+
+It finds pairs where the [[funding rates|what-is-funding]] are different:
+- You open a LONG on Exchange A
+- You open a SHORT on Exchange B (same size)
+
+Sometimes you'll pay funding on one side, but receive MORE on the other side.
+
+The difference is your profit! Example: you pay 0.01% but receive 0.05% = net gain of 0.04%.
+
+Since your positions cancel out price movements, you keep that spread as pure profit.`
+      },
+      {
+        id: 'why-use-cactusfund',
+        question: "Why should I use CactusFund?",
+        answer: `Without CactusFund:
+- You'd have to check rates on 10+ exchanges manually
+- Compare spreads, fees, and liquidation risks yourself
+- React fast before opportunities disappear
+
+With CactusFund:
+- All opportunities are sorted by profitability
+- Risk levels are calculated automatically
+- One-click to see exactly what to do
+- Real-time updates every 30 seconds
+
+We do the boring work so you can focus on making money.`
+      },
+      {
+        id: 'is-cactusfund-free',
+        question: "Is CactusFund free to use?",
+        answer: `The basic features are completely free:
+- View all [[funding rates|what-is-funding]] across exchanges
+- See top [[arbitrage opportunities|what-is-arb]]
+- Learn with our AI assistant
+
+Pro features (coming soon) will include:
+- Automated trade execution
+- Custom alerts and notifications
+- Advanced analytics and reports`
+      },
+      {
+        id: 'is-cactusfund-safe',
+        question: "Is CactusFund safe?",
+        answer: `Yes! Here's why:
+- We NEVER hold your funds (non-custodial)
+- Your [[wallet|what-is-wallet]] stays in your control
+- We only show you opportunities - YOU decide to trade
+- No private keys stored on our servers
+
+Think of CactusFund like Google Maps: we show you the best route, but you're the one driving.`
+      }
+    ]
+  },
+  {
     id: 'basics',
     title: 'The Basics',
     icon: 'lucide:book-open',
@@ -84,7 +185,7 @@ const faqCategories = [
         question: "What is crypto trading?",
         answer: `Crypto trading means buying and selling digital currencies like Bitcoin or Ethereum to make profit.
 
-With CactusFund, you don't need to predict if prices go up or down - we use a smarter strategy called arbitrage.`
+With CactusFund, you don't need to predict if prices go up or down - we use a smarter strategy called [[arbitrage|what-is-arb]].`
       },
       {
         id: 'what-is-wallet',
@@ -189,11 +290,11 @@ Steps: Install MetaMask, create wallet, save seed phrase offline, buy ETH, conne
       {
         id: 'how-use-app',
         question: "How do I use CactusFund?",
-        answer: `Dashboard shows current funding rates across all DEXs.
+        answer: `Dashboard shows current [[funding rates|what-is-funding]] across all [[DEXs|what-is-dex]].
 
 Opportunities page shows the best trades sorted by daily return.
 
-Click an opportunity to see the Long/Short pair and execute both trades.
+Click an opportunity to see the [[Long/Short pair|what-is-arb]] and execute both trades.
 
 Look for daily returns above 0.1% for good opportunities.`
       },
@@ -269,7 +370,8 @@ Look for daily returns above 0.1% for good opportunities.`
           <div 
             v-for="q in category.questions" 
             :key="q.id"
-            class="group"
+            :id="`question-${q.id}`"
+            class="group transition-all duration-300"
           >
             <!-- Question Button -->
             <button
@@ -309,8 +411,8 @@ Look for daily returns above 0.1% for good opportunities.`
               v-show="isOpen(q.id)"
               class="px-4 pb-4 pt-2"
             >
-              <div class="ml-8 p-3 rounded-lg bg-white/[0.02] border border-white/5 text-sm text-neutral-300 leading-relaxed whitespace-pre-line">
-                {{ q.answer }}
+              <div class="ml-8 p-3 rounded-lg bg-white/[0.02] border border-white/5 text-sm text-neutral-300 leading-relaxed whitespace-pre-line faq-answer">
+                <span v-html="parseAnswer(q.answer)"></span>
               </div>
             </div>
           </div>
@@ -446,5 +548,39 @@ Look for daily returns above 0.1% for good opportunities.`
 
 .animate-bounce-slow {
   animation: bounce-slow 2s ease-in-out infinite;
+}
+
+/* FAQ Link styles */
+:deep(.faq-link) {
+  color: #10b981;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+
+:deep(.faq-link:hover) {
+  color: #34d399;
+  text-decoration-style: solid;
+}
+
+/* Highlight flash animation */
+@keyframes highlight-flash {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(16, 185, 129, 0.15);
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 0.5s ease-in-out 3;
+  border-radius: 0.5rem;
 }
 </style>
