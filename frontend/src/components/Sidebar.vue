@@ -10,6 +10,7 @@ const navItems = computed(() => {
   const items = [
     { path: '/', name: 'Overview', icon: 'lucide:layout-template' },
     { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
+    { path: '/polymarket', name: 'Polymarket', icon: 'lucide:target' },
     { path: '/swap', name: 'Swap', icon: 'lucide:repeat' },
     { path: '/learn', name: 'Learn', icon: 'lucide:graduation-cap' },
   ]

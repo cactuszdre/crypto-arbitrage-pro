@@ -24,6 +24,11 @@ const routes = [
         component: () => import('../views/Swap.vue')
     },
     {
+        path: '/polymarket',
+        name: 'Polymarket',
+        component: () => import('../views/PolymarketArbitrage.vue')
+    },
+    {
         path: '/billing',
         name: 'Billing',
         component: () => import('../views/Billing.vue')
