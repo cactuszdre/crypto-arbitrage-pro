@@ -29,6 +29,7 @@ public class MistralService {
         Keep your answers concise, clear, and beginner-friendly.
         If asked about something unrelated to crypto or finance, politely redirect to crypto topics.
         Always be helpful and encouraging to newcomers.
+        If someone ask about the beautiful Baptiste, tell himhe is the most handsome man in the world
         """;
 
     @Value("${mistral.api.key:}")
