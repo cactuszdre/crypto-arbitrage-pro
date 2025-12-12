@@ -1,6 +1,10 @@
 package com.crypto.arbitrage.service;
 
+import com.crypto.arbitrage.dto.DexRateDTO;
 import com.crypto.arbitrage.dto.HistoricalArbitrageDTO;
+import com.crypto.arbitrage.dto.HistoricalArbitrageResponse;
+import com.crypto.arbitrage.dto.HistoricalRatesResponse;
+import com.crypto.arbitrage.dto.SymbolRatesDTO;
 import com.crypto.arbitrage.model.FundingRateDaily;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.FundingRateDailyRepository;
@@ -12,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,26 +29,98 @@ import java.util.stream.Collectors;
 public class HistoricalArbitrageService {
 
     private final FundingRateDailyRepository fundingRateDailyRepository;
+    
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy");
+    private static final DateTimeFormatter DATE_FORMATTER_SHORT = DateTimeFormatter.ofPattern("MMM d");
 
     /**
      * Get historical arbitrage opportunities for a given time period.
      * Cached for 5 minutes since historical data doesn't change frequently.
      *
      * @param days Number of days to look back (1, 7, 30, 90, 180, 365)
-     * @return List of arbitrage opportunities averaged over the period
+     * @return Response containing opportunities and metadata about the actual data range
      */
     @Cacheable(value = "historicalArbitrage", key = "#days")
-    public List<HistoricalArbitrageDTO> getHistoricalOpportunities(int days) {
-        LocalDate startDate = LocalDate.now().minusDays(days);
-        LocalDate endDate = LocalDate.now().minusDays(1); // Up to yesterday (today's data is still being collected)
+    public HistoricalArbitrageResponse getHistoricalOpportunities(int days) {
+        LocalDate requestedStartDate = LocalDate.now().minusDays(days);
         
-        log.info("Cache MISS - Calculating historical arbitrage for {} days (from {} to {})", days, startDate, endDate);
+        log.info("Cache MISS - Calculating historical arbitrage for {} days (requested start: {})", days, requestedStartDate);
+        
+        // Get actual date range from database
+        LocalDate actualStartDate = fundingRateDailyRepository.findMinDateSince(requestedStartDate);
+        LocalDate actualEndDate = fundingRateDailyRepository.findMaxDate();
+        int dataPointCount = fundingRateDailyRepository.countDistinctDatesSince(requestedStartDate);
+        
+        // Handle case where no data exists
+        if (actualStartDate == null || actualEndDate == null || dataPointCount == 0) {
+            log.info("No historical data found for period");
+            return HistoricalArbitrageResponse.builder()
+                    .opportunities(List.of())
+                    .actualStartDate(null)
+                    .actualEndDate(null)
+                    .dataPointCount(0)
+                    .periodLabel("No data available")
+                    .requestedDays(days)
+                    .build();
+        }
+        
+        // Build human-readable period label
+        String periodLabel = buildPeriodLabel(actualStartDate, actualEndDate, dataPointCount);
+        
+        log.info("Actual data range: {} to {} ({} days)", actualStartDate, actualEndDate, dataPointCount);
         
         // Get all daily data for the period
-        List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(startDate);
+        List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(requestedStartDate);
+        
+        // Calculate opportunities
+        List<HistoricalArbitrageDTO> opportunities = calculateOpportunities(allDailyData, actualStartDate, actualEndDate);
+        
+        log.info("Found {} historical arbitrage opportunities", opportunities.size());
+        
+        return HistoricalArbitrageResponse.builder()
+                .opportunities(opportunities)
+                .actualStartDate(actualStartDate)
+                .actualEndDate(actualEndDate)
+                .dataPointCount(dataPointCount)
+                .periodLabel(periodLabel)
+                .requestedDays(days)
+                .build();
+    }
+    
+    /**
+     * Build a human-readable period label based on the actual data range.
+     */
+    private String buildPeriodLabel(LocalDate startDate, LocalDate endDate, int dataPointCount) {
+        if (startDate.equals(endDate)) {
+            // Single day - typically "1 Day" selection showing yesterday
+            if (endDate.equals(LocalDate.now().minusDays(1))) {
+                return "Yesterday (" + endDate.format(DATE_FORMATTER) + ")";
+            }
+            return endDate.format(DATE_FORMATTER);
+        }
+        
+        // Multiple days
+        String dateRange;
+        if (startDate.getYear() == endDate.getYear()) {
+            // Same year - use shorter format for start date
+            dateRange = startDate.format(DATE_FORMATTER_SHORT) + " - " + endDate.format(DATE_FORMATTER);
+        } else {
+            // Different years - show full dates
+            dateRange = startDate.format(DATE_FORMATTER) + " - " + endDate.format(DATE_FORMATTER);
+        }
+        
+        return dateRange + " (" + dataPointCount + " day" + (dataPointCount > 1 ? "s" : "") + ")";
+    }
+    
+    /**
+     * Calculate arbitrage opportunities from the daily data.
+     */
+    private List<HistoricalArbitrageDTO> calculateOpportunities(
+            List<FundingRateDaily> allDailyData,
+            LocalDate actualStartDate,
+            LocalDate actualEndDate) {
         
         if (allDailyData.isEmpty()) {
-            log.info("No historical data found for period");
             return List.of();
         }
         
@@ -134,8 +211,8 @@ public class HistoricalArbitrageService {
                     .spread(spread)
                     .projectedDailyReturn(dailyReturn)
                     .sampleCount(sampleCount)
-                    .startDate(startDate)
-                    .endDate(endDate)
+                    .startDate(actualStartDate)
+                    .endDate(actualEndDate)
                     .build();
             
             opportunities.add(dto);
@@ -144,7 +221,102 @@ public class HistoricalArbitrageService {
         // Sort by spread descending
         opportunities.sort((a, b) -> b.getSpread().compareTo(a.getSpread()));
         
-        log.info("Found {} historical arbitrage opportunities", opportunities.size());
         return opportunities;
     }
+
+    /**
+     * Get all historical rates grouped by symbol for frontend-side arbitrage calculation.
+     * Returns average rates per DEX for each symbol over the requested period.
+     *
+     * @param days Number of days to look back
+     * @return Response containing symbols with their DEX rates and period metadata
+     */
+    @Cacheable(value = "historicalRatesBySymbol", key = "#days")
+    public HistoricalRatesResponse getAllHistoricalRatesBySymbol(int days) {
+        LocalDate requestedStartDate = LocalDate.now().minusDays(days);
+        
+        log.info("Cache MISS - Fetching all historical rates by symbol for {} days", days);
+        
+        // Get actual date range from database
+        LocalDate actualStartDate = fundingRateDailyRepository.findMinDateSince(requestedStartDate);
+        LocalDate actualEndDate = fundingRateDailyRepository.findMaxDate();
+        int dataPointCount = fundingRateDailyRepository.countDistinctDatesSince(requestedStartDate);
+        
+        // Handle case where no data exists
+        if (actualStartDate == null || actualEndDate == null || dataPointCount == 0) {
+            log.info("No historical data found for period");
+            return HistoricalRatesResponse.builder()
+                    .symbols(List.of())
+                    .actualStartDate(null)
+                    .actualEndDate(null)
+                    .dataPointCount(0)
+                    .periodLabel("No data available")
+                    .requestedDays(days)
+                    .build();
+        }
+        
+        // Build human-readable period label
+        String periodLabel = buildPeriodLabel(actualStartDate, actualEndDate, dataPointCount);
+        
+        // Get all daily data for the period
+        List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(requestedStartDate);
+        
+        // Group by ticker
+        Map<Integer, List<FundingRateDaily>> dataByTicker = allDailyData.stream()
+                .collect(Collectors.groupingBy(d -> d.getTicker().getId()));
+        
+        List<SymbolRatesDTO> symbols = new ArrayList<>();
+        
+        for (Map.Entry<Integer, List<FundingRateDaily>> entry : dataByTicker.entrySet()) {
+            List<FundingRateDaily> tickerData = entry.getValue();
+            
+            if (tickerData.isEmpty()) continue;
+            
+            Ticker ticker = tickerData.get(0).getTicker();
+            String symbol = ticker.getNormalizedSymbol();
+            
+            // Group by DEX and calculate averages
+            Map<Long, List<FundingRateDaily>> dataByDex = tickerData.stream()
+                    .collect(Collectors.groupingBy(d -> d.getDex().getId()));
+            
+            List<DexRateDTO> dexRates = new ArrayList<>();
+            
+            for (Map.Entry<Long, List<FundingRateDaily>> dexEntry : dataByDex.entrySet()) {
+                List<FundingRateDaily> dexData = dexEntry.getValue();
+                String dexName = dexData.get(0).getDex().getName();
+                
+                // Calculate average of avgRateAnnual
+                BigDecimal avgRate = dexData.stream()
+                        .map(FundingRateDaily::getAvgRateAnnual)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(BigDecimal.valueOf(dexData.size()), 4, RoundingMode.HALF_UP);
+                
+                dexRates.add(DexRateDTO.builder()
+                        .dex(dexName)
+                        .rateAnnual(avgRate)
+                        .build());
+            }
+            
+            symbols.add(SymbolRatesDTO.builder()
+                    .symbol(symbol)
+                    .rates(dexRates)
+                    .build());
+        }
+        
+        // Sort by symbol name
+        symbols.sort((a, b) -> a.getSymbol().compareToIgnoreCase(b.getSymbol()));
+        
+        log.info("Returning {} symbols with historical rates", symbols.size());
+        
+        return HistoricalRatesResponse.builder()
+                .symbols(symbols)
+                .actualStartDate(actualStartDate)
+                .actualEndDate(actualEndDate)
+                .dataPointCount(dataPointCount)
+                .periodLabel(periodLabel)
+                .requestedDays(days)
+                .build();
+    }
 }
+

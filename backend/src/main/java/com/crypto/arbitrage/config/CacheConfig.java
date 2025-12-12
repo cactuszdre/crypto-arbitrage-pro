@@ -45,6 +45,14 @@ public class CacheConfig {
                 .recordStats()
                 .build());
         
+        // Raw rates cache for frontend-side arbitrage calculation - 10 seconds TTL
+        CaffeineCache allRatesCache = new CaffeineCache("allRatesBySymbol",
+            Caffeine.newBuilder()
+                .expireAfterWrite(10, TimeUnit.SECONDS)
+                .maximumSize(10)
+                .recordStats()
+                .build());
+        
         // Historical data cache - 5 minutes TTL (keyed by days parameter)
         CaffeineCache historicalCache = new CaffeineCache("historicalArbitrage",
             Caffeine.newBuilder()
@@ -53,7 +61,21 @@ public class CacheConfig {
                 .recordStats()
                 .build());
         
-        cacheManager.setCaches(Arrays.asList(arbitrageCache, fundingRatesCache, historicalCache));
+        // Historical raw rates cache for frontend-side calculation - 5 minutes TTL
+        CaffeineCache historicalRatesCache = new CaffeineCache("historicalRatesBySymbol",
+            Caffeine.newBuilder()
+                .expireAfterWrite(5, TimeUnit.MINUTES)
+                .maximumSize(20)
+                .recordStats()
+                .build());
+        
+        cacheManager.setCaches(Arrays.asList(
+            arbitrageCache, 
+            fundingRatesCache, 
+            allRatesCache,
+            historicalCache,
+            historicalRatesCache
+        ));
         
         return cacheManager;
     }

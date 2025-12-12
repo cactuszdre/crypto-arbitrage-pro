@@ -46,8 +46,8 @@ public class FundingRateCleanupService {
 
     /**
      * Runs every day at 1:00 AM to clean up old funding rate data.
-     * 1. Aggregates data older than 24 hours into daily averages
-     * 2. Deletes the old raw data
+     * 1. Aggregates yesterday's data (from 00:00 to 23:59:59) into daily averages
+     * 2. Deletes data older than today (keeps only today's data)
      */
     @Scheduled(cron = "0 0 1 * * *") // Every day at 1:00 AM
     @Transactional
@@ -55,12 +55,15 @@ public class FundingRateCleanupService {
         log.info("Starting funding rate cleanup job...");
         
         try {
-            // Calculate cutoff time (24 hours ago)
-            LocalDateTime cutoffTime = LocalDateTime.now().minusHours(24);
-            LocalDate yesterday = cutoffTime.toLocalDate();
+            // Calculate yesterday's date range (from 00:00 to 23:59:59)
+            LocalDate yesterday = LocalDate.now().minusDays(1);
+            LocalDateTime startOfYesterday = yesterday.atStartOfDay();           // 00:00:00 yesterday
+            LocalDateTime endOfYesterday = yesterday.plusDays(1).atStartOfDay(); // 00:00:00 today
             
-            // Step 1: Aggregate old rates
-            List<Object[]> aggregatedData = fundingRateRepository.aggregateOldRates(cutoffTime);
+            log.info("Aggregating data for yesterday: {} (from {} to {})", yesterday, startOfYesterday, endOfYesterday);
+            
+            // Step 1: Aggregate yesterday's rates (full day, from 00:00 to 23:59:59)
+            List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(startOfYesterday, endOfYesterday);
             log.info("Found {} ticker/dex combinations to aggregate", aggregatedData.size());
             
             int savedCount = 0;
@@ -86,8 +89,6 @@ public class FundingRateCleanupService {
                     
                     // Check if we already have an entry for this date
                     if (fundingRateDailyRepository.existsByTickerAndDexAndDate(ticker, dex, yesterday)) {
-                        log.debug("Daily aggregate already exists for {} on {} - skipping", 
-                                ticker.getNormalizedSymbol(), yesterday);
                         continue;
                     }
                     
@@ -114,8 +115,8 @@ public class FundingRateCleanupService {
             
             log.info("Saved {} daily aggregates", savedCount);
             
-            // Step 2: Delete old raw data
-            int deletedCount = fundingRateRepository.deleteByTimestampBefore(cutoffTime);
+            // Step 2: Delete old raw data (everything before today 00:00)
+            int deletedCount = fundingRateRepository.deleteByTimestampBefore(endOfYesterday);
             log.info("Deleted {} old funding rate records", deletedCount);
             
             log.info("Funding rate cleanup completed successfully. Aggregated: {}, Deleted: {}", 
@@ -141,12 +142,16 @@ public class FundingRateCleanupService {
     public String getCleanupStats() {
         long totalRates = fundingRateRepository.count();
         long dailyAggregates = fundingRateDailyRepository.count();
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
-        List<Object[]> oldRates = fundingRateRepository.aggregateOldRates(cutoff);
+        
+        // Check what would be aggregated for yesterday
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        LocalDateTime startOfYesterday = yesterday.atStartOfDay();
+        LocalDateTime endOfYesterday = yesterday.plusDays(1).atStartOfDay();
+        List<Object[]> pendingRates = fundingRateRepository.aggregateForBucket(startOfYesterday, endOfYesterday);
         
         return String.format(
-            "Raw funding rates: %d, Daily aggregates: %d, Pending cleanup: %d ticker/dex combinations",
-            totalRates, dailyAggregates, oldRates.size()
+            "Raw funding rates: %d, Daily aggregates: %d, Pending cleanup for %s: %d ticker/dex combinations",
+            totalRates, dailyAggregates, yesterday, pendingRates.size()
         );
     }
 }

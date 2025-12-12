@@ -33,4 +33,22 @@ public interface FundingRateDailyRepository extends JpaRepository<FundingRateDai
     List<FundingRateDaily> findAllSince(@Param("startDate") LocalDate startDate);
 
     boolean existsByTickerAndDexAndDate(Ticker ticker, Dex dex, LocalDate date);
+
+    /**
+     * Find the minimum (oldest) date in the database since a given start date
+     */
+    @Query("SELECT MIN(f.date) FROM FundingRateDaily f WHERE f.date >= :startDate")
+    LocalDate findMinDateSince(@Param("startDate") LocalDate startDate);
+
+    /**
+     * Find the maximum (most recent) date in the database
+     */
+    @Query("SELECT MAX(f.date) FROM FundingRateDaily f")
+    LocalDate findMaxDate();
+
+    /**
+     * Count distinct dates available since a given start date
+     */
+    @Query("SELECT COUNT(DISTINCT f.date) FROM FundingRateDaily f WHERE f.date >= :startDate")
+    int countDistinctDatesSince(@Param("startDate") LocalDate startDate);
 }

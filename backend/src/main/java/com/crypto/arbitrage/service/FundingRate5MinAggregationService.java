@@ -66,7 +66,6 @@ public class FundingRate5MinAggregationService {
             LocalDateTime bucketStart = calculateBucketTime(now.minusMinutes(BUCKET_MINUTES));
             LocalDateTime bucketEnd = bucketStart.plusMinutes(BUCKET_MINUTES);
 
-            log.debug("Aggregating bucket: {} to {}", bucketStart, bucketEnd);
 
             // Get aggregated data for this bucket
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(bucketStart, bucketEnd);

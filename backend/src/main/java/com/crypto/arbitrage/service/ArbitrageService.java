@@ -1,6 +1,8 @@
 package com.crypto.arbitrage.service;
 
 import com.crypto.arbitrage.dto.ArbitrageOpportunityDTO;
+import com.crypto.arbitrage.dto.DexRateDTO;
+import com.crypto.arbitrage.dto.SymbolRatesDTO;
 import com.crypto.arbitrage.model.LastFunding;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.LastFundingRepository;
@@ -66,7 +68,6 @@ public class ArbitrageService {
             List<LastFunding> rates = entry.getValue();
             String symbol = rates.get(0).getSymbol();
 
-            log.debug("Analyzing symbol: {} with {} rates", symbol, rates.size());
 
             if (rates.size() < 2) {
                 continue; // Need at least 2 exchanges to compare
@@ -119,5 +120,52 @@ public class ArbitrageService {
         opportunities.sort((o1, o2) -> o2.getSpread().compareTo(o1.getSpread()));
 
         return opportunities;
+    }
+
+    /**
+     * Get all rates grouped by symbol for frontend-side arbitrage calculation.
+     * This allows the frontend to recalculate best routes based on user-selected DEX filters.
+     *
+     * @return List of symbols with all their DEX rates
+     */
+    @Cacheable(value = "allRatesBySymbol")
+    public List<SymbolRatesDTO> getAllRatesBySymbol() {
+        log.info("Cache MISS - Fetching all rates by symbol");
+        
+        List<LastFunding> allRates = lastFundingRepository.findAll();
+
+        // Group by ticker ID
+        Map<Integer, List<LastFunding>> ratesByTicker = allRates.stream()
+                .filter(r -> r.getTicker() != null && r.getDex() != null)
+                .collect(Collectors.groupingBy(r -> r.getTicker().getId()));
+
+        List<SymbolRatesDTO> result = new ArrayList<>();
+
+        for (Map.Entry<Integer, List<LastFunding>> entry : ratesByTicker.entrySet()) {
+            List<LastFunding> rates = entry.getValue();
+            
+            if (rates.isEmpty()) continue;
+            
+            String symbol = rates.get(0).getSymbol();
+
+            // Convert to DTOs
+            List<DexRateDTO> dexRates = rates.stream()
+                    .map(r -> DexRateDTO.builder()
+                            .dex(r.getDex().getName())
+                            .rateAnnual(r.getRateAnnual())
+                            .build())
+                    .collect(Collectors.toList());
+
+            result.add(SymbolRatesDTO.builder()
+                    .symbol(symbol)
+                    .rates(dexRates)
+                    .build());
+        }
+
+        // Sort by symbol name for consistent ordering
+        result.sort((a, b) -> a.getSymbol().compareToIgnoreCase(b.getSymbol()));
+
+        log.info("Returning {} symbols with rates", result.size());
+        return result;
     }
 }

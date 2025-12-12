@@ -16,6 +16,7 @@ const { state: authState } = useAuth()
 const isPro = computed(() => authState.user?.plan === 'PRO' || authState.user?.role === 'ADMIN')
 
 const opportunities = ref([])
+const rawRates = ref([]) // Raw rates by symbol for dynamic recalculation
 const currentPage = ref(1)
 const itemsPerPage = 8
 const failedImages = ref(new Set())
@@ -123,6 +124,9 @@ const periodOptions = [
 ]
 const isLoadingHistorical = ref(false)
 
+// Historical data metadata (period info from backend)
+const historicalMeta = ref(null) // { periodLabel, actualStartDate, actualEndDate, dataPointCount }
+
 // DEX filter - all DEXes selected by default
 const selectedDexes = ref([]) // Will be initialized with all DEXes on mount
 const showDexFilter = ref(false)
@@ -194,23 +198,63 @@ const getSortState = (column) => {
   return sortDirection.value
 }
 
-// Filter opportunities based on search query and DEX filter
+// Calculate best arbitrage routes from raw rates based on selected DEXes
+const calculateOpportunitiesFromRates = (rates, selectedDexList) => {
+  if (!rates || rates.length === 0 || selectedDexList.length < 2) return []
+  
+  return rates.map(item => {
+    // Filter to only selected DEXes
+    const filteredRates = item.rates.filter(r => selectedDexList.includes(r.dex))
+    
+    if (filteredRates.length < 2) return null
+    
+    // Find best long (lowest rate) and best short (highest rate)
+    const bestLong = filteredRates.reduce((a, b) => 
+      parseFloat(a.rateAnnual) < parseFloat(b.rateAnnual) ? a : b
+    )
+    const bestShort = filteredRates.reduce((a, b) => 
+      parseFloat(a.rateAnnual) > parseFloat(b.rateAnnual) ? a : b
+    )
+    
+    // Skip if same DEX
+    if (bestLong.dex === bestShort.dex) return null
+    
+    const longRate = parseFloat(bestLong.rateAnnual)
+    const shortRate = parseFloat(bestShort.rateAnnual)
+    const spread = shortRate - longRate
+    
+    // Only positive spreads
+    if (spread <= 0) return null
+    
+    return {
+      symbol: item.symbol,
+      longDex: bestLong.dex,
+      shortDex: bestShort.dex,
+      longRate: longRate,
+      shortRate: shortRate,
+      spread: spread,
+      projectedDailyReturn: spread / 365
+    }
+  }).filter(Boolean)
+}
+
+// Computed opportunities - recalculates when DEX selection or raw rates change
+const computedOpportunities = computed(() => {
+  if (rawRates.value.length === 0) {
+    // Fall back to pre-calculated opportunities if no raw rates
+    return opportunities.value
+  }
+  return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value)
+})
+
+// Filter opportunities based on search query
 const filteredOpportunities = computed(() => {
   // If less than 2 DEXes selected, return empty (need at least 2 for arbitrage)
   if (selectedDexes.value.length < 2) {
     return []
   }
 
-  let result = opportunities.value
-
-  // Apply DEX filter - only show opportunities where BOTH dexes are selected
-  // Always apply if not all DEXes are selected
-  if (selectedDexes.value.length < availableDexes.value.length) {
-    result = result.filter(opp =>
-      selectedDexes.value.includes(opp.longDex) &&
-      selectedDexes.value.includes(opp.shortDex)
-    )
-  }
+  let result = computedOpportunities.value
 
   // Apply search filter
   if (searchQuery.value.trim()) {
@@ -339,28 +383,75 @@ const formatRate = (rate) => {
   return { value: formatted, class: 'text-neutral-400' }
 }
 
-// Fetch opportunities
+// Fetch opportunities - now uses raw rates for dynamic recalculation
 const fetchOpportunities = async (silent = false) => {
   if (!silent) isLoadingOpportunities.value = true
   try {
-    const response = await arbitrageApi.getOpportunities()
-    opportunities.value = response.data
+    // Fetch raw rates for frontend-side calculation
+    const response = await arbitrageApi.getAllRates()
+    rawRates.value = response.data
+    // Clear pre-calculated opportunities since we're using rawRates now
+    opportunities.value = []
   } catch (error) {
-    console.error('Failed to fetch opportunities:', error)
+    console.error('Failed to fetch raw rates:', error)
+    // Fallback to old endpoint if new one fails
+    try {
+      const fallbackResponse = await arbitrageApi.getOpportunities()
+      opportunities.value = fallbackResponse.data
+      rawRates.value = []
+    } catch (fallbackError) {
+      console.error('Failed to fetch opportunities:', fallbackError)
+      opportunities.value = []
+      rawRates.value = []
+    }
   } finally {
     isLoadingOpportunities.value = false
   }
 }
 
-// Fetch historical opportunities based on period
+// Fetch historical opportunities - now uses raw rates for dynamic recalculation
 const fetchHistoricalOpportunities = async (days) => {
   isLoadingHistorical.value = true
+  historicalMeta.value = null
   try {
-    const response = await arbitrageApi.getHistoricalOpportunities(days)
-    opportunities.value = response.data
-  } catch (error) {
-    console.error('Failed to fetch historical opportunities:', error)
+    // Fetch raw historical rates for frontend-side calculation
+    const response = await arbitrageApi.getHistoricalRates(days)
+    const data = response.data
+    
+    // Store raw rates for dynamic recalculation
+    rawRates.value = data.symbols || []
+    // Clear pre-calculated opportunities since we're using rawRates now
     opportunities.value = []
+    
+    // Store metadata
+    historicalMeta.value = {
+      periodLabel: data.periodLabel,
+      actualStartDate: data.actualStartDate,
+      actualEndDate: data.actualEndDate,
+      dataPointCount: data.dataPointCount,
+      requestedDays: data.requestedDays
+    }
+  } catch (error) {
+    console.error('Failed to fetch historical rates:', error)
+    // Fallback to old endpoint if new one fails
+    try {
+      const fallbackResponse = await arbitrageApi.getHistoricalOpportunities(days)
+      const fallbackData = fallbackResponse.data
+      opportunities.value = fallbackData.opportunities || []
+      rawRates.value = []
+      historicalMeta.value = {
+        periodLabel: fallbackData.periodLabel,
+        actualStartDate: fallbackData.actualStartDate,
+        actualEndDate: fallbackData.actualEndDate,
+        dataPointCount: fallbackData.dataPointCount,
+        requestedDays: fallbackData.requestedDays
+      }
+    } catch (fallbackError) {
+      console.error('Failed to fetch historical opportunities:', fallbackError)
+      opportunities.value = []
+      rawRates.value = []
+      historicalMeta.value = null
+    }
   } finally {
     isLoadingHistorical.value = false
   }
@@ -373,6 +464,8 @@ watch(selectedPeriod, (newPeriod) => {
   if (option && option.days > 0) {
     fetchHistoricalOpportunities(option.days)
   } else {
+    // Reset historical meta when switching back to Live mode
+    historicalMeta.value = null
     fetchOpportunities()
   }
 })
@@ -502,9 +595,6 @@ onUnmounted(() => {
               </svg>
               Loading...
             </span>
-            <span v-else-if="selectedPeriod !== 'current'" class="text-[10px] text-neutral-600 ml-2">
-              (Historical avg data)
-            </span>
 
             <!-- DEX Filter Dropdown -->
             <div class="relative ml-auto">
@@ -583,6 +673,41 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
+
+          <!-- Historical Data Info Banner -->
+          <div 
+            v-if="selectedPeriod !== 'current' && !isLoadingHistorical && historicalMeta && historicalMeta.dataPointCount > 0"
+            class="mt-3 sm:mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20"
+          >
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              </svg>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs sm:text-sm text-white font-medium truncate">
+                  {{ historicalMeta.periodLabel }}
+                </p>
+                <p class="text-[10px] sm:text-xs text-neutral-400">
+                  Historical average based on {{ historicalMeta.dataPointCount }} day{{ historicalMeta.dataPointCount > 1 ? 's' : '' }} of data
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- No Historical Data Warning -->
+          <div 
+            v-else-if="selectedPeriod !== 'current' && !isLoadingHistorical && (!historicalMeta || historicalMeta.dataPointCount === 0)"
+            class="mt-3 sm:mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20"
+          >
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              <p class="text-xs text-amber-400">
+                No historical data available for this period yet
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Skeleton Loading -->
@@ -602,7 +727,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Empty State: No data at all -->
-        <div v-else-if="opportunities.length === 0" class="p-8 sm:p-12 text-center">
+        <div v-else-if="rawRates.length === 0 && opportunities.length === 0" class="p-8 sm:p-12 text-center">
           <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 rounded-full bg-white/5 flex items-center justify-center">
             <svg class="w-6 h-6 sm:w-8 sm:h-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>

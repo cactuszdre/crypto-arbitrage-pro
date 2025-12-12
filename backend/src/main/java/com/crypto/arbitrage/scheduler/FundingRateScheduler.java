@@ -28,7 +28,6 @@ public class FundingRateScheduler {
      */
     @Scheduled(fixedDelay = 10000) // 10 secondes APRÈS la fin de l'exécution précédente
     public void fetchFundingRatesLoop() {
-        log.debug("=== Start periodic funding rate fetch ===");
 
         long startTime = System.currentTimeMillis();
 
@@ -38,7 +37,6 @@ public class FundingRateScheduler {
                 dexRepository.findByName("Paradex").ifPresent(dex -> {
                     List<com.crypto.arbitrage.model.DexMarket> markets = dexMarketRepository.findByDexAndActiveTrue(dex);
                     if (markets.isEmpty()) {
-                        log.debug("No active markets found for Paradex, skipping.");
                         return;
                     }
 

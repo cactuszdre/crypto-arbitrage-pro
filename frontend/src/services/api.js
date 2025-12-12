@@ -62,6 +62,9 @@ export const fundingRateApi = {
 export const arbitrageApi = {
     getOpportunities: () => api.get('/arbitrage/opportunities'),
     getHistoricalOpportunities: (days) => api.get('/arbitrage/opportunities/historical', { params: { days } }),
+    // New endpoints for raw rates (for frontend-side arbitrage calculation)
+    getAllRates: () => api.get('/arbitrage/rates/all'),
+    getHistoricalRates: (days) => api.get('/arbitrage/rates/historical', { params: { days } }),
     calculate: (dex1, dex2) => api.get(`/arbitrage/calculate?dex1=${dex1}&dex2=${dex2}`)
 };
 
