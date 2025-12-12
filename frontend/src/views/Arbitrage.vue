@@ -536,8 +536,8 @@ onUnmounted(() => {
 
     <!-- Opportunities List -->
     <div class="lg:col-span-2 space-y-4 sm:space-y-6">
-      <div class="glass-card rounded-2xl sm:rounded-3xl overflow-hidden">
-        <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/5">
+      <div class="glass-card rounded-2xl sm:rounded-3xl overflow-visible">
+        <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-white/5 overflow-visible">
           <div class="flex items-center justify-between mb-3 sm:mb-4">
             <h3 class="text-sm sm:text-base font-medium text-white">Live Opportunities</h3>
             <span class="text-[10px] sm:text-xs text-emerald-400">
