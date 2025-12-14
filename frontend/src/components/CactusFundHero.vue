@@ -57,108 +57,38 @@
       </div>
 
       <!-- Right Column: Live Data Card -->
-      <div class="relative hidden lg:block pointer-events-auto">
-         <!-- Abstract Glow Behind -->
-         <div class="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 to-cyan-500/10 blur-3xl -z-10 rounded-full"></div>
+      <!-- Right Column: Visual Animation -->
+      <div class="relative hidden lg:block pointer-events-auto h-[500px] w-full flex items-center justify-center perspective-1000">
+         
+         <!-- Orbital Canvas Container -->
+         <div ref="cardCanvasContainer" class="absolute inset-0 pointer-events-none z-0"></div>
 
-         <!-- LOADING STATE -->
-         <div v-if="isLoadingData" class="relative p-6 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 h-[380px] flex items-center justify-center">
-             <div class="text-emerald-500/50 flex flex-col items-center gap-4">
-                 <svg class="w-10 h-10 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                 <span class="text-sm tracking-widest font-mono text-neutral-500">SCANNING MARKETS...</span>
+         <!-- Labels Overlay (controlled by Three.js) -->
+         <div class="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+             
+             <div id="label-btc" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500/20 to-amber-500/20 border border-orange-500/40 backdrop-blur-md text-orange-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.2)]">
+                <span class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span> BTC
+                </span>
              </div>
-         </div>
 
-         <!-- REAL DATA CARD (Arbitrage page style) -->
-         <div v-else-if="bestOpp" class="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-300 bg-gradient-to-br from-white/[0.08] to-white/[0.02] border-emerald-500/30 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20">
-            <!-- Glass reflection effect -->
-            <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-              <div class="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-white/10 to-transparent rotate-12 opacity-50"></div>
-            </div>
-
-            <!-- Header: Symbol + Best Badge -->
-            <div class="relative flex items-center justify-between gap-2 mb-4">
-              <div class="flex items-center gap-3 min-w-0 flex-1">
-                <!-- Icon -->
-                <div class="relative shrink-0">
-                  <img
-                    :src="`https://app.paradex.trade/static/market/${getBaseSymbol(bestOpp.symbol).toUpperCase()}.svg`"
-                    :alt="getBaseSymbol(bestOpp.symbol)"
-                    class="w-12 h-12 rounded-xl border border-white/10 bg-neutral-800/50 object-cover shadow-lg"
-                    @error="(e) => e.target.style.display = 'none'"
-                  >
-                </div>
-                <!-- Symbol name -->
-                <div class="min-w-0">
-                  <h4 class="text-base font-semibold text-white truncate">
-                    {{ bestOpp.symbol.replace('-USD-PERP', '').replace('-PERP', '') }}
-                  </h4>
-                  <p class="text-[10px] text-neutral-500">Perpetual</p>
-                </div>
-              </div>
-
-              <!-- BEST OPPORTUNITY Badge -->
-              <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 animate-pulse">
-                <svg class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                </svg>
-                <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wide">Best Now</span>
-              </div>
-            </div>
-
-            <!-- Route: Long -> Short -->
-            <div class="relative flex items-center gap-2 mb-4 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-              <div class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                <span class="text-[10px] text-emerald-400 font-medium shrink-0">LONG</span>
-                <span class="text-xs text-white font-semibold ml-auto truncate">{{ bestOpp.longDex }}</span>
-              </div>
-              <!-- Arrow -->
-              <div class="flex items-center justify-center w-6 h-6 rounded-full bg-white/5 shrink-0">
-                <svg class="w-3 h-3 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                </svg>
-              </div>
-              <div class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></span>
-                <span class="text-[10px] text-red-400 font-medium shrink-0">SHORT</span>
-                <span class="text-xs text-white font-semibold ml-auto truncate">{{ bestOpp.shortDex }}</span>
-              </div>
-            </div>
-
-            <!-- Rates Grid -->
-            <div class="relative grid grid-cols-2 gap-3 mb-4">
-              <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Long Rate</p>
-                <p class="text-sm font-semibold text-emerald-400">{{ formatRate(bestOpp.longRate) }}</p>
-              </div>
-              <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Short Rate</p>
-                <p class="text-sm font-semibold text-red-400">{{ formatRate(bestOpp.shortRate) }}</p>
-              </div>
-            </div>
-
-            <!-- Footer: Daily Return -->
-            <div class="relative flex items-center justify-between pt-4 border-t border-white/5">
-              <span class="text-sm text-neutral-400">Daily Return</span>
-              <div class="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
-                +{{ (bestOpp.spread / 365).toFixed(4) }}%<span class="text-[10px] opacity-70 ml-1">/day</span>
-              </div>
-            </div>
-         </div>
-
-         <!-- NO DATA STATE -->
-         <div v-else class="relative p-6 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 h-[380px] flex items-center justify-center">
-             <div class="text-neutral-500 flex flex-col items-center gap-4 text-center">
-                 <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
-                 <span class="text-sm font-mono">No opportunities found</span>
+             <div id="label-eth" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 backdrop-blur-md text-indigo-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(99,102,241,0.2)]">
+                <span class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> ETH
+                </span>
              </div>
-         </div>
 
-         <!-- Decorator Element: APY Badge -->
-         <div v-if="bestOpp" class="absolute -right-8 top-1/2 p-4 rounded-xl bg-neutral-900/80 border border-white/10 animate-float-slow">
-            <div class="text-xs text-neutral-400 mb-1">Annual Yield</div>
-            <div class="text-lg font-bold text-emerald-400">{{ formatRate(bestOpp.spread) }}</div>
+             <div id="label-sol" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 backdrop-blur-md text-emerald-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                <span class="flex items-center gap-2">
+                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> SOL
+                </span>
+             </div>
+
+             <div id="label-arb" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500/20 to-cyan-500/20 border border-sky-500/40 backdrop-blur-md text-sky-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(14,165,233,0.2)]">
+                <span class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span> ARB
+                </span>
+             </div>
          </div>
       </div>
 
@@ -169,78 +99,27 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
 import * as THREE from 'three';
-import { arbitrageApi } from '../services/api';
 
+// --- Background Animation Refs ---
 const canvasContainer = ref(null);
-let scene, camera, renderer;
-let frameId;
+let bgScene, bgCamera, bgRenderer;
+let bgFrameId;
 let width, height;
 let wavePoints;
 let raycaster, mouse;
 let planeMesh;
 
-// --- Live Data State ---
-const bestOpp = ref(null);
-const isLoadingData = ref(true);
+// --- Card Animation Refs (3D Orbit) ---
+const cardCanvasContainer = ref(null);
+const cryptoLabels = ref([]); // DOM elements for labels
+let cardScene, cardCamera, cardRenderer;
+const cardWidth = ref(0);
+const cardHeight = ref(0);
+let orbitGroup;
+const orbitNodes = []; // { mesh, labelId, angle, speed, radius, axis, color }
 
 // --- Helpers ---
-const formatRate = (rate) => {
-    if (rate === undefined || rate === null) return '0.00%';
-    return (rate > 0 ? '+' : '') + rate.toFixed(2) + '%';
-};
-
-const getBaseSymbol = (symbol) => {
-    if (!symbol) return 'BTC';
-    return symbol.split('-')[0].replace('PERP', '').replace('USD', '');
-};
-
-const calculateBestOpportunity = (rawRates) => {
-    if (!rawRates || rawRates.length === 0) return null;
-
-    let best = null;
-    let maxSpread = -Infinity;
-
-    for (const item of rawRates) {
-        if (!item.rates || item.rates.length < 2) continue;
-
-        const sorted = [...item.rates].sort((a, b) => parseFloat(a.rateAnnual) - parseFloat(b.rateAnnual));
-        const bestLong = sorted[0];
-        const bestShort = sorted[sorted.length - 1];
-
-        if (bestLong.dex === bestShort.dex) continue;
-
-        const spread = parseFloat(bestShort.rateAnnual) - parseFloat(bestLong.rateAnnual);
-        
-        if (spread > maxSpread) {
-            maxSpread = spread;
-            best = {
-                symbol: item.symbol,
-                longDex: bestLong.dex,
-                shortDex: bestShort.dex,
-                longRate: parseFloat(bestLong.rateAnnual),
-                shortRate: parseFloat(bestShort.rateAnnual),
-                spread: spread
-            };
-        }
-    }
-    return best;
-};
-
-const fetchData = async () => {
-    try {
-        isLoadingData.value = true;
-        const response = await arbitrageApi.getAllRates();
-        const foundBest = calculateBestOpportunity(response.data);
-        if (foundBest) {
-            bestOpp.value = foundBest;
-        }
-    } catch (e) {
-        console.error("Hero Data Fetch Error", e);
-    } finally {
-        isLoadingData.value = false;
-    }
-};
-
+// (Removed data helpers)
 
 // --- Text Scramble Effect ---
 const phrases = [
@@ -251,8 +130,6 @@ const phrases = [
 ];
 const displayedText = ref("");
 let phraseIndex = 0;
-let charIndex = 0;
-let isDeleting = false;
 let scrambleInterval = null;
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()";
 
@@ -275,14 +152,13 @@ const startTextAnimation = () => {
 
         if (iterations >= targetPhrase.length) { 
             clearInterval(scrambleInterval);
-            // Wait before switching to next phrase
             setTimeout(() => {
                 nextPhrase();
-            }, 3000); // Read time
+            }, 3000); 
         }
         
-        iterations += 1; // Faster reveal
-    }, 30); // Faster interval
+        iterations += 1; 
+    }, 30); 
 };
 
 const nextPhrase = () => {
@@ -310,52 +186,40 @@ const vertexShader = `
     h += sin(val.x * 0.3 + uTime * 0.5) * 0.5;
 
     // --- Mouse Interaction ---
-    // Distance from vertex to mouse position (in world XY plane)
     float d = distance(val.xy, uMouse.xy);
-    
-    // Interaction radius (increase for larger effect)
     float radius = 25.0;
     float interact = smoothstep(radius, 0.0, d);
     
-    // Effect: Create a turbulent spike/wave near mouse
-    // Much lighter effect: reduced amplitude from 4.0 to 1.5
     float mouseWave = sin(d * 0.5 - uTime * 5.0) * 1.5 * interact;
     
     h += mouseWave;
 
-    // Apply height
     val.z = h;
     vHeight = h;
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(val, 1.0);
     
-    // Dynamic point size: bigger near crests/mouse
-    // Reduced scaling from +2.0 to +1.0
     gl_PointSize = 2.5 + (interact * 1.0); 
   }
 `;
 
-/* Fragment Shader: Emerald/Cyan Gradient based on Height with Radial Fade */
+/* Fragment Shader */
 const fragmentShader = `
   varying float vHeight;
   varying vec2 vUv;
 
   void main() {
-    // Colors
-    vec3 colorLow = vec3(0.02, 0.2, 0.15); // Dark Green/Gray
-    vec3 colorHigh = vec3(0.2, 0.9, 0.6); // Emerald bright
+    vec3 colorLow = vec3(0.02, 0.2, 0.15); 
+    vec3 colorHigh = vec3(0.2, 0.9, 0.6); 
 
-    // Mix based on height
     float mixFactor = smoothstep(-5.0, 5.0, vHeight);
     
-    // Circular particle shape
     vec2 cxy = 2.0 * gl_PointCoord - 1.0;
     float r = dot(cxy, cxy);
     if (r > 1.0) discard;
     
     float alpha = 1.0 - smoothstep(0.5, 1.0, r);
 
-    // Radial Fade Mask
     float distFromCenter = distance(vUv, vec2(0.5));
     float edgeMask = 1.0 - smoothstep(0.35, 0.5, distFromCenter);
 
@@ -364,27 +228,26 @@ const fragmentShader = `
   }
 `;
 
-const initThree = () => {
+// --- Background Initialization ---
+const initBackgroundThree = () => {
     width = window.innerWidth;
     height = window.innerHeight;
     raycaster = new THREE.Raycaster();
-    mouse = new THREE.Vector2(9999, 9999); // Start off-screen
+    mouse = new THREE.Vector2(9999, 9999);
 
-    scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050505, 0.02);
+    bgScene = new THREE.Scene();
+    bgScene.fog = new THREE.FogExp2(0x050505, 0.02);
 
-    camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
-    camera.position.set(0, -20, 30);
-    camera.lookAt(0, 0, 0);
+    bgCamera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
+    bgCamera.position.set(0, -20, 30);
+    bgCamera.lookAt(0, 0, 0);
 
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    canvasContainer.value.appendChild(renderer.domElement);
+    bgRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    bgRenderer.setSize(width, height);
+    bgRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    if (canvasContainer.value) canvasContainer.value.appendChild(bgRenderer.domElement);
 
-    // Geometry: Grid of Points
     const geometry = new THREE.PlaneGeometry(180, 120, 120, 80); 
-
     const material = new THREE.ShaderMaterial({
         vertexShader,
         fragmentShader,
@@ -397,55 +260,225 @@ const initThree = () => {
     });
 
     wavePoints = new THREE.Points(geometry, material);
-    scene.add(wavePoints);
+    bgScene.add(wavePoints);
 
-    // Invisible Plane for Raycasting (matches Points plane Z=0)
     const planeGeo = new THREE.PlaneGeometry(500, 500);
     const planeMat = new THREE.MeshBasicMaterial({ visible: false });
     planeMesh = new THREE.Mesh(planeGeo, planeMat);
-    scene.add(planeMesh);
+    bgScene.add(planeMesh);
+};
 
-    animate();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('mousemove', onMouseMove);
+// --- Card Animation (Orbital) Initialization ---
+const initCardThree = () => {
+    if (!cardCanvasContainer.value) return;
+    
+    const container = cardCanvasContainer.value;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    cardWidth.value = w;
+    cardHeight.value = h;
+
+    cardScene = new THREE.Scene();
+    
+    // Moved Camera back to 24 to fit everything comfortably
+    cardCamera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
+    cardCamera.position.set(0, 0, 24);
+    cardCamera.lookAt(0, 0, 0);
+
+    cardRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    cardRenderer.setSize(w, h);
+    cardRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(cardRenderer.domElement);
+
+    // Light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    cardScene.add(ambientLight);
+    const pointLight = new THREE.PointLight(0x10b981, 2, 50);
+    pointLight.position.set(0, 0, 0);
+    cardScene.add(pointLight);
+
+    orbitGroup = new THREE.Group();
+    cardScene.add(orbitGroup);
+
+    // Central Core (CactusFund)
+    const coreGeo = new THREE.IcosahedronGeometry(1.8, 1);
+    const coreMat = new THREE.MeshBasicMaterial({ 
+        color: 0x10b981, 
+        wireframe: true, 
+        transparent: true, 
+        opacity: 0.6 
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    orbitGroup.add(coreMesh);
+    
+    // Glowing Core Center
+    const innerGeo = new THREE.IcosahedronGeometry(1.0, 0);
+    const innerMat = new THREE.MeshBasicMaterial({ color: 0xccfbf1 });
+    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+    orbitGroup.add(innerMesh);
+
+    // Helper for Basis
+    const getPerpendicularBasis = (axis) => {
+        const ax = axis.clone().normalize();
+        let tangent = new THREE.Vector3(0, 1, 0);
+        if (Math.abs(ax.y) > 0.99) tangent.set(1, 0, 0);
+        const u = new THREE.Vector3().crossVectors(ax, tangent).normalize();
+        const v = new THREE.Vector3().crossVectors(ax, u).normalize();
+        return { u, v };
+    };
+
+    // Nodes Data
+    const nodeData = [
+        { id: 'btc', label: 'BTC', radius: 5, speed: 0.8, color: 0xf7931a, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png', axis: new THREE.Vector3(0, 1, 0.2).normalize() },
+        { id: 'eth', label: 'ETH', radius: 7, speed: 0.5, color: 0x627eea, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png', axis: new THREE.Vector3(1, 0.5, 0).normalize() },
+        { id: 'sol', label: 'SOL', radius: 6, speed: 0.6, color: 0x14f195, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png', axis: new THREE.Vector3(-0.5, 1, 0).normalize() },
+        { id: 'arb', label: 'ARB', radius: 8.5, speed: 0.3, color: 0x28a0f0, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/11841.png', axis: new THREE.Vector3(0.5, -0.5, 1).normalize() },
+    ];
+
+    const textureLoader = new THREE.TextureLoader();
+
+    nodeData.forEach((d) => {
+        // Calculate Basis for this Node's Plane
+        const { u, v } = getPerpendicularBasis(d.axis);
+
+        // 1. Create Orbit Path (Visual Ring)
+        const points = [];
+        const segments = 64;
+        for (let i = 0; i <= segments; i++) {
+            const theta = (i / segments) * Math.PI * 2;
+            const x = Math.cos(theta) * d.radius;
+            const y = Math.sin(theta) * d.radius;
+            const p = u.clone().multiplyScalar(x).add(v.clone().multiplyScalar(y));
+            points.push(p);
+        }
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15 });
+        const ring = new THREE.Line(lineGeo, lineMat);
+        orbitGroup.add(ring);
+
+        // 2. Create Logo Node (Texture on Circle)
+        // Use a group for the node so we can offset/scale if needed
+        const nodeGroup = new THREE.Group();
+        orbitGroup.add(nodeGroup);
+
+        // Circular Coin
+        const geometry = new THREE.CircleGeometry(0.6, 32);
+        const texture = textureLoader.load(d.img);
+        
+        // Fix texture encoding for better color
+        texture.colorSpace = THREE.SRGBColorSpace; 
+
+        const material = new THREE.MeshBasicMaterial({ 
+            map: texture, 
+            transparent: true,
+            side: THREE.DoubleSide,
+            color: 0xffffff // White tint to show original colors
+        });
+        
+        const mesh = new THREE.Mesh(geometry, material);
+        nodeGroup.add(mesh);
+        
+        // Add a glow ring behind the logo
+        const glowGeo = new THREE.CircleGeometry(0.65, 32);
+        const glowMat = new THREE.MeshBasicMaterial({ color: d.color, transparent: true, opacity: 0.5 });
+        const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+        glowMesh.position.z = -0.01; // Slightly behind
+        nodeGroup.add(glowMesh);
+
+        orbitNodes.push({
+            group: nodeGroup, // Move the group, not just mesh
+            mesh: mesh,       // Ref to mesh if we need to rotate it specifically
+            labelId: d.id,
+            angle: Math.random() * Math.PI * 2,
+            speed: d.speed,
+            radius: d.radius,
+            u, v
+        });
+    });
+};
+
+const updateCardAnimation = (time) => {
+    if (!cardRenderer || !orbitGroup) return;
+    
+    // Rotate entire group slightly
+    orbitGroup.rotation.y = time * 0.1;
+    orbitGroup.updateMatrixWorld(); 
+
+    const parentInv = orbitGroup.quaternion.clone().invert();
+    const camQuat = cardCamera.quaternion;
+
+    // Update Nodes
+    orbitNodes.forEach(node => {
+        // Move angle
+        node.angle += node.speed * 0.01;
+        
+        // Calculate position
+        const x = Math.cos(node.angle) * node.radius;
+        const y = Math.sin(node.angle) * node.radius;
+        const pos = node.u.clone().multiplyScalar(x).add(node.v.clone().multiplyScalar(y));
+        
+        // Update Group Position
+        node.group.position.copy(pos);
+        
+        // BILLBOARDING: Force the logo to always face the camera by canceling parent rotation
+        node.group.quaternion.copy(parentInv).multiply(camQuat);
+        
+        // Update Label Position (Project 3D -> 2D)
+        const vector = pos.clone();
+        vector.applyMatrix4(orbitGroup.matrixWorld); 
+        vector.project(cardCamera);
+
+        const cx = (vector.x * .5 + .5) * cardWidth.value;
+        const cy = -(vector.y * .5 - .5) * cardHeight.value;
+
+        // Find label element
+        const el = document.getElementById(`label-${node.labelId}`);
+        if (el) {
+            if (vector.z < 1) {
+                el.style.display = 'block';
+                el.style.transform = `translate(-50%, -50%) translate(${cx}px, ${cy}px) translateY(-30px)`; 
+                
+                const opacity = 1.0 - Math.max(0, (vector.z - 0.5) * 2); 
+                el.style.opacity = Math.max(0.2, opacity);
+                el.style.zIndex = vector.z < 0.5 ? 10 : 1;
+            } else {
+                el.style.display = 'none';
+            }
+        }
+    });
+
+    cardRenderer.render(cardScene, cardCamera);
 };
 
 const animate = () => {
-    frameId = requestAnimationFrame(animate);
+    bgFrameId = requestAnimationFrame(animate);
     const time = performance.now() * 0.001;
     
+    // Background Update
     if (wavePoints) {
         wavePoints.material.uniforms.uTime.value = time;
         wavePoints.rotation.z = time * 0.05;
         
-        // Raycast
-        raycaster.setFromCamera(mouse, camera);
+        raycaster.setFromCamera(mouse, bgCamera);
         const intersects = raycaster.intersectObject(planeMesh);
         
         if (intersects.length > 0) {
-            // Transform intersection point back to local space of the rotating points?
-            // wavePoints rotates around Z. 
-            // So world point P -> Inverse Rotate -> Local Point.
-            
             const hit = intersects[0].point;
-            
-            // Apply inverse rotation of the container to match the grid
             const angle = -wavePoints.rotation.z;
             const x = hit.x * Math.cos(angle) - hit.y * Math.sin(angle);
             const y = hit.x * Math.sin(angle) + hit.y * Math.cos(angle);
-            
             wavePoints.material.uniforms.uMouse.value.set(x, y, 0);
-        } else {
-             // Reset if off plane (rare due to big plane)
-             // wavePoints.material.uniforms.uMouse.value.set(9999, 9999, 0);
         }
+        bgRenderer.render(bgScene, bgCamera);
     }
 
-    renderer.render(scene, camera);
+    // Card Update
+    if (cardRenderer) {
+        updateCardAnimation(time);
+    }
 };
 
 const onMouseMove = (event) => {
-    // Normalized Device Coords
     mouse.x = (event.clientX / width) * 2 - 1;
     mouse.y = -(event.clientY / height) * 2 + 1;
 };
@@ -453,22 +486,42 @@ const onMouseMove = (event) => {
 const onResize = () => {
     width = window.innerWidth;
     height = window.innerHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+    
+    // Bg Resize
+    bgCamera.aspect = width / height;
+    bgCamera.updateProjectionMatrix();
+    bgRenderer.setSize(width, height);
+
+    // Card Resize (if container changes size)
+    if (cardCanvasContainer.value) {
+        const cw = cardCanvasContainer.value.clientWidth;
+        const ch = cardCanvasContainer.value.clientHeight;
+        cardWidth.value = cw;
+        cardHeight.value = ch;
+        cardCamera.aspect = cw / ch;
+        cardCamera.updateProjectionMatrix();
+        cardRenderer.setSize(cw, ch);
+    }
 };
 
 onMounted(() => {
-    initThree();
+    initBackgroundThree();
+    // Delay card init slightly to ensure DOM dimensions
+    setTimeout(() => {
+        initCardThree();
+    }, 100);
     startTextAnimation();
-    fetchData();
+    animate();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('mousemove', onMouseMove);
 });
 
 onUnmounted(() => {
-    cancelAnimationFrame(frameId);
+    cancelAnimationFrame(bgFrameId);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('mousemove', onMouseMove);
-    if(renderer) renderer.dispose();
+    if(bgRenderer) bgRenderer.dispose();
+    if(cardRenderer) cardRenderer.dispose();
     if(scrambleInterval) clearInterval(scrambleInterval);
 });
 </script>
