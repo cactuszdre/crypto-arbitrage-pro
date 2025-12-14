@@ -123,9 +123,13 @@ const periodOptions = [
   { value: '1y', label: '1 Year', days: 365 }
 ]
 const isLoadingHistorical = ref(false)
+const isPreloadingHistorical = ref(false) // True during initial preload phase
 
 // Historical data metadata (period info from backend)
 const historicalMeta = ref(null) // { periodLabel, actualStartDate, actualEndDate, dataPointCount }
+
+// Cache for preloaded historical data (keyed by days)
+const historicalDataCache = new Map()
 
 // DEX filter - all DEXes selected by default
 const selectedDexes = ref([]) // Will be initialized with all DEXes on mount
@@ -409,31 +413,70 @@ const fetchOpportunities = async (silent = false) => {
   }
 }
 
-// Fetch historical opportunities - now uses raw rates for dynamic recalculation
-const fetchHistoricalOpportunities = async (days) => {
-  isLoadingHistorical.value = true
-  historicalMeta.value = null
+// Fetch and cache historical data for a given period
+const fetchAndCacheHistoricalData = async (days) => {
   try {
-    // Fetch raw historical rates for frontend-side calculation
     const response = await arbitrageApi.getHistoricalRates(days)
     const data = response.data
     
-    // Store raw rates for dynamic recalculation
-    rawRates.value = data.symbols || []
-    // Clear pre-calculated opportunities since we're using rawRates now
-    opportunities.value = []
-    
-    // Store metadata
-    historicalMeta.value = {
-      periodLabel: data.periodLabel,
-      actualStartDate: data.actualStartDate,
-      actualEndDate: data.actualEndDate,
-      dataPointCount: data.dataPointCount,
-      requestedDays: data.requestedDays
-    }
+    // Store in cache
+    historicalDataCache.set(days, {
+      rawRates: data.symbols || [],
+      meta: {
+        periodLabel: data.periodLabel,
+        actualStartDate: data.actualStartDate,
+        actualEndDate: data.actualEndDate,
+        dataPointCount: data.dataPointCount,
+        requestedDays: data.requestedDays
+      }
+    })
+    return true
   } catch (error) {
-    console.error('Failed to fetch historical rates:', error)
-    // Fallback to old endpoint if new one fails
+    console.error(`Failed to fetch historical data for ${days} days:`, error)
+    return false
+  }
+}
+
+// Preload all historical periods in parallel at page mount
+const preloadAllHistoricalData = async () => {
+  isPreloadingHistorical.value = true
+  const periodsToLoad = periodOptions.filter(p => p.days > 0).map(p => p.days)
+  
+  // Fetch all periods in parallel
+  await Promise.all(periodsToLoad.map(days => fetchAndCacheHistoricalData(days)))
+  
+  isPreloadingHistorical.value = false
+  console.log('Historical data preloaded for periods:', periodsToLoad)
+}
+
+// Apply cached historical data to current view (instant, no fetch)
+const applyHistoricalDataFromCache = (days) => {
+  const cached = historicalDataCache.get(days)
+  if (cached) {
+    rawRates.value = cached.rawRates
+    opportunities.value = []
+    historicalMeta.value = cached.meta
+    return true
+  }
+  return false
+}
+
+// Fetch historical opportunities - now uses cache first
+const fetchHistoricalOpportunities = async (days) => {
+  // Try cache first (instant)
+  if (applyHistoricalDataFromCache(days)) {
+    return
+  }
+  
+  // If not in cache (shouldn't happen after preload), fetch it
+  isLoadingHistorical.value = true
+  historicalMeta.value = null
+  
+  const success = await fetchAndCacheHistoricalData(days)
+  if (success) {
+    applyHistoricalDataFromCache(days)
+  } else {
+    // Fallback to old endpoint
     try {
       const fallbackResponse = await arbitrageApi.getHistoricalOpportunities(days)
       const fallbackData = fallbackResponse.data
@@ -452,9 +495,9 @@ const fetchHistoricalOpportunities = async (days) => {
       rawRates.value = []
       historicalMeta.value = null
     }
-  } finally {
-    isLoadingHistorical.value = false
   }
+  
+  isLoadingHistorical.value = false
 }
 
 // Watch period changes
@@ -514,8 +557,13 @@ onMounted(async () => {
   if (route.query.search) {
     searchQuery.value = route.query.search
   }
+  
+  // Fetch live data first (show immediately)
   fetchOpportunities()
   startAutoRefresh()
+  
+  // Preload all historical data in background (for instant filter switching)
+  preloadAllHistoricalData()
 })
 
 // Watch for route query changes (when search is updated from Header)
