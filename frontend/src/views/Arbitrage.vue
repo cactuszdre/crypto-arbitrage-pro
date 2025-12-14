@@ -137,18 +137,34 @@ const showDexFilter = ref(false)
 
 // Available DEXes loaded from database (loaded once at mount)
 const availableDexes = ref([])
+const dexConfigs = ref({}) // Map of dexName -> { name, color, tradeUrlPattern }
 
 // Load DEX list from database (called once at mount)
 const loadAvailableDexes = async () => {
   try {
     const response = await dexApi.getAll()
+    // Store full DEX configs for URLs and colors
+    const configs = {}
+    for (const dex of response.data) {
+      configs[dex.name] = {
+        name: dex.name,
+        color: dex.color || '#6366F1',
+        tradeUrlPattern: dex.tradeUrlPattern || ''
+      }
+    }
+    dexConfigs.value = configs
     // Extract DEX names from response
     availableDexes.value = response.data.map(dex => dex.name).sort()
     // Initialize selection with all DEXes
     selectedDexes.value = [...availableDexes.value]
   } catch (error) {
     console.error('Failed to load DEX list:', error)
-    // Fallback to known DEXes if API fails
+    // Fallback with hardcoded patterns if API fails
+    dexConfigs.value = {
+      'Hyperliquid': { name: 'Hyperliquid', color: '#F59E0B', tradeUrlPattern: 'https://app.hyperliquid.xyz/trade/{base}' },
+      'Paradex': { name: 'Paradex', color: '#10B981', tradeUrlPattern: 'https://app.paradex.trade/trade/{symbol}' },
+      'Lighter': { name: 'Lighter', color: '#6366F1', tradeUrlPattern: 'https://app.lighter.xyz/trade/{BASE}' }
+    }
     availableDexes.value = ['Hyperliquid', 'Paradex', 'Lighter']
     selectedDexes.value = [...availableDexes.value]
   }
@@ -513,22 +529,24 @@ watch(selectedPeriod, (newPeriod) => {
   }
 })
 
-// Generate DEX URL
+// Generate DEX URL using pattern from database
 const getDexUrl = (dexName, symbol) => {
   const base = getBaseSymbol(symbol)
-
-  switch(dexName.toLowerCase()) {
-    case 'paradex':
-      return `https://app.paradex.trade/trade/${symbol}`
-    case 'hyperliquid':
-      return `https://app.hyperliquid.xyz/trade/${base}`
-    case 'lighter':
-      return `https://app.lighter.xyz/trade/${base.toUpperCase()}`
-    case 'dydx':
-      return `https://dydx.exchange/trade/${base}-USD`
-    default:
-      return '#'
+  const config = dexConfigs.value[dexName]
+  
+  if (config && config.tradeUrlPattern) {
+    // Replace placeholders in pattern:
+    // {symbol} = full symbol (e.g., BTC-USD-PERP)
+    // {base} = lowercase base (e.g., btc)
+    // {BASE} = uppercase base (e.g., BTC)
+    return config.tradeUrlPattern
+      .replace('{symbol}', symbol)
+      .replace('{base}', base)
+      .replace('{BASE}', base.toUpperCase())
   }
+  
+  // Fallback for DEXes without pattern
+  return '#'
 }
 
 // Auto-refresh every 10 seconds (only in Live mode)

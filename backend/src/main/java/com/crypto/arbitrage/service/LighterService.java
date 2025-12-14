@@ -23,7 +23,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class LighterService {
+public class LighterService implements DexFetcher {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
@@ -33,6 +33,13 @@ public class LighterService {
 
     private static final String DEX_NAME = "Lighter";
     private static final String DEFAULT_BASE_URL = "https://mainnet.zklighter.elliot.ai/api/v1";
+
+    @Override
+    public String getDexName() {
+        return DEX_NAME;
+    }
+
+    @Override
 
     public List<FundingRate> fetchFundingData() {
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);

@@ -69,6 +69,8 @@ public class DexController {
                 .baseUrl(dex.getBaseUrl())
                 .fundingIntervalHours(dex.getFundingIntervalHours())
                 .active(dex.getActive())
+                .color(dex.getColor())
+                .tradeUrlPattern(dex.getTradeUrlPattern())
                 .createdAt(dex.getCreatedAt())
                 // Do not return API key
                 .build();

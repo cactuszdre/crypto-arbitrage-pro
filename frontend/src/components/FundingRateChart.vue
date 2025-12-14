@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { fundingRateApi, chartApi } from '../services/api'
+import { fundingRateApi, chartApi, dexApi } from '../services/api'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -49,12 +49,39 @@ const metrics = [
   { label: 'Annualized', value: 'rateAnnual' }
 ]
 
-const dexes = ['All', 'Paradex', 'Lighter', 'Hyperliquid']
+// Dynamic DEX config loaded from API
+const availableDexes = ref([]) // List of DEX names
+const dexConfigs = ref({}) // Map of dexName -> { name, color }
+const dexes = computed(() => ['All', ...availableDexes.value])
 
-const dexColors = {
-  'Paradex': '#10B981',    // Emerald
-  'Lighter': '#6366F1',    // Indigo
-  'Hyperliquid': '#F59E0B' // Amber
+// Get color for a DEX (from API or fallback)
+const getDexColor = (dexName) => {
+  return dexConfigs.value[dexName]?.color || '#6366F1'
+}
+
+// Load DEX configuration from API
+const loadDexConfigs = async () => {
+  try {
+    const response = await dexApi.getAll()
+    const configs = {}
+    for (const dex of response.data) {
+      configs[dex.name] = {
+        name: dex.name,
+        color: dex.color || '#6366F1'
+      }
+    }
+    dexConfigs.value = configs
+    availableDexes.value = response.data.map(d => d.name).sort()
+  } catch (error) {
+    console.error('Failed to load DEX configs:', error)
+    // Fallback
+    dexConfigs.value = {
+      'Paradex': { name: 'Paradex', color: '#10B981' },
+      'Lighter': { name: 'Lighter', color: '#6366F1' },
+      'Hyperliquid': { name: 'Hyperliquid', color: '#F59E0B' }
+    }
+    availableDexes.value = ['Hyperliquid', 'Lighter', 'Paradex']
+  }
 }
 
 // Aggregate data by 30-minute intervals - takes the latest value for each 30-min bucket
@@ -136,46 +163,20 @@ const fetchData = async (silent = false) => {
 
     // Fallback to raw data if pre-aggregated didn't return data
     if (data.length === 0) {
-      // Fetch for Paradex
-      if (selectedDex.value === 'All' || selectedDex.value === 'Paradex') {
-        try {
-          const pResponse = await fundingRateApi.getHistory({
-            dex: 'Paradex',
-            symbol: props.symbol,
-            hours: 24
-          })
-          data.push(...pResponse.data.map(d => ({ ...d, dex: 'Paradex' })))
-        } catch (e) {
-          console.error("No Paradex data", e)
+      // Dynamically fetch for each available DEX
+      for (const dexName of availableDexes.value) {
+        if (selectedDex.value === 'All' || selectedDex.value === dexName) {
+          try {
+            const response = await fundingRateApi.getHistory({
+              dex: dexName,
+              symbol: props.symbol,
+              hours: 24
+            })
+            data.push(...response.data.map(d => ({ ...d, dex: dexName })))
+          } catch (e) {
+            console.error(`No ${dexName} data`, e)
+          }
         }
-      }
-
-      // Fetch for Lighter
-      if (selectedDex.value === 'All' || selectedDex.value === 'Lighter') {
-         try {
-          const lResponse = await fundingRateApi.getHistory({
-            dex: 'Lighter',
-            symbol: props.symbol,
-            hours: 24
-          })
-          data.push(...lResponse.data.map(d => ({ ...d, dex: 'Lighter' })))
-         } catch (e) {
-           console.error("No Lighter data", e)
-         }
-      }
-
-      // Fetch for Hyperliquid
-      if (selectedDex.value === 'All' || selectedDex.value === 'Hyperliquid') {
-         try {
-          const hResponse = await fundingRateApi.getHistory({
-            dex: 'Hyperliquid',
-            symbol: props.symbol,
-            hours: 24
-          })
-          data.push(...hResponse.data.map(d => ({ ...d, dex: 'Hyperliquid' })))
-         } catch (e) {
-           console.error("No Hyperliquid data", e)
-         }
       }
 
       // Aggregate by 10-minute intervals when using raw data
@@ -213,7 +214,8 @@ watch(() => selectedDex.value, async () => {
 })
 
 // Initial fetch
-onMounted(() => {
+onMounted(async () => {
+  await loadDexConfigs() // Load DEX configs first
   fetchData(false)
 })
 
@@ -280,14 +282,11 @@ const unifiedChartData = computed(() => {
     }
 
     const datasets = []
-    if (selectedDex.value === 'All' || selectedDex.value === 'Paradex') {
-        datasets.push(getDataset('Paradex', dexColors['Paradex']))
-    }
-    if (selectedDex.value === 'All' || selectedDex.value === 'Lighter') {
-        datasets.push(getDataset('Lighter', dexColors['Lighter']))
-    }
-    if (selectedDex.value === 'All' || selectedDex.value === 'Hyperliquid') {
-        datasets.push(getDataset('Hyperliquid', dexColors['Hyperliquid']))
+    // Dynamically build datasets for each available DEX
+    for (const dexName of availableDexes.value) {
+      if (selectedDex.value === 'All' || selectedDex.value === dexName) {
+        datasets.push(getDataset(dexName, getDexColor(dexName)))
+      }
     }
 
     return { labels, datasets }
@@ -412,17 +411,17 @@ const chartOptions = computed(() => ({
 
         <!-- Custom Legend (desktop) -->
         <div class="hidden sm:flex items-center gap-3 lg:gap-4 text-xs">
-          <div v-if="selectedDex === 'All' || selectedDex === 'Paradex'" class="flex items-center gap-1.5 sm:gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
-            <span class="text-neutral-400">Paradex</span>
-          </div>
-          <div v-if="selectedDex === 'All' || selectedDex === 'Lighter'" class="flex items-center gap-1.5 sm:gap-2">
-            <span class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></span>
-            <span class="text-neutral-400">Lighter</span>
-          </div>
-          <div v-if="selectedDex === 'All' || selectedDex === 'Hyperliquid'" class="flex items-center gap-1.5 sm:gap-2">
-            <span class="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
-            <span class="text-neutral-400">Hyperliquid</span>
+          <div 
+            v-for="dexName in availableDexes" 
+            :key="dexName"
+            v-if="selectedDex === 'All' || selectedDex === dexName" 
+            class="flex items-center gap-1.5 sm:gap-2"
+          >
+            <span 
+              class="w-2 h-2 rounded-full" 
+              :style="{ backgroundColor: getDexColor(dexName), boxShadow: `0 0 8px ${getDexColor(dexName)}99` }"
+            ></span>
+            <span class="text-neutral-400">{{ dexName }}</span>
           </div>
         </div>
       </div>
@@ -469,17 +468,17 @@ const chartOptions = computed(() => ({
 
       <!-- Custom Legend (mobile only) -->
       <div class="flex sm:hidden items-center gap-3 text-[10px]">
-        <div v-if="selectedDex === 'All' || selectedDex === 'Paradex'" class="flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]"></span>
-          <span class="text-neutral-400">Paradex</span>
-        </div>
-        <div v-if="selectedDex === 'All' || selectedDex === 'Lighter'" class="flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_6px_rgba(99,102,241,0.6)]"></span>
-          <span class="text-neutral-400">Lighter</span>
-        </div>
-        <div v-if="selectedDex === 'All' || selectedDex === 'Hyperliquid'" class="flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)]"></span>
-          <span class="text-neutral-400">Hyperliquid</span>
+        <div 
+          v-for="dexName in availableDexes" 
+          :key="dexName"
+          v-if="selectedDex === 'All' || selectedDex === dexName" 
+          class="flex items-center gap-1.5"
+        >
+          <span 
+            class="w-1.5 h-1.5 rounded-full" 
+            :style="{ backgroundColor: getDexColor(dexName), boxShadow: `0 0 6px ${getDexColor(dexName)}99` }"
+          ></span>
+          <span class="text-neutral-400">{{ dexName }}</span>
         </div>
       </div>
     </div>

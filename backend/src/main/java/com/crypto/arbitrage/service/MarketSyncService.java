@@ -6,7 +6,6 @@ import com.crypto.arbitrage.model.FundingRate;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexMarketRepository;
 import com.crypto.arbitrage.repository.DexRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -14,20 +13,41 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * Service for synchronizing available markets across all DEXes.
+ * Uses DexFetcher interface to dynamically iterate over all registered DEX services.
+ * Adding a new DEX only requires implementing DexFetcher - no changes needed here.
+ */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MarketSyncService {
 
     private final DexRepository dexRepository;
     private final DexMarketRepository dexMarketRepository;
     private final TickerService tickerService;
-    private final ParadexService paradexService;
-    private final LighterService lighterService;
-    private final HyperliquidService hyperliquidService;
+    private final ParadexService paradexService; // Special case: has fetchAvailableSymbols
+    private final Map<String, DexFetcher> fetchersByName;
+
+    public MarketSyncService(
+            DexRepository dexRepository,
+            DexMarketRepository dexMarketRepository,
+            TickerService tickerService,
+            ParadexService paradexService,
+            List<DexFetcher> dexFetchers) {
+        this.dexRepository = dexRepository;
+        this.dexMarketRepository = dexMarketRepository;
+        this.tickerService = tickerService;
+        this.paradexService = paradexService;
+        this.fetchersByName = dexFetchers.stream()
+                .collect(Collectors.toMap(DexFetcher::getDexName, Function.identity()));
+        
+        log.info("MarketSyncService initialized with {} DexFetcher implementations", fetchersByName.size());
+    }
 
     /**
      * Runs daily at midnight to refresh available markets for all DEXes.
@@ -36,10 +56,52 @@ public class MarketSyncService {
     @Transactional
     public void syncAllMarkets() {
         log.info("Starting daily market sync...");
-        syncParadex();
-        syncLighter();
-        syncHyperliquid();
-        log.info("Daily market sync completed.");
+        
+        // Get all active DEXes from database
+        List<Dex> activeDexes = dexRepository.findAll().stream()
+                .filter(Dex::getActive)
+                .toList();
+        
+        for (Dex dex : activeDexes) {
+            try {
+                syncDex(dex);
+            } catch (Exception e) {
+                log.error("Failed to sync {} markets", dex.getName(), e);
+            }
+        }
+        
+        log.info("Daily market sync completed for {} DEXes", activeDexes.size());
+    }
+    
+    /**
+     * Sync markets for a specific DEX.
+     */
+    private void syncDex(Dex dex) {
+        String dexName = dex.getName();
+        List<String> symbols;
+        
+        // Special case: Paradex has explicit symbol list endpoint
+        if ("Paradex".equals(dexName)) {
+            symbols = paradexService.fetchAvailableSymbols();
+        } else {
+            // For other DEXes, infer symbols from funding data
+            DexFetcher fetcher = fetchersByName.get(dexName);
+            if (fetcher == null) {
+                log.warn("No DexFetcher found for DEX: {}", dexName);
+                return;
+            }
+            
+            List<FundingRate> rates = fetcher.fetchFundingData();
+            symbols = rates.stream()
+                    .map(FundingRate::getSymbol)
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
+        
+        if (!symbols.isEmpty()) {
+            updateMarketsForDex(dex, symbols);
+            log.info("Synced {} markets for {}", symbols.size(), dexName);
+        }
     }
     
     // Also run on startup after a delay
@@ -48,58 +110,7 @@ public class MarketSyncService {
         syncAllMarkets();
     }
 
-    private void syncParadex() {
-        try {
-            Dex dex = dexRepository.findByName("Paradex").orElse(null);
-            if (dex == null) return;
-
-            // Paradex returns explicit market list
-            List<String> symbols = paradexService.fetchAvailableSymbols(); // e.g. ["BTC-USD-PERP", ...]
-            updateMarketsForDex(dex, symbols);
-        } catch (Exception e) {
-            log.error("Failed to sync Paradex markets", e);
-        }
-    }
-
-    private void syncLighter() {
-        try {
-            Dex dex = dexRepository.findByName("Lighter").orElse(null);
-            if (dex == null) return;
-
-            // Lighter: we infer markets from the funding rates endpoint which returns all
-            List<FundingRate> rates = lighterService.fetchFundingData();
-            // Note: fetchFundingData saves rates, but here we just want the unique symbols
-            List<String> symbols = rates.stream()
-                    .map(FundingRate::getSymbol)
-                    .distinct()
-                    .collect(Collectors.toList());
-            
-            updateMarketsForDex(dex, symbols);
-        } catch (Exception e) {
-            log.error("Failed to sync Lighter markets", e);
-        }
-    }
-
-    private void syncHyperliquid() {
-        try {
-            Dex dex = dexRepository.findByName("Hyperliquid").orElse(null);
-            if (dex == null) return;
-
-            // Hyperliquid: we infer markets from the funding rates endpoint
-            List<FundingRate> rates = hyperliquidService.fetchFundingData();
-            List<String> symbols = rates.stream()
-                    .map(FundingRate::getSymbol)
-                    .distinct()
-                    .collect(Collectors.toList());
-            
-            updateMarketsForDex(dex, symbols);
-        } catch (Exception e) {
-            log.error("Failed to sync Hyperliquid markets", e);
-        }
-    }
-
     private void updateMarketsForDex(Dex dex, List<String> fetchedSymbols) {
-        
         List<DexMarket> existingMarkets = dexMarketRepository.findByDexAndActiveTrue(dex);
         Set<String> existingSymbols = existingMarkets.stream()
                 .map(DexMarket::getSymbol)
@@ -125,10 +136,5 @@ public class MarketSyncService {
                 log.info("Activated new market for {}: {}", dex.getName(), symbol);
             }
         }
-
-        // Deactivate old markets not found in fetch (Optional: might be risky if fetch fails partially)
-        // For robustness, maybe we only deactivate if we are strictly sure. 
-        // Let's hold off on auto-deactivating for now to prevent accidental data loss visibility.
     }
 }
-

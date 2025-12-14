@@ -36,6 +36,12 @@ public class Dex {
     @Builder.Default
     private Boolean active = true;
 
+    @Column(name = "color", length = 20)
+    private String color; // Hex color for frontend (e.g., "#10B981")
+
+    @Column(name = "trade_url_pattern", length = 200)
+    private String tradeUrlPattern; // URL pattern for trade links (e.g., "https://app.paradex.trade/trade/{symbol}")
+
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

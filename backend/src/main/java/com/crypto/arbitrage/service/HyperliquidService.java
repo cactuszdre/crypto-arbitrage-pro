@@ -25,7 +25,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class HyperliquidService {
+public class HyperliquidService implements DexFetcher {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
@@ -37,10 +37,16 @@ public class HyperliquidService {
     private static final String DEX_NAME = "Hyperliquid";
     private static final String DEFAULT_BASE_URL = "https://api.hyperliquid.xyz";
 
+    @Override
+    public String getDexName() {
+        return DEX_NAME;
+    }
+
     /**
      * Fetches funding data from Hyperliquid API using the metaAndAssetCtxs endpoint.
      * This provides current funding rates for all perpetual assets.
      */
+    @Override
     public List<FundingRate> fetchFundingData() {
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {

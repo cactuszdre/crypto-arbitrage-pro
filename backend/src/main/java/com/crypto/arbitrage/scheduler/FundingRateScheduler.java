@@ -1,47 +1,80 @@
 package com.crypto.arbitrage.scheduler;
 
-import com.crypto.arbitrage.service.HyperliquidService;
-import com.crypto.arbitrage.service.LighterService;
+import com.crypto.arbitrage.model.DexMarket;
+import com.crypto.arbitrage.repository.DexMarketRepository;
+import com.crypto.arbitrage.repository.DexRepository;
+import com.crypto.arbitrage.service.DexFetcher;
 import com.crypto.arbitrage.service.ParadexService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+/**
+ * Scheduler for fetching funding rates from all DEXes.
+ * Uses the DexFetcher interface to dynamically iterate over all registered DEX services.
+ * Adding a new DEX only requires implementing DexFetcher - no changes needed here.
+ */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class FundingRateScheduler {
 
-    private final ParadexService paradexService;
-    private final LighterService lighterService;
-    private final HyperliquidService hyperliquidService;
-    private final com.crypto.arbitrage.repository.DexRepository dexRepository;
-    private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
+    private final List<DexFetcher> dexFetchers; // Auto-injected by Spring
+    private final ParadexService paradexService; // Special case: per-symbol fetch
+    private final DexRepository dexRepository;
+    private final DexMarketRepository dexMarketRepository;
     
-    private final java.util.concurrent.ExecutorService executorService = java.util.concurrent.Executors.newFixedThreadPool(20);
+    private final ExecutorService executorService = Executors.newFixedThreadPool(20);
+
+    public FundingRateScheduler(
+            List<DexFetcher> dexFetchers,
+            ParadexService paradexService,
+            DexRepository dexRepository,
+            DexMarketRepository dexMarketRepository) {
+        this.dexFetchers = dexFetchers;
+        this.paradexService = paradexService;
+        this.dexRepository = dexRepository;
+        this.dexMarketRepository = dexMarketRepository;
+        
+        log.info("FundingRateScheduler initialized with {} DexFetcher implementations: {}", 
+                dexFetchers.size(), 
+                dexFetchers.stream().map(DexFetcher::getDexName).toList());
+    }
 
     /**
-     * Récupère les funding rates toutes les 10 secondes
+     * Fetches funding rates every 10 seconds from all registered DEXes.
      */
-    @Scheduled(fixedDelay = 10000) // 10 secondes APRÈS la fin de l'exécution précédente
+    @Scheduled(fixedDelay = 10000)
     public void fetchFundingRatesLoop() {
-
         long startTime = System.currentTimeMillis();
 
-        // 1. Paradex (Parallelized)
-        java.util.concurrent.CompletableFuture<Void> paradexFuture = java.util.concurrent.CompletableFuture.runAsync(() -> {
+        // 1. Fetch from all DexFetcher implementations (global fetch DEXes like Hyperliquid, Lighter)
+        List<CompletableFuture<Void>> globalFetchers = dexFetchers.stream()
+                .filter(DexFetcher::isEnabled)
+                .map(fetcher -> CompletableFuture.runAsync(() -> {
+                    try {
+                        fetcher.fetchFundingData();
+                    } catch (Exception e) {
+                        log.error("{}: Error fetching data", fetcher.getDexName(), e);
+                    }
+                }, executorService))
+                .toList();
+
+        // 2. Paradex: Special handling (per-symbol fetch)
+        CompletableFuture<Void> paradexFuture = CompletableFuture.runAsync(() -> {
             try {
                 dexRepository.findByName("Paradex").ifPresent(dex -> {
-                    List<com.crypto.arbitrage.model.DexMarket> markets = dexMarketRepository.findByDexAndActiveTrue(dex);
-                    if (markets.isEmpty()) {
-                        return;
-                    }
+                    if (!dex.getActive()) return;
+                    
+                    List<DexMarket> markets = dexMarketRepository.findByDexAndActiveTrue(dex);
+                    if (markets.isEmpty()) return;
 
-                    List<java.util.concurrent.CompletableFuture<Void>> futures = markets.stream()
-                            .map(market -> java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    List<CompletableFuture<Void>> marketFutures = markets.stream()
+                            .map(market -> CompletableFuture.runAsync(() -> {
                                 try {
                                     paradexService.fetchAndSaveLatestFundingRate(market.getSymbol());
                                 } catch (Exception e) {
@@ -50,40 +83,26 @@ public class FundingRateScheduler {
                             }, executorService))
                             .toList();
 
-                    // Wait for all Paradex requests to complete
-                    java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+                    CompletableFuture.allOf(marketFutures.toArray(new CompletableFuture[0])).join();
                 });
             } catch (Exception e) {
                 log.error("Error in Paradex fetch loop", e);
             }
         }, executorService);
 
-        // 2. Lighter (Global fetch)
-        java.util.concurrent.CompletableFuture<Void> lighterFuture = java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                lighterService.fetchFundingData();
-            } catch (Exception e) {
-                log.error("Lighter: Error fetching data", e);
-            }
-        }, executorService);
+        // Wait for all fetchers to complete
+        CompletableFuture<Void> allGlobal = CompletableFuture.allOf(
+                globalFetchers.toArray(new CompletableFuture[0]));
+        CompletableFuture.allOf(allGlobal, paradexFuture).join();
 
-        // 3. Hyperliquid (Global fetch)
-        java.util.concurrent.CompletableFuture<Void> hyperliquidFuture = java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                hyperliquidService.fetchFundingData();
-            } catch (Exception e) {
-                log.error("Hyperliquid: Error fetching data", e);
-            }
-        }, executorService);
-
-        // Wait for all DEXes to complete
-        java.util.concurrent.CompletableFuture.allOf(paradexFuture, lighterFuture, hyperliquidFuture).join();
-
+        long duration = System.currentTimeMillis() - startTime;
+        if (duration > 5000) {
+            log.warn("Funding rate fetch took {}ms", duration);
+        }
     }
 
     @Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE)
     public void onStartup() {
-        // Initial fetch logic if needed, but the loop handles it.
-        // MarketSyncService will run at 2s to populate the list.
+        // Initial setup handled by MarketSyncService
     }
 }

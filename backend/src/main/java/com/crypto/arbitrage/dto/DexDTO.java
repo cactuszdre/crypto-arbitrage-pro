@@ -19,5 +19,7 @@ public class DexDTO {
     private String apiKey;
     private Integer fundingIntervalHours;
     private Boolean active;
+    private String color;
+    private String tradeUrlPattern;
     private LocalDateTime createdAt;
 }
