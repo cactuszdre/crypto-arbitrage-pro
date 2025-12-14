@@ -57,39 +57,101 @@
       </div>
 
       <!-- Right Column: Live Data Card -->
-      <!-- Right Column: Visual Animation -->
-      <div class="relative hidden lg:block pointer-events-auto h-[500px] w-full flex items-center justify-center perspective-1000">
-         
-         <!-- Orbital Canvas Container -->
-         <div ref="cardCanvasContainer" class="absolute inset-0 pointer-events-none z-0"></div>
+      <!-- Right Column: Carousel Data Card -->
+      <div class="relative hidden lg:block pointer-events-auto h-[450px] overflow-hidden">
+          <!-- Glow Behind -->
+          <div class="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 to-cyan-500/10 blur-3xl -z-10 rounded-full"></div>
 
-         <!-- Labels Overlay (controlled by Three.js) -->
-         <div class="absolute inset-0 pointer-events-none z-10 overflow-hidden">
-             
-             <div id="label-btc" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500/20 to-amber-500/20 border border-orange-500/40 backdrop-blur-md text-orange-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.2)]">
-                <span class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span> BTC
-                </span>
+          <!-- Loading State -->
+          <div v-if="isLoadingData" class="relative p-6 rounded-2xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 h-full flex items-center justify-center">
+             <div class="text-emerald-500/50 flex flex-col items-center gap-4">
+                 <svg class="w-10 h-10 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                 <span class="text-sm tracking-widest font-mono text-neutral-500">SCANNING MARKETS...</span>
              </div>
+          </div>
 
-             <div id="label-eth" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 backdrop-blur-md text-indigo-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(99,102,241,0.2)]">
-                <span class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span> ETH
-                </span>
-             </div>
+          <!-- Carousel Card (Minimal & Elegant) -->
+          <Transition name="slide-blur">
+              <div v-if="!isLoadingData && currentOpp" :key="currentOpp.symbol" class="h-full w-full relative group perspective-1000">
+                  
+                  <div class="relative h-full flex flex-col p-8 rounded-2xl border border-white/5 bg-[#050505] shadow-2xl transition-all duration-500 hover:border-white/10 overflow-hidden">
+                      
+                      <!-- Header: Asset & Rank -->
+                      <div class="flex items-center justify-between mb-8">
+                          <div class="flex items-center gap-4">
+                              <img 
+                                  :src="`https://app.paradex.trade/static/market/${getBaseSymbol(currentOpp.symbol).toUpperCase()}.svg`" 
+                                  class="w-12 h-12 rounded-full border border-neutral-800 bg-neutral-900"
+                                  @error="(e) => e.target.style.display = 'none'"
+                              >
+                              <div>
+                                  <h3 class="text-xl font-medium text-white tracking-tight">{{ getBaseSymbol(currentOpp.symbol) }}</h3>
+                                  <p class="text-xs text-neutral-500 font-mono">PERPETUAL FUTURE</p>
+                              </div>
+                          </div>
+                          <div class="px-3 py-1 rounded-full border border-white/5 bg-white/[0.02] text-xs font-medium text-neutral-400">
+                              #{{ currentIndex + 1 }} Top Opportunity
+                          </div>
+                      </div>
 
-             <div id="label-sol" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 backdrop-blur-md text-emerald-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                <span class="flex items-center gap-2">
-                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> SOL
-                </span>
-             </div>
+                      <!-- Main Content: The Strategy Flow -->
+                      <div class="flex-1 relative flex flex-col justify-center pl-2">
+                          <!-- Vertical Connector Line -->
+                          <div class="absolute left-9 top-6 bottom-6 w-px bg-gradient-to-b from-emerald-500/20 via-neutral-800 to-red-500/20"></div>
 
-             <div id="label-arb" class="hidden absolute top-0 left-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500/20 to-cyan-500/20 border border-sky-500/40 backdrop-blur-md text-sky-300 text-xs font-bold tracking-widest shadow-[0_0_20px_rgba(14,165,233,0.2)]">
-                <span class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span> ARB
-                </span>
-             </div>
-         </div>
+                          <!-- Leg 1: Long -->
+                          <div class="relative flex items-center gap-5 mb-8 group/item">
+                               <div class="relative z-10 w-14 h-14 rounded-full bg-[#0A0A0A] border border-emerald-500/20 flex items-center justify-center shrink-0 group-hover/item:border-emerald-500/40 transition-colors">
+                                  <div class="text-[10px] font-bold text-emerald-500 uppercase">Buy</div>
+                               </div>
+                               <div>
+                                   <div class="text-[10px] uppercase text-neutral-500 tracking-wider font-medium mb-0.5">Step 1 • Open Long</div>
+                                   <div class="text-base text-white">
+                                      <span class="font-medium">{{ currentOpp.longDex }}</span>
+                                      <span class="text-neutral-600 mx-2">|</span> 
+                                      <span class="text-neutral-400 text-sm">Rate: <span class="text-emerald-400/80">{{ formatRate(currentOpp.longRate) }}</span></span>
+                                   </div>
+                               </div>
+                          </div>
+
+                          <!-- Leg 2: Short -->
+                          <div class="relative flex items-center gap-5 group/item">
+                               <div class="relative z-10 w-14 h-14 rounded-full bg-[#0A0A0A] border border-red-500/20 flex items-center justify-center shrink-0 group-hover/item:border-red-500/40 transition-colors">
+                                  <div class="text-[10px] font-bold text-red-500 uppercase">Sell</div>
+                               </div>
+                               <div>
+                                   <div class="text-[10px] uppercase text-neutral-500 tracking-wider font-medium mb-0.5">Step 2 • Open Short</div>
+                                   <div class="text-base text-white">
+                                      <span class="font-medium">{{ currentOpp.shortDex }}</span>
+                                      <span class="text-neutral-600 mx-2">|</span> 
+                                      <span class="text-neutral-400 text-sm">Rate: <span class="text-red-400/80">{{ formatRate(currentOpp.shortRate) }}</span></span>
+                                   </div>
+                               </div>
+                          </div>
+                      </div>
+
+                      <!-- Footer: Net Result -->
+                      <div class="mt-8 pt-6 border-t border-white/5 flex items-end justify-between">
+                          <div>
+                              <p class="text-[10px] uppercase text-neutral-500 tracking-widest font-semibold mb-1">Annual Return</p>
+                              <div class="text-3xl font-light text-white tracking-tighter">
+                                  {{ formatRate(currentOpp.spread) }}
+                              </div>
+                          </div>
+                      </div>
+
+                       <!-- Minimal Progress Bar -->
+                       <div class="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900">
+                           <div class="h-full bg-white opacity-20 animate-[width_5s_linear_infinite]" :key="currentIndex"></div>
+                       </div>
+                  </div>
+              </div>
+          </Transition>
+
+          <!-- No Data State key fallback -->
+          <div v-if="!isLoadingData && !currentOpp" class="h-full flex items-center justify-center border border-white/10 rounded-2xl bg-white/[0.02]">
+              <span class="text-neutral-500 font-mono">No active opportunities</span>
+          </div>
       </div>
 
     </div>
@@ -97,10 +159,11 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import * as THREE from 'three';
+import { arbitrageApi } from '../services/api';
 
-// --- Background Animation Refs ---
+// --- Background Animation Refs (Keep existing background) ---
 const canvasContainer = ref(null);
 let bgScene, bgCamera, bgRenderer;
 let bgFrameId;
@@ -109,19 +172,99 @@ let wavePoints;
 let raycaster, mouse;
 let planeMesh;
 
-// --- Card Animation Refs (3D Orbit) ---
-const cardCanvasContainer = ref(null);
-const cryptoLabels = ref([]); // DOM elements for labels
-let cardScene, cardCamera, cardRenderer;
-const cardWidth = ref(0);
-const cardHeight = ref(0);
-let orbitGroup;
-const orbitNodes = []; // { mesh, labelId, angle, speed, radius, axis, color }
+// --- Carousel State ---
+const topOpportunities = ref([]);
+const currentIndex = ref(0);
+const isLoadingData = ref(true);
+const carouselInterval = ref(null);
+
+const currentOpp = computed(() => {
+    if (topOpportunities.value.length === 0) return null;
+    return topOpportunities.value[currentIndex.value];
+});
 
 // --- Helpers ---
-// (Removed data helpers)
+const formatRate = (rate) => {
+    if (rate === undefined || rate === null) return '0.00%';
+    return (rate > 0 ? '+' : '') + rate.toFixed(2) + '%';
+};
 
-// --- Text Scramble Effect ---
+const getBaseSymbol = (symbol) => {
+    if (!symbol) return 'BTC';
+    return symbol.split('-')[0].replace('PERP', '').replace('USD', '');
+};
+
+// --- Data Logic ---
+const fetchData = async () => {
+    try {
+        isLoadingData.value = true;
+        const response = await arbitrageApi.getAllRates();
+        processTopOpportunities(response.data);
+    } catch (e) {
+        console.error("Data Fetch Error", e);
+    } finally {
+        isLoadingData.value = false;
+    }
+};
+
+const processTopOpportunities = (data) => {
+    let allArbs = [];
+
+    for (const item of data) {
+        if (!item.rates || item.rates.length < 2) continue;
+
+        // Sort rates ascending (Lowest Long, Highest Short ideally)
+        const sorted = [...item.rates].sort((a, b) => parseFloat(a.rateAnnual) - parseFloat(b.rateAnnual));
+        const bestLong = sorted[0];
+        const bestShort = sorted[sorted.length - 1];
+
+        if (bestLong.dex === bestShort.dex) continue;
+
+        // Arbitrage Spread = Short Rate - Long Rate
+        const spread = parseFloat(bestShort.rateAnnual) - parseFloat(bestLong.rateAnnual);
+        
+        if (spread > 0) {
+            allArbs.push({
+                symbol: item.symbol,
+                longDex: bestLong.dex,
+                shortDex: bestShort.dex,
+                longRate: parseFloat(bestLong.rateAnnual),
+                shortRate: parseFloat(bestShort.rateAnnual),
+                spread: spread
+            });
+        }
+    }
+    
+    // Sort by best spread first
+    allArbs.sort((a, b) => b.spread - a.spread);
+    
+    // Filter for unique symbols (Diversity) - Top 3 Unique
+    const uniqueSyms = new Set();
+    const finalOps = [];
+    for(const arb of allArbs) {
+        const base = getBaseSymbol(arb.symbol);
+        if(!uniqueSyms.has(base)) {
+             uniqueSyms.add(base);
+             finalOps.push(arb);
+        }
+        if(finalOps.length >= 3) break;
+    }
+    
+    topOpportunities.value = finalOps;
+
+    if (finalOps.length > 1) {
+        startCarousel();
+    }
+};
+
+const startCarousel = () => {
+    if (carouselInterval.value) clearInterval(carouselInterval.value);
+    carouselInterval.value = setInterval(() => {
+        currentIndex.value = (currentIndex.value + 1) % topOpportunities.value.length;
+    }, 5000); 
+};
+
+// --- Text Scramble Effect (Keep existing) ---
 const phrases = [
     "Find the best arbitrage opportunities",
     "Learn more about crypto market efficiency",
@@ -165,7 +308,6 @@ const nextPhrase = () => {
     phraseIndex = (phraseIndex + 1) % phrases.length;
     startTextAnimation();
 };
-
 
 /* Vertex Shader: Sine Wave Displacement + Mouse Interaction */
 const vertexShader = `
@@ -268,188 +410,6 @@ const initBackgroundThree = () => {
     bgScene.add(planeMesh);
 };
 
-// --- Card Animation (Orbital) Initialization ---
-const initCardThree = () => {
-    if (!cardCanvasContainer.value) return;
-    
-    const container = cardCanvasContainer.value;
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    cardWidth.value = w;
-    cardHeight.value = h;
-
-    cardScene = new THREE.Scene();
-    
-    // Moved Camera back to 24 to fit everything comfortably
-    cardCamera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
-    cardCamera.position.set(0, 0, 24);
-    cardCamera.lookAt(0, 0, 0);
-
-    cardRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
-    cardRenderer.setSize(w, h);
-    cardRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(cardRenderer.domElement);
-
-    // Light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    cardScene.add(ambientLight);
-    const pointLight = new THREE.PointLight(0x10b981, 2, 50);
-    pointLight.position.set(0, 0, 0);
-    cardScene.add(pointLight);
-
-    orbitGroup = new THREE.Group();
-    cardScene.add(orbitGroup);
-
-    // Central Core (CactusFund)
-    const coreGeo = new THREE.IcosahedronGeometry(1.8, 1);
-    const coreMat = new THREE.MeshBasicMaterial({ 
-        color: 0x10b981, 
-        wireframe: true, 
-        transparent: true, 
-        opacity: 0.6 
-    });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    orbitGroup.add(coreMesh);
-    
-    // Glowing Core Center
-    const innerGeo = new THREE.IcosahedronGeometry(1.0, 0);
-    const innerMat = new THREE.MeshBasicMaterial({ color: 0xccfbf1 });
-    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
-    orbitGroup.add(innerMesh);
-
-    // Helper for Basis
-    const getPerpendicularBasis = (axis) => {
-        const ax = axis.clone().normalize();
-        let tangent = new THREE.Vector3(0, 1, 0);
-        if (Math.abs(ax.y) > 0.99) tangent.set(1, 0, 0);
-        const u = new THREE.Vector3().crossVectors(ax, tangent).normalize();
-        const v = new THREE.Vector3().crossVectors(ax, u).normalize();
-        return { u, v };
-    };
-
-    // Nodes Data
-    const nodeData = [
-        { id: 'btc', label: 'BTC', radius: 5, speed: 0.8, color: 0xf7931a, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png', axis: new THREE.Vector3(0, 1, 0.2).normalize() },
-        { id: 'eth', label: 'ETH', radius: 7, speed: 0.5, color: 0x627eea, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png', axis: new THREE.Vector3(1, 0.5, 0).normalize() },
-        { id: 'sol', label: 'SOL', radius: 6, speed: 0.6, color: 0x14f195, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png', axis: new THREE.Vector3(-0.5, 1, 0).normalize() },
-        { id: 'arb', label: 'ARB', radius: 8.5, speed: 0.3, color: 0x28a0f0, img: 'https://s2.coinmarketcap.com/static/img/coins/64x64/11841.png', axis: new THREE.Vector3(0.5, -0.5, 1).normalize() },
-    ];
-
-    const textureLoader = new THREE.TextureLoader();
-
-    nodeData.forEach((d) => {
-        // Calculate Basis for this Node's Plane
-        const { u, v } = getPerpendicularBasis(d.axis);
-
-        // 1. Create Orbit Path (Visual Ring)
-        const points = [];
-        const segments = 64;
-        for (let i = 0; i <= segments; i++) {
-            const theta = (i / segments) * Math.PI * 2;
-            const x = Math.cos(theta) * d.radius;
-            const y = Math.sin(theta) * d.radius;
-            const p = u.clone().multiplyScalar(x).add(v.clone().multiplyScalar(y));
-            points.push(p);
-        }
-        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-        const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15 });
-        const ring = new THREE.Line(lineGeo, lineMat);
-        orbitGroup.add(ring);
-
-        // 2. Create Logo Node (Texture on Circle)
-        // Use a group for the node so we can offset/scale if needed
-        const nodeGroup = new THREE.Group();
-        orbitGroup.add(nodeGroup);
-
-        // Circular Coin
-        const geometry = new THREE.CircleGeometry(0.6, 32);
-        const texture = textureLoader.load(d.img);
-        
-        // Fix texture encoding for better color
-        texture.colorSpace = THREE.SRGBColorSpace; 
-
-        const material = new THREE.MeshBasicMaterial({ 
-            map: texture, 
-            transparent: true,
-            side: THREE.DoubleSide,
-            color: 0xffffff // White tint to show original colors
-        });
-        
-        const mesh = new THREE.Mesh(geometry, material);
-        nodeGroup.add(mesh);
-        
-        // Add a glow ring behind the logo
-        const glowGeo = new THREE.CircleGeometry(0.65, 32);
-        const glowMat = new THREE.MeshBasicMaterial({ color: d.color, transparent: true, opacity: 0.5 });
-        const glowMesh = new THREE.Mesh(glowGeo, glowMat);
-        glowMesh.position.z = -0.01; // Slightly behind
-        nodeGroup.add(glowMesh);
-
-        orbitNodes.push({
-            group: nodeGroup, // Move the group, not just mesh
-            mesh: mesh,       // Ref to mesh if we need to rotate it specifically
-            labelId: d.id,
-            angle: Math.random() * Math.PI * 2,
-            speed: d.speed,
-            radius: d.radius,
-            u, v
-        });
-    });
-};
-
-const updateCardAnimation = (time) => {
-    if (!cardRenderer || !orbitGroup) return;
-    
-    // Rotate entire group slightly
-    orbitGroup.rotation.y = time * 0.1;
-    orbitGroup.updateMatrixWorld(); 
-
-    const parentInv = orbitGroup.quaternion.clone().invert();
-    const camQuat = cardCamera.quaternion;
-
-    // Update Nodes
-    orbitNodes.forEach(node => {
-        // Move angle
-        node.angle += node.speed * 0.01;
-        
-        // Calculate position
-        const x = Math.cos(node.angle) * node.radius;
-        const y = Math.sin(node.angle) * node.radius;
-        const pos = node.u.clone().multiplyScalar(x).add(node.v.clone().multiplyScalar(y));
-        
-        // Update Group Position
-        node.group.position.copy(pos);
-        
-        // BILLBOARDING: Force the logo to always face the camera by canceling parent rotation
-        node.group.quaternion.copy(parentInv).multiply(camQuat);
-        
-        // Update Label Position (Project 3D -> 2D)
-        const vector = pos.clone();
-        vector.applyMatrix4(orbitGroup.matrixWorld); 
-        vector.project(cardCamera);
-
-        const cx = (vector.x * .5 + .5) * cardWidth.value;
-        const cy = -(vector.y * .5 - .5) * cardHeight.value;
-
-        // Find label element
-        const el = document.getElementById(`label-${node.labelId}`);
-        if (el) {
-            if (vector.z < 1) {
-                el.style.display = 'block';
-                el.style.transform = `translate(-50%, -50%) translate(${cx}px, ${cy}px) translateY(-30px)`; 
-                
-                const opacity = 1.0 - Math.max(0, (vector.z - 0.5) * 2); 
-                el.style.opacity = Math.max(0.2, opacity);
-                el.style.zIndex = vector.z < 0.5 ? 10 : 1;
-            } else {
-                el.style.display = 'none';
-            }
-        }
-    });
-
-    cardRenderer.render(cardScene, cardCamera);
-};
-
 const animate = () => {
     bgFrameId = requestAnimationFrame(animate);
     const time = performance.now() * 0.001;
@@ -471,11 +431,6 @@ const animate = () => {
         }
         bgRenderer.render(bgScene, bgCamera);
     }
-
-    // Card Update
-    if (cardRenderer) {
-        updateCardAnimation(time);
-    }
 };
 
 const onMouseMove = (event) => {
@@ -491,29 +446,13 @@ const onResize = () => {
     bgCamera.aspect = width / height;
     bgCamera.updateProjectionMatrix();
     bgRenderer.setSize(width, height);
-
-    // Card Resize (if container changes size)
-    if (cardCanvasContainer.value) {
-        const cw = cardCanvasContainer.value.clientWidth;
-        const ch = cardCanvasContainer.value.clientHeight;
-        cardWidth.value = cw;
-        cardHeight.value = ch;
-        cardCamera.aspect = cw / ch;
-        cardCamera.updateProjectionMatrix();
-        cardRenderer.setSize(cw, ch);
-    }
 };
 
 onMounted(() => {
     initBackgroundThree();
-    // Delay card init slightly to ensure DOM dimensions
-    setTimeout(() => {
-        initCardThree();
-    }, 100);
     startTextAnimation();
-    animate();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('mousemove', onMouseMove);
+    animate(); // Crucial: Start the animation loop
+    fetchData(); 
 });
 
 onUnmounted(() => {
@@ -521,12 +460,34 @@ onUnmounted(() => {
     window.removeEventListener('resize', onResize);
     window.removeEventListener('mousemove', onMouseMove);
     if(bgRenderer) bgRenderer.dispose();
-    if(cardRenderer) cardRenderer.dispose();
     if(scrambleInterval) clearInterval(scrambleInterval);
+    if(carouselInterval.value) clearInterval(carouselInterval.value);
 });
 </script>
 
 <style scoped>
+.slide-blur-enter-active,
+.slide-blur-leave-active {
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.slide-blur-enter-from {
+  opacity: 0;
+  transform: translateX(30%);
+  filter: blur(12px);
+}
+
+.slide-blur-leave-to {
+  opacity: 0;
+  transform: translateX(-30%);
+  filter: blur(12px);
+}
+
 .animate-float-slow {
     animation: float 6s ease-in-out infinite;
 }
