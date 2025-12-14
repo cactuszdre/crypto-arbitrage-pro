@@ -562,8 +562,8 @@ onMounted(async () => {
   fetchOpportunities()
   startAutoRefresh()
   
-  // Preload all historical data in background (for instant filter switching)
-  preloadAllHistoricalData()
+  // Note: Historical data is loaded on-demand when user clicks filters
+  // and cached in historicalDataCache for instant subsequent access
 })
 
 // Watch for route query changes (when search is updated from Header)

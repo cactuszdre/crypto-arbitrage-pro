@@ -7,9 +7,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * Service responsible for clearing historical data caches before new data is generated.
- * Historical data is aggregated daily at 01:00, so we clear the cache at 00:55
- * to ensure users get fresh data after the aggregation completes.
+ * Service responsible for cache management:
+ * - Evicting historical data caches before new data is generated (00:55)
+ * - Warming up caches after daily aggregation completes (01:05)
  */
 @Service
 @RequiredArgsConstructor
@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 public class CacheEvictionService {
 
     private final CacheManager cacheManager;
+    private final HistoricalArbitrageService historicalArbitrageService;
 
     /**
      * Clear historical data caches every day at 00:55.
@@ -31,6 +32,30 @@ public class CacheEvictionService {
         evictCache("historicalRatesBySymbol");
         
         log.info("Historical caches evicted successfully");
+    }
+
+    /**
+     * Warm up historical data caches every day at 01:05.
+     * This runs after the daily data aggregation at 01:00,
+     * pre-populating caches so the first user gets instant data.
+     */
+    @Scheduled(cron = "0 5 1 * * *") // Every day at 01:05
+    public void warmUpHistoricalCaches() {
+        log.info("Warming up historical data caches at 01:05 (after daily aggregation)");
+        
+        int[] periodsToWarm = {1, 7, 30, 90, 180, 365};
+        
+        for (int days : periodsToWarm) {
+            try {
+                // This call will populate the cache due to @Cacheable
+                historicalArbitrageService.getAllHistoricalRatesBySymbol(days);
+                log.info("Cache warmed for {} days historical data", days);
+            } catch (Exception e) {
+                log.error("Failed to warm cache for {} days: {}", days, e.getMessage());
+            }
+        }
+        
+        log.info("Historical cache warming completed");
     }
 
     private void evictCache(String cacheName) {
