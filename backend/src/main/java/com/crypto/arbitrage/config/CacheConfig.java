@@ -56,7 +56,7 @@ public class CacheConfig {
         // Historical data cache - 5 minutes TTL (keyed by days parameter)
         CaffeineCache historicalCache = new CaffeineCache("historicalArbitrage",
             Caffeine.newBuilder()
-                .expireAfterWrite(1, TimeUnit.HOURS)
+                .expireAfterWrite(24, TimeUnit.HOURS)
                 .maximumSize(20)  // Cache different day ranges (1, 7, 30, 90, 180, 365)
                 .recordStats()
                 .build());
@@ -64,7 +64,7 @@ public class CacheConfig {
         // Historical raw rates cache for frontend-side calculation - 5 minutes TTL
         CaffeineCache historicalRatesCache = new CaffeineCache("historicalRatesBySymbol",
             Caffeine.newBuilder()
-                .expireAfterWrite(1, TimeUnit.HOURS)
+                .expireAfterWrite(24, TimeUnit.HOURS)
                 .maximumSize(20)
                 .recordStats()
                 .build());
