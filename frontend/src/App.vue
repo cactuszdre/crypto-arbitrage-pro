@@ -38,7 +38,7 @@ const navItems = [
     </div>
 
     <!-- Mobile Floating Menu Button (bottom left) - Visible on Mobile OR Home Page -->
-    <div v-if="$route.name !== 'Login'" class="fixed bottom-6 left-6 z-50" :class="{ 'md:hidden': $route.name !== 'Home' }">
+    <div v-if="route.path !== '/login'" class="fixed bottom-6 left-6 z-50" :class="{ 'md:hidden': route.path !== '/' }">
       <!-- Menu Popup -->
       <div
         v-show="mobileMenuOpen"
@@ -109,17 +109,17 @@ const navItems = [
     <div
       v-if="mobileMenuOpen"
       class="fixed inset-0 bg-black/40 z-40"
-      :class="{ 'md:hidden': $route.name !== 'Home' }"
+      :class="{ 'md:hidden': route.path !== '/' }"
       @click="closeMobileMenu"
     ></div>
 
-    <!-- Sidebar (desktop only) - Hidden on Home Page -->
-    <Sidebar v-if="$route.name !== 'Login' && $route.name !== 'Home'" />
+    <!-- Sidebar (desktop only) - Hidden on Home Page and Login -->
+    <Sidebar v-if="route.path !== '/login' && route.path !== '/'" />
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col h-full overflow-hidden relative z-10">
-      <Header v-if="$route.name !== 'Login' && $route.name !== 'Home'" />
-      <div :class="['flex-1 overflow-y-auto', ($route.name !== 'Login' && $route.name !== 'Home') ? 'px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8 space-y-4 sm:space-y-6' : '']">
+      <Header v-if="route.path !== '/login' && route.path !== '/'" />
+      <div :class="['flex-1 overflow-y-auto', (route.path !== '/login' && route.path !== '/') ? 'px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8 space-y-4 sm:space-y-6' : '']">
         <RouterView />
       </div>
     </main>

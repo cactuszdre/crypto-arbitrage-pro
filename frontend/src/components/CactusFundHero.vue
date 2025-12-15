@@ -69,40 +69,48 @@
              </div>
          </div>
 
-         <!-- REAL DATA CARD (Arbitrage page style) -->
-         <div v-else-if="bestOpp" class="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-300 bg-gradient-to-br from-white/[0.08] to-white/[0.02] border-emerald-500/30 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20">
+         <!-- REAL DATA CARD (Carousel of Top 3 Opportunities) -->
+         <div v-else-if="currentOpp" class="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-500 bg-gradient-to-br from-white/[0.08] to-white/[0.02] border-emerald-500/30 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20">
             <!-- Glass reflection effect -->
             <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
               <div class="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-white/10 to-transparent rotate-12 opacity-50"></div>
             </div>
 
-            <!-- Header: Symbol + Best Badge -->
+            <!-- Header: Symbol + Carousel Indicators -->
             <div class="relative flex items-center justify-between gap-2 mb-4">
               <div class="flex items-center gap-3 min-w-0 flex-1">
                 <!-- Icon -->
                 <div class="relative shrink-0">
                   <img
-                    :src="`https://app.paradex.trade/static/market/${getBaseSymbol(bestOpp.symbol).toUpperCase()}.svg`"
-                    :alt="getBaseSymbol(bestOpp.symbol)"
-                    class="w-12 h-12 rounded-xl border border-white/10 bg-neutral-800/50 object-cover shadow-lg"
+                    :key="currentOpp.symbol"
+                    :src="`https://app.paradex.trade/static/market/${getBaseSymbol(currentOpp.symbol).toUpperCase()}.svg`"
+                    :alt="getBaseSymbol(currentOpp.symbol)"
+                    class="w-12 h-12 rounded-xl border border-white/10 bg-neutral-800/50 object-cover shadow-lg transition-opacity duration-300"
                     @error="(e) => e.target.style.display = 'none'"
                   >
                 </div>
                 <!-- Symbol name -->
                 <div class="min-w-0">
                   <h4 class="text-base font-semibold text-white truncate">
-                    {{ bestOpp.symbol.replace('-USD-PERP', '').replace('-PERP', '') }}
+                    {{ currentOpp.symbol.replace('-USD-PERP', '').replace('-PERP', '') }}
                   </h4>
                   <p class="text-[10px] text-neutral-500">Perpetual</p>
                 </div>
               </div>
 
-              <!-- BEST OPPORTUNITY Badge -->
-              <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 animate-pulse">
-                <svg class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                </svg>
-                <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wide">Best Now</span>
+              <!-- Carousel Indicators -->
+              <div class="flex items-center gap-2">
+                <button
+                  v-for="(opp, index) in topOpportunities"
+                  :key="index"
+                  @click="goToSlide(index)"
+                  :class="[
+                    'w-2 h-2 rounded-full transition-all duration-300',
+                    currentIndex === index 
+                      ? 'bg-emerald-500 w-6' 
+                      : 'bg-white/20 hover:bg-white/40'
+                  ]"
+                ></button>
               </div>
             </div>
 
@@ -111,7 +119,7 @@
               <div class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                 <span class="text-[10px] text-emerald-400 font-medium shrink-0">LONG</span>
-                <span class="text-xs text-white font-semibold ml-auto truncate">{{ bestOpp.longDex }}</span>
+                <span class="text-xs text-white font-semibold ml-auto truncate">{{ currentOpp.longDex }}</span>
               </div>
               <!-- Arrow -->
               <div class="flex items-center justify-center w-6 h-6 rounded-full bg-white/5 shrink-0">
@@ -122,7 +130,7 @@
               <div class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></span>
                 <span class="text-[10px] text-red-400 font-medium shrink-0">SHORT</span>
-                <span class="text-xs text-white font-semibold ml-auto truncate">{{ bestOpp.shortDex }}</span>
+                <span class="text-xs text-white font-semibold ml-auto truncate">{{ currentOpp.shortDex }}</span>
               </div>
             </div>
 
@@ -130,11 +138,11 @@
             <div class="relative grid grid-cols-2 gap-3 mb-4">
               <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
                 <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Long Rate</p>
-                <p class="text-sm font-semibold text-emerald-400">{{ formatRate(bestOpp.longRate) }}</p>
+                <p class="text-sm font-semibold text-emerald-400">{{ formatRate(currentOpp.longRate) }}</p>
               </div>
               <div class="p-3 rounded-xl bg-white/[0.03] border border-white/5">
                 <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Short Rate</p>
-                <p class="text-sm font-semibold text-red-400">{{ formatRate(bestOpp.shortRate) }}</p>
+                <p class="text-sm font-semibold text-red-400">{{ formatRate(currentOpp.shortRate) }}</p>
               </div>
             </div>
 
@@ -142,7 +150,7 @@
             <div class="relative flex items-center justify-between pt-4 border-t border-white/5">
               <span class="text-sm text-neutral-400">Daily Return</span>
               <div class="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
-                +{{ (bestOpp.spread / 365).toFixed(4) }}%<span class="text-[10px] opacity-70 ml-1">/day</span>
+                +{{ (currentOpp.spread / 365).toFixed(4) }}%<span class="text-[10px] opacity-70 ml-1">/day</span>
               </div>
             </div>
          </div>
@@ -155,11 +163,7 @@
              </div>
          </div>
 
-         <!-- Decorator Element: APY Badge -->
-         <div v-if="bestOpp" class="absolute -right-8 top-1/2 p-4 rounded-xl bg-neutral-900/80 border border-white/10 animate-float-slow">
-            <div class="text-xs text-neutral-400 mb-1">Annual Yield</div>
-            <div class="text-lg font-bold text-emerald-400">{{ formatRate(bestOpp.spread) }}</div>
-         </div>
+
       </div>
 
     </div>
@@ -167,7 +171,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import * as THREE from 'three';
 import { arbitrageApi } from '../services/api';
 
@@ -180,8 +184,35 @@ let raycaster, mouse;
 let planeMesh;
 
 // --- Live Data State ---
-const bestOpp = ref(null);
+const topOpportunities = ref([]);
+const currentIndex = ref(0);
 const isLoadingData = ref(true);
+let carouselInterval = null;
+
+// Current opportunity to display
+const currentOpp = computed(() => topOpportunities.value[currentIndex.value] || null);
+
+// Carousel navigation
+const goToSlide = (index) => {
+    currentIndex.value = index;
+    resetCarouselTimer();
+};
+
+const nextSlide = () => {
+    if (topOpportunities.value.length > 0) {
+        currentIndex.value = (currentIndex.value + 1) % topOpportunities.value.length;
+    }
+};
+
+const startCarousel = () => {
+    if (carouselInterval) clearInterval(carouselInterval);
+    carouselInterval = setInterval(nextSlide, 3000); // Change every 3 seconds
+};
+
+const resetCarouselTimer = () => {
+    if (carouselInterval) clearInterval(carouselInterval);
+    startCarousel();
+};
 
 // --- Helpers ---
 const formatRate = (rate) => {
@@ -194,11 +225,10 @@ const getBaseSymbol = (symbol) => {
     return symbol.split('-')[0].replace('PERP', '').replace('USD', '');
 };
 
-const calculateBestOpportunity = (rawRates) => {
-    if (!rawRates || rawRates.length === 0) return null;
+const calculateTopOpportunities = (rawRates) => {
+    if (!rawRates || rawRates.length === 0) return [];
 
-    let best = null;
-    let maxSpread = -Infinity;
+    const opportunities = [];
 
     for (const item of rawRates) {
         if (!item.rates || item.rates.length < 2) continue;
@@ -211,28 +241,30 @@ const calculateBestOpportunity = (rawRates) => {
 
         const spread = parseFloat(bestShort.rateAnnual) - parseFloat(bestLong.rateAnnual);
         
-        if (spread > maxSpread) {
-            maxSpread = spread;
-            best = {
+        if (spread > 0) {
+            opportunities.push({
                 symbol: item.symbol,
                 longDex: bestLong.dex,
                 shortDex: bestShort.dex,
                 longRate: parseFloat(bestLong.rateAnnual),
                 shortRate: parseFloat(bestShort.rateAnnual),
                 spread: spread
-            };
+            });
         }
     }
-    return best;
+
+    // Sort by spread descending and return top 3
+    return opportunities.sort((a, b) => b.spread - a.spread).slice(0, 3);
 };
 
 const fetchData = async () => {
     try {
         isLoadingData.value = true;
         const response = await arbitrageApi.getAllRates();
-        const foundBest = calculateBestOpportunity(response.data);
-        if (foundBest) {
-            bestOpp.value = foundBest;
+        const found = calculateTopOpportunities(response.data);
+        if (found.length > 0) {
+            topOpportunities.value = found;
+            startCarousel();
         }
     } catch (e) {
         console.error("Hero Data Fetch Error", e);
@@ -470,6 +502,7 @@ onUnmounted(() => {
     window.removeEventListener('mousemove', onMouseMove);
     if(renderer) renderer.dispose();
     if(scrambleInterval) clearInterval(scrambleInterval);
+    if(carouselInterval) clearInterval(carouselInterval);
 });
 </script>
 
