@@ -8,7 +8,7 @@ const { state } = useAuth()
 
 const navItems = computed(() => {
   const items = [
-    { path: '/overview', name: 'Overview', icon: 'lucide:layout-template' },
+    { path: '/overview', name: 'Asset Details', icon: 'lucide:bar-chart-3' },
     { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
     { path: '/swap', name: 'Swap', icon: 'lucide:repeat' },
     { path: '/learn', name: 'Learn', icon: 'lucide:graduation-cap' },

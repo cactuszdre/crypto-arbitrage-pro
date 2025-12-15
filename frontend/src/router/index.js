@@ -15,8 +15,13 @@ const routes = [
     },
     {
         path: '/overview',
-        name: 'Dashboard',
-        component: Dashboard
+        name: 'AssetDetails',
+        component: Dashboard,
+        props: (route) => ({
+            initialSymbol: route.query.symbol || null,
+            initialLongDex: route.query.longDex || null,
+            initialShortDex: route.query.shortDex || null
+        })
     },
     {
         path: '/arbitrage',

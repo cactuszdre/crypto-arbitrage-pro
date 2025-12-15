@@ -120,6 +120,22 @@ public class ChartController {
     }
 
     /**
+     * Get daily comparison data for a symbol across all DEXs, grouped by DEX
+     * Uses the funding_rate_daily table for historical data (7D, 30D views)
+     * 
+     * @param symbol Symbol to compare
+     * @param days Number of days (default: 7)
+     */
+    @GetMapping("/funding-rate/{symbol}/compare-daily")
+    public ResponseEntity<Map<String, List<FundingRateChartDTO>>> getDailyComparisonData(
+            @PathVariable String symbol,
+            @RequestParam(defaultValue = "7") int days) {
+        
+        Map<String, List<FundingRateChartDTO>> data = chartService.getDailyComparisonData(symbol, days);
+        return ResponseEntity.ok(data);
+    }
+
+    /**
      * Get aggregation statistics (admin endpoint)
      */
     @GetMapping("/admin/stats")

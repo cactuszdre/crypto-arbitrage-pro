@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, unref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { arbitrageApi, dexApi } from '../services/api'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/vue'
 import { executeHyperliquidOrder } from '../services/hyperliquid'
@@ -10,6 +10,19 @@ import { useAuth } from '../stores/auth'
 
 // Route for reading query params
 const route = useRoute()
+const router = useRouter()
+
+// Navigate to Asset Details page with crypto and DEX info
+const navigateToAssetDetails = (opp) => {
+  router.push({
+    path: '/overview',
+    query: {
+      symbol: opp.symbol,
+      longDex: opp.longDex,
+      shortDex: opp.shortDex
+    }
+  })
+}
 
 // Auth store for Pro plan check
 const { state: authState } = useAuth()
@@ -977,6 +990,20 @@ onUnmounted(() => {
                 </p>
               </div>
             </div>
+
+            <!-- View Details Button -->
+            <button
+              @click.stop="navigateToAssetDetails(opp)"
+              class="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-medium hover:from-indigo-500/30 hover:to-purple-500/30 hover:text-white transition-all group"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
+              View Details
+              <svg class="w-3 h-3 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+              </svg>
+            </button>
           </div>
           </div>
 
@@ -1054,6 +1081,7 @@ onUnmounted(() => {
                   </svg>
                 </span>
               </th>
+              <th class="w-12 px-2 py-3 font-medium text-center">Details</th>
               <th class="w-16 pl-2 pr-4 py-3 font-medium"></th>
             </tr>
           </thead>
@@ -1118,6 +1146,17 @@ onUnmounted(() => {
                 <span :class="['text-xs font-medium', opp.projectedDailyReturn >= 0 ? 'text-emerald-400' : 'text-red-400']">
                   {{ opp.projectedDailyReturn >= 0 ? '+' : '' }}{{ (opp.projectedDailyReturn).toFixed(4) }}%
                 </span>
+              </td>
+              <td class="w-12 px-2 py-3 text-center">
+                <button
+                  @click="navigateToAssetDetails(opp)"
+                  class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40 hover:scale-110 transition-all duration-200"
+                  title="View asset details"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                  </svg>
+                </button>
               </td>
               <td class="w-16 pl-2 pr-4 py-3">
                 <div class="inline-block relative">

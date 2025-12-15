@@ -38,9 +38,11 @@ const chartKey = ref(0) // Used to force chart re-render
 const historyData = ref([])
 const selectedDex = ref('All') // 'All', 'Paradex', 'Lighter', 'Hyperliquid'
 const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
+const selectedPeriod = ref(24) // Hours: 24, 168 (7d), 720 (30d)
 const isChangingMetric = ref(false) // Loading state for metric changes
 const isChangingDex = ref(false) // Loading state for DEX changes
 const isChangingSymbol = ref(false) // Loading state for symbol changes
+const isChangingPeriod = ref(false)
 const usingPreAggregated = ref(false) // Track if using pre-aggregated data
 
 const metrics = [
@@ -49,10 +51,23 @@ const metrics = [
   { label: 'Annualized', value: 'rateAnnual' }
 ]
 
+const periods = [
+  { label: '24H', value: 24 },
+  { label: '7D', value: 168 },
+  { label: '30D', value: 720 }
+]
+
 // Dynamic DEX config loaded from API
 const availableDexes = ref([]) // List of DEX names
 const dexConfigs = ref({}) // Map of dexName -> { name, color }
-const dexes = computed(() => ['All', ...availableDexes.value])
+
+// DEXes that have data in the current historyData
+const dexesWithData = computed(() => {
+  const uniqueDexes = [...new Set(historyData.value.map(d => d.dex))]
+  return uniqueDexes.filter(dex => availableDexes.value.includes(dex)).sort()
+})
+
+const dexes = computed(() => ['All', ...dexesWithData.value])
 
 // Get color for a DEX (from API or fallback)
 const getDexColor = (dexName) => {
@@ -84,27 +99,43 @@ const loadDexConfigs = async () => {
   }
 }
 
-// Aggregate data by 30-minute intervals - takes the latest value for each 30-min bucket
-// Used as fallback when pre-aggregated data isn't available
-const aggregateByInterval = (data) => {
+// Aggregate data by dynamic intervals based on total duration
+const aggregateByInterval = (data, totalHours) => {
   const buckets = new Map()
-  const INTERVAL_MINUTES = 10
+  let intervalMinutes = 15 // Default 15 min for 24h
+
+  if (totalHours > 24 && totalHours <= 168) {
+    intervalMinutes = 120 // 2 hours for 7D
+  } else if (totalHours > 168) {
+    intervalMinutes = 1440 // 1 day for 30D
+  }
 
   for (const item of data) {
     const date = new Date(item.timestamp)
-    // Calculate which 30-minute bucket this falls into (0 for 0-29, 1 for 30-59)
-    const intervalBucket = Math.floor(date.getMinutes() / INTERVAL_MINUTES)
-    // Create a key for the 30-minute bucket (year-month-day-hour-interval)
-    const intervalKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${intervalBucket}`
+    // Normalize to the start of the interval
+    // For large intervals, we might want to just round to the nearest hour or day
+    let normalizedDate;
+    
+    if (intervalMinutes === 1440) {
+        // Round to start of day
+        normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    } else {
+        const totalMinutes = date.getHours() * 60 + date.getMinutes()
+        const bucketIndex = Math.floor(totalMinutes / intervalMinutes)
+        const normalizedTotalMinutes = bucketIndex * intervalMinutes
+        const nsHours = Math.floor(normalizedTotalMinutes / 60)
+        const nsMinutes = normalizedTotalMinutes % 60
+        normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), nsHours, nsMinutes)
+    }
+
+    const intervalKey = normalizedDate.toISOString()
     const bucketKey = `${item.dex}-${intervalKey}`
 
-    // Keep the latest entry for each dex per 30-minute interval
+    // Ensure we keep the latest entry for each interval
     if (!buckets.has(bucketKey) || new Date(buckets.get(bucketKey).timestamp) < date) {
-      // Normalize timestamp to the start of the 30-minute interval
-      const normalizedMinute = intervalBucket * INTERVAL_MINUTES
       buckets.set(bucketKey, {
         ...item,
-        timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), normalizedMinute).toISOString()
+        timestamp: normalizedDate.toISOString()
       })
     }
   }
@@ -120,14 +151,15 @@ const fetchData = async (silent = false) => {
   try {
     const data = []
     let usedPreAggregated = false
+    const hours = selectedPeriod.value
 
-    // First, try the pre-aggregated 5-minute chart API
-    try {
-      if (selectedDex.value === 'All') {
-        // Use comparison endpoint for all DEXs
-        const response = await chartApi.getComparisonData(props.symbol, 24)
+    // For 24H: use 5-minute aggregated data
+    // For 7D/30D: use daily aggregated data
+    if (hours <= 24) {
+      // Use 5-minute aggregated API for 24H view
+      try {
+        const response = await chartApi.getComparisonData(props.symbol, hours)
         if (response.data && Object.keys(response.data).length > 0) {
-          // Transform comparison data to flat array
           for (const [dexName, dexData] of Object.entries(response.data)) {
             for (const item of dexData) {
               data.push({
@@ -141,51 +173,58 @@ const fetchData = async (silent = false) => {
           }
           usedPreAggregated = true
         }
-      } else {
-        // Fetch for specific DEX
-        const response = await chartApi.getChartData(props.symbol, selectedDex.value, 24)
-        if (response.data && response.data.length > 0) {
-          for (const item of response.data) {
-            data.push({
-              dex: item.dexName || selectedDex.value,
-              timestamp: item.bucketTime,
-              rate: item.avgRate,
-              rate8h: item.avgRate8h,
-              rateAnnual: item.avgRateAnnual
-            })
+      } catch (e) {
+        console.log('[Chart] Pre-aggregated API not available, falling back to raw data')
+      }
+    } else {
+      // Use daily aggregated API for 7D/30D views
+      try {
+        const days = Math.ceil(hours / 24)
+        const response = await chartApi.getDailyComparisonData(props.symbol, days)
+        if (response.data && Object.keys(response.data).length > 0) {
+          for (const [dexName, dexData] of Object.entries(response.data)) {
+            for (const item of dexData) {
+              data.push({
+                dex: dexName,
+                timestamp: item.bucketTime,
+                rate: item.avgRate,
+                rate8h: item.avgRate8h,
+                rateAnnual: item.avgRateAnnual
+              })
+            }
           }
           usedPreAggregated = true
         }
+      } catch (e) {
+        console.log('[Chart] Daily API not available:', e)
       }
-    } catch (e) {
-      console.log('[Chart] Pre-aggregated API not available, falling back to raw data')
     }
 
     // Fallback to raw data if pre-aggregated didn't return data
-    if (data.length === 0) {
-      // Dynamically fetch for each available DEX
+    // Note: This only works for 24H since raw data is cleaned up
+    if (data.length === 0 && hours <= 24) {
       for (const dexName of availableDexes.value) {
-        if (selectedDex.value === 'All' || selectedDex.value === dexName) {
-          try {
-            const response = await fundingRateApi.getHistory({
-              dex: dexName,
-              symbol: props.symbol,
-              hours: 24
-            })
-            data.push(...response.data.map(d => ({ ...d, dex: dexName })))
-          } catch (e) {
-            console.error(`No ${dexName} data`, e)
-          }
+        try {
+          const response = await fundingRateApi.getHistory({
+            dex: dexName,
+            symbol: props.symbol,
+            hours: hours
+          })
+          data.push(...response.data.map(d => ({ ...d, dex: dexName })))
+        } catch (e) {
+          console.error(`No ${dexName} data`, e)
         }
       }
-
-      // Aggregate by 10-minute intervals when using raw data
-      const aggregated = aggregateByInterval(data)
-      historyData.value = aggregated.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-    } else {
-      // Pre-aggregated data is already in 5-minute buckets, just sort
-      historyData.value = data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
     }
+
+    // For 24H view, aggregate by 15min intervals for smoother charts
+    // For daily data, it's already aggregated by day, so skip frontend aggregation
+    let finalData = data
+    if (hours <= 24 && data.length > 0) {
+      finalData = aggregateByInterval(data, hours)
+    }
+    
+    historyData.value = finalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
 
     usingPreAggregated.value = usedPreAggregated
     
@@ -206,11 +245,17 @@ watch(() => props.symbol, async () => {
   isChangingSymbol.value = false
 })
 
-// Watch for DEX changes - show loading overlay
-watch(() => selectedDex.value, async () => {
-  isChangingDex.value = true
+// Watch for DEX changes - just re-render chart (data is already loaded)
+watch(() => selectedDex.value, () => {
+  // No need to refetch, just trigger chart re-render
+  chartKey.value++
+})
+
+// Watch for Period changes
+watch(() => selectedPeriod.value, async () => {
+  isChangingPeriod.value = true
   await fetchData(false)
-  isChangingDex.value = false
+  isChangingPeriod.value = false
 })
 
 // Initial fetch
@@ -233,7 +278,10 @@ let refreshInterval = null
 onMounted(() => {
   
   refreshInterval = setInterval(() => {
-    fetchData(true) // Silent refresh
+    // Only auto-refresh if looking at last 24H (live)
+    if (selectedPeriod.value === 24) {
+      fetchData(true)
+    }
   }, 10000)
 })
 
@@ -249,8 +297,19 @@ const unifiedChartData = computed(() => {
     // 1. Collect all unique timestamps, sorted
     const allTimestamps = [...new Set(historyData.value.map(d => d.timestamp))].sort()
 
-    // 2. Create labels (show only hour:minute)
-    const labels = allTimestamps.map(t => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}))
+    // 2. Create labels
+    const labels = allTimestamps.map(t => {
+      const date = new Date(t)
+      if (selectedPeriod.value > 24) {
+        // Show Date + Month for longer periods
+        // If it's a daily view (30D), just show Date
+        if (selectedPeriod.value > 168) {
+             return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+        }
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      }
+      return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+    })
 
     // 3. Map data to these timestamps
     const getDataset = (dexName, color) => {
@@ -269,9 +328,9 @@ const unifiedChartData = computed(() => {
             data: metricsData,
             tension: 0.4,
             spanGaps: true,
-            pointStyle: 'circle', // Points are circles (also affects tooltip indicators)
-            pointRadius: 2,
-            pointBackgroundColor: color, // Fill circle with dataset color (affects tooltip too)
+            pointStyle: 'circle',
+            pointRadius: window.innerWidth < 640 ? 1 : 2,
+            pointBackgroundColor: color,
             pointHoverRadius: 6,
             pointHoverBackgroundColor: color,
             pointHoverBorderColor: '#000',
@@ -282,8 +341,8 @@ const unifiedChartData = computed(() => {
     }
 
     const datasets = []
-    // Dynamically build datasets for each available DEX
-    for (const dexName of availableDexes.value) {
+    // Dynamically build datasets for DEXes with data
+    for (const dexName of dexesWithData.value) {
       if (selectedDex.value === 'All' || selectedDex.value === dexName) {
         datasets.push(getDataset(dexName, getDexColor(dexName)))
       }
@@ -316,7 +375,6 @@ const crosshairPlugin = {
   }
 }
 
-// Register crosshair plugin
 ChartJS.register(crosshairPlugin)
 
 const chartOptions = computed(() => ({
@@ -342,7 +400,7 @@ const chartOptions = computed(() => ({
       cornerRadius: 8,
       padding: window.innerWidth < 640 ? 8 : 12,
       displayColors: true,
-      usePointStyle: true, // Use circles instead of squares for color indicators
+      usePointStyle: true,
       boxPadding: 4,
       titleFont: {
         size: window.innerWidth < 640 ? 11 : 12
@@ -350,7 +408,7 @@ const chartOptions = computed(() => ({
       bodyFont: {
         size: window.innerWidth < 640 ? 10 : 12
       },
-      animation: false, // No tooltip animation for snappy feel
+      animation: false,
       callbacks: {
         label: function(context) {
           let label = context.dataset.label || ''
@@ -358,12 +416,18 @@ const chartOptions = computed(() => ({
             label += ': '
           }
           if (context.parsed.y !== null) {
-            // Use more decimals for 1H rate (rate is very small)
             const decimals = selectedMetric.value === 'rate' ? 6 :
                             selectedMetric.value === 'rate8h' ? 4 : 2
             label += context.parsed.y.toFixed(decimals) + '%'
           }
           return label
+        },
+        title: function(context) {
+            // Customize title based on period
+            if (context[0] && selectedPeriod.value > 24) {
+                 return context[0].label 
+            }
+            return context[0] ? context[0].label : ''
         }
       }
     }
@@ -391,7 +455,7 @@ const chartOptions = computed(() => ({
       ticks: {
         color: '#6B7280',
         font: { size: window.innerWidth < 640 ? 8 : 10 },
-        maxTicksLimit: window.innerWidth < 640 ? 6 : 12,
+        maxTicksLimit: window.innerWidth < 640 ? 6 : 10,
         maxRotation: window.innerWidth < 640 ? 0 : 45
       },
       border: {
@@ -403,16 +467,16 @@ const chartOptions = computed(() => ({
 </script>
 
 <template>
-  <div class="glass-card rounded-2xl p-4 sm:p-6 lg:p-8 min-h-[400px] sm:min-h-[500px] flex flex-col relative">
+  <div class="flex flex-col relative w-full h-full min-h-[450px] p-4 sm:p-6">
     <!-- Chart Header -->
-    <div class="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6 lg:mb-8">
+    <div class="flex flex-col gap-3 sm:gap-4 mb-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-base sm:text-lg font-medium text-white tracking-tight">Funding Rate History</h2>
+        <h2 class="text-base sm:text-lg font-medium text-neutral-200 tracking-tight">Funding Rate History</h2>
 
         <!-- Custom Legend (desktop) -->
         <div class="hidden sm:flex items-center gap-3 lg:gap-4 text-xs">
           <div 
-            v-for="dexName in availableDexes" 
+            v-for="dexName in dexesWithData" 
             :key="dexName"
             v-if="selectedDex === 'All' || selectedDex === dexName" 
             class="flex items-center gap-1.5 sm:gap-2"
@@ -427,18 +491,18 @@ const chartOptions = computed(() => ({
       </div>
 
       <!-- Controls - Stack on mobile, inline on desktop -->
-      <div class="flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-center sm:bg-black/40 sm:rounded-lg sm:p-1 sm:border sm:border-white/5 sm:w-fit">
+      <div class="flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-center sm:bg-white/5 sm:rounded-lg sm:p-1 sm:w-fit">
         <!-- DEX Tabs -->
-        <div class="flex items-center bg-black/40 sm:bg-transparent rounded-lg p-1 sm:p-0 border border-white/5 sm:border-0 overflow-x-auto">
+        <div class="flex items-center bg-white/5 sm:bg-transparent rounded-lg p-1 sm:p-0 overflow-x-auto">
           <button
             v-for="dex in dexes"
             :key="dex"
             @click="selectedDex = dex"
             :class="[
-              'px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors border whitespace-nowrap flex-shrink-0',
+              'px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0',
               selectedDex === dex
-                ? 'bg-emerald-600 text-white border-transparent shadow-lg shadow-emerald-500/25'
-                : 'text-neutral-500 border-transparent hover:text-white'
+                ? 'bg-neutral-800 text-white shadow-sm border border-white/10'
+                : 'text-neutral-500 hover:text-white'
             ]"
           >
             {{ dex }}
@@ -447,18 +511,38 @@ const chartOptions = computed(() => ({
 
         <!-- Separator (desktop only) -->
         <div class="hidden sm:block w-px h-4 bg-white/10 mx-2"></div>
+        
+        <!-- Period Tabs (NEW) -->
+        <div class="flex items-center bg-white/5 sm:bg-transparent rounded-lg p-1 sm:p-0 overflow-x-auto">
+          <button
+            v-for="period in periods"
+            :key="period.value"
+            @click="selectedPeriod = period.value"
+            :class="[
+              'px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0',
+              selectedPeriod === period.value
+                ? 'bg-neutral-800 text-white shadow-sm border border-white/10'
+                : 'text-neutral-500 hover:text-white'
+            ]"
+          >
+            {{ period.label }}
+          </button>
+        </div>
+
+        <!-- Separator (desktop only) -->
+        <div class="hidden sm:block w-px h-4 bg-white/10 mx-2"></div>
 
         <!-- Metric Tabs -->
-        <div class="flex items-center bg-black/40 sm:bg-transparent rounded-lg p-1 sm:p-0 border border-white/5 sm:border-0 overflow-x-auto">
+        <div class="flex items-center bg-white/5 sm:bg-transparent rounded-lg p-1 sm:p-0 overflow-x-auto">
           <button
             v-for="metric in metrics"
             :key="metric.value"
             @click="selectedMetric = metric.value"
             :class="[
-              'px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors border whitespace-nowrap flex-shrink-0',
+              'px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0',
               selectedMetric === metric.value
-                ? 'bg-white/10 text-white border-white/10'
-                : 'text-neutral-500 border-transparent hover:text-white'
+                ? 'bg-neutral-800 text-white shadow-sm border border-white/10'
+                : 'text-neutral-500 hover:text-white'
             ]"
           >
             {{ metric.label }}
@@ -469,7 +553,7 @@ const chartOptions = computed(() => ({
       <!-- Custom Legend (mobile only) -->
       <div class="flex sm:hidden items-center gap-3 text-[10px]">
         <div 
-          v-for="dexName in availableDexes" 
+          v-for="dexName in dexesWithData" 
           :key="dexName"
           v-if="selectedDex === 'All' || selectedDex === dexName" 
           class="flex items-center gap-1.5"
@@ -492,16 +576,16 @@ const chartOptions = computed(() => ({
     </div>
 
     <!-- Chart (show after initial load, even during background refresh) -->
-    <div v-else class="flex-1 relative w-full min-h-[250px] sm:min-h-[320px] lg:min-h-[360px]">
+    <div v-else class="flex-1 relative w-full min-h-[300px]">
       <!-- Overlay loading for changes -->
       <div
-        v-if="isChangingMetric || isChangingDex || isChangingSymbol"
-        class="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg transition-opacity duration-150"
+        v-if="isChangingMetric || isChangingDex || isChangingSymbol || isChangingPeriod"
+        class="absolute inset-0 bg-[#0A0A0A]/60 backdrop-blur-[1px] flex items-center justify-center z-20 rounded-lg transition-opacity duration-150"
       >
         <div class="flex items-center gap-2 sm:gap-3">
           <div class="w-4 h-4 sm:w-5 sm:h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
           <span class="text-xs sm:text-sm text-neutral-300">
-            {{ isChangingSymbol ? 'Loading asset...' : isChangingDex ? 'Loading platform...' : 'Updating...' }}
+            {{ isChangingSymbol ? 'Loading asset...' : isChangingPeriod ? 'Loading history...' : isChangingDex ? 'Loading platform...' : 'Updating...' }}
           </span>
         </div>
       </div>

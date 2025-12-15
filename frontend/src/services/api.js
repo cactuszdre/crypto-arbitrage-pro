@@ -104,6 +104,10 @@ export const chartApi = {
     getComparisonData: (symbol, hours = 24) =>
         api.get(`/charts/funding-rate/${symbol}/compare`, { params: { hours } }),
 
+    // Get daily comparison data for historical views (7D, 30D)
+    getDailyComparisonData: (symbol, days = 7) =>
+        api.get(`/charts/funding-rate/${symbol}/compare-daily`, { params: { days } }),
+
     // Get statistics summary
     getStatsSummary: (symbol, hours = 24) =>
         api.get(`/charts/funding-rate/${symbol}/stats`, { params: { hours } })

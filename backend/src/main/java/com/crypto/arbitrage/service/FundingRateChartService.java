@@ -3,15 +3,18 @@ package com.crypto.arbitrage.service;
 import com.crypto.arbitrage.dto.FundingRateChartDTO;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate5Min;
+import com.crypto.arbitrage.model.FundingRateDaily;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRate5MinRepository;
+import com.crypto.arbitrage.repository.FundingRateDailyRepository;
 import com.crypto.arbitrage.repository.TickerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
 public class FundingRateChartService {
 
     private final FundingRate5MinRepository fundingRate5MinRepository;
+    private final FundingRateDailyRepository fundingRateDailyRepository;
     private final TickerRepository tickerRepository;
     private final DexRepository dexRepository;
 
@@ -147,6 +151,51 @@ public class FundingRateChartService {
 
         return allData.stream()
                 .collect(Collectors.groupingBy(FundingRateChartDTO::getDexName));
+    }
+
+    /**
+     * Get daily chart data grouped by DEX for historical comparison charts (7D, 30D)
+     * Uses the funding_rate_daily table for aggregated daily data
+     *
+     * @param symbol The symbol to compare
+     * @param days Number of days
+     * @return Map of DEX name to chart data
+     */
+    public Map<String, List<FundingRateChartDTO>> getDailyComparisonData(String symbol, int days) {
+        Ticker ticker = tickerRepository.findByNormalizedSymbol(symbol).orElse(null);
+        
+        if (ticker == null) {
+            log.warn("Ticker not found: {}", symbol);
+            return Collections.emptyMap();
+        }
+        
+        LocalDate startDate = LocalDate.now().minusDays(days);
+        
+        // Get all daily data for this ticker since startDate
+        List<FundingRateDaily> dailyData = fundingRateDailyRepository.findByTickerSince(ticker, startDate);
+        
+        // Convert to DTOs and group by DEX
+        return dailyData.stream()
+                .map(this::toDailyDTO)
+                .collect(Collectors.groupingBy(FundingRateChartDTO::getDexName));
+    }
+    
+    /**
+     * Convert FundingRateDaily entity to chart DTO
+     */
+    private FundingRateChartDTO toDailyDTO(FundingRateDaily entity) {
+        return FundingRateChartDTO.builder()
+                .id(entity.getId())
+                .symbol(entity.getSymbol())
+                .dexName(entity.getDex() != null ? entity.getDex().getName() : null)
+                .bucketTime(entity.getDate().atStartOfDay())
+                .avgRate(entity.getAvgRate())
+                .avgRate8h(entity.getAvgRate8h())
+                .avgRateAnnual(entity.getAvgRateAnnual())
+                .minRate(entity.getMinRate())
+                .maxRate(entity.getMaxRate())
+                .sampleCount(entity.getSampleCount())
+                .build();
     }
 
     /**
