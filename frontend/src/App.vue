@@ -119,7 +119,7 @@ const navItems = [
     <!-- Main Content -->
     <main class="flex-1 flex flex-col h-full overflow-hidden relative z-10">
       <Header v-if="route.path !== '/login' && route.path !== '/'" />
-      <div :class="['flex-1 overflow-y-auto', (route.path !== '/login' && route.path !== '/') ? 'px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8 space-y-4 sm:space-y-6' : '']">
+      <div id="main-scroll-container" :class="['flex-1 overflow-y-auto', (route.path !== '/login' && route.path !== '/') ? 'px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-8 space-y-4 sm:space-y-6' : '']">
         <RouterView />
       </div>
     </main>

@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick, watch, defineProps } f
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { fundingRateApi, arbitrageApi, dexApi } from '../services/api'
 import FundingRateChart from '../components/FundingRateChart.vue'
+import ArbitrageHistoryChart from '../components/ArbitrageHistoryChart.vue'
 
 // Props from router (when navigating from Arbitrage table)
 const props = defineProps({
@@ -28,6 +29,19 @@ const selectedLongDex = ref(null)
 const selectedShortDex = ref(null)
 const positionSize = ref(10000) // Total position size in $
 
+// Chart yield data (from ArbitrageHistoryChart)
+const chartYieldData = ref({
+  average: 0,
+  periodLabel: 'Live',
+  periodDays: 1,
+  dataPoints: 0,
+  isLive: true
+})
+
+const handleAverageYieldUpdate = (data) => {
+  chartYieldData.value = data
+}
+
 // Position size options
 const positionSizeOptions = [
   { label: '$1k', value: 1000 },
@@ -42,6 +56,8 @@ const showLongDexDropdown = ref(false)
 const showShortDexDropdown = ref(false)
 const symbolSearchQuery = ref('')
 const symbolSearchInputRef = ref(null)
+
+
 
 // ===== ANIMATED COUNTER SYSTEM =====
 const displayRate = ref(0)
@@ -129,12 +145,15 @@ const shortDexRate = computed(() => {
 })
 
 // Calculate spread between the two DEXes
+// Funding arbitrage: Long pays rate, Short receives rate
+// Net yield = shortRate - longRate
 const spreadData = computed(() => {
   if (!longDexRate.value || !shortDexRate.value) return null
   
   const longRate = longDexRate.value.rate8h || 0
   const shortRate = shortDexRate.value.rate8h || 0
-  const spread = Math.abs(longRate - shortRate)
+  // Directional spread: what you receive (short) minus what you pay (long)
+  const spread = shortRate - longRate
   const dailyReturn = spread * 3 // 3 funding periods per day
   const annualReturn = dailyReturn * 365
   
@@ -144,7 +163,7 @@ const spreadData = computed(() => {
     spread,
     dailyReturn,
     annualReturn,
-    isPositive: longRate < shortRate // Positive when long rate is lower (you earn paying less)
+    isPositive: spread > 0
   }
 })
 
@@ -377,6 +396,12 @@ const fetchData = async () => {
   }
 }
 
+// Scroll state for liquid glass effect
+const isScrolled = ref(false)
+const handleScroll = (e) => {
+  isScrolled.value = e.target.scrollTop > 20
+}
+
 // ===== LIFECYCLE =====
 
 let refreshInterval = null
@@ -399,307 +424,333 @@ onMounted(async () => {
   refreshInterval = setInterval(fetchData, 10000)
   document.addEventListener('click', closeDropdowns)
   document.addEventListener('touchend', closeDropdowns)
+  
+  // Use nextTick to ensure parent scroll container is ready
+  await nextTick()
+  const scrollContainer = document.getElementById('main-scroll-container')
+  if (scrollContainer) {
+    scrollContainer.addEventListener('scroll', handleScroll)
+    // Check initial scroll position
+    isScrolled.value = scrollContainer.scrollTop > 20
+  }
 })
 
 onUnmounted(() => {
   if (refreshInterval) clearInterval(refreshInterval)
   document.removeEventListener('click', closeDropdowns)
   document.removeEventListener('touchend', closeDropdowns)
+  
+  const scrollContainer = document.getElementById('main-scroll-container')
+  if (scrollContainer) {
+    scrollContainer.removeEventListener('scroll', handleScroll)
+  }
 })
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Header With Asset Selector -->
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-      <div class="flex items-center gap-4">
-        <!-- Asset Icon & Name -->
-        <div class="flex items-center gap-3">
-          <div class="relative dropdown-container">
-            <button 
-              @click.stop="toggleSymbolDropdown"
-              class="flex items-center gap-3 pl-2 pr-4 py-2 hover:bg-white/5 rounded-xl transition-colors group"
+    <!-- Header With Asset Selector (Sticky Pill) -->
+    <div class="sticky top-0 z-40 flex justify-start pointer-events-none mb-4">
+      <div class="pointer-events-auto">
+        <div class="relative dropdown-container">
+          <button 
+            @click.stop="toggleSymbolDropdown"
+            :class="[
+              'flex items-center gap-3 pl-2 pr-4 py-2 rounded-2xl transition-all duration-300 ease-out group hover:bg-white/10 hover:border-white/20',
+              isScrolled 
+                ? 'bg-[#0A0A0A]/70 backdrop-blur-xl border border-white/10 shadow-xl' 
+                : 'bg-transparent border border-transparent'
+            ]"
+          >
+            <img 
+              v-if="!isImageFailed(selectedSymbol)"
+              :key="selectedSymbol"
+              :src="getFallbackIcon(selectedSymbol)" 
+              class="w-10 h-10 rounded-full bg-neutral-800 shadow-lg"
+              @error="(e) => handleImageError(selectedSymbol, e)"
+            />
+            <div
+              v-else
+              class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-sm sm:text-base text-white font-bold shadow-lg"
             >
-              <img 
-                v-if="!isImageFailed(selectedSymbol)"
-                :key="selectedSymbol"
-                :src="getFallbackIcon(selectedSymbol)" 
-                class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-neutral-800 shadow-lg"
-                @error="(e) => handleImageError(selectedSymbol, e)"
-              />
-              <div
-                v-else
-                class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-sm sm:text-base text-white font-bold shadow-lg"
+              {{ getBaseSymbol(selectedSymbol).charAt(0) }}
+            </div>
+            <div class="text-left flex flex-col justify-center">
+              <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-none mb-0.5">
+                {{ selectedSymbol.replace(/-USD-PERP/i, '').replace(/-PERP/i, '') }}
+              </h1>
+              <!-- Mini Pill for Symbol -->
+              <span class="text-xs font-mono text-neutral-500 leading-none">{{ selectedSymbol }}</span>
+            </div>
+            <svg class="w-4 h-4 text-neutral-500 group-hover:text-white transition-colors ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+              </button>
+
+              <!-- Asset Dropdown -->
+              <div 
+                v-if="showSymbolDropdown"
+                class="absolute left-0 top-full mt-2 w-72 bg-[#0E0E0E] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden ring-1 ring-white/5"
               >
-                {{ getBaseSymbol(selectedSymbol).charAt(0) }}
-              </div>
-              <div class="text-left">
-                <div class="flex items-center gap-2">
-                  <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                    {{ selectedSymbol.replace(/-USD-PERP/i, '').replace(/-PERP/i, '') }}
-                  </h1>
-                  <svg class="w-4 h-4 text-neutral-500 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                  </svg>
+                <div class="p-3 border-b border-white/5">
+                  <input 
+                    ref="symbolSearchInputRef"
+                    v-model="symbolSearchQuery"
+                    type="text" 
+                    placeholder="Search assets..." 
+                    class="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-colors"
+                  />
                 </div>
-                <!-- Mini Pill for Symbol -->
-                <span class="text-xs font-mono text-neutral-500">{{ selectedSymbol }}</span>
-              </div>
-            </button>
-
-            <!-- Asset Dropdown -->
-            <div 
-              v-if="showSymbolDropdown"
-              class="absolute left-0 top-full mt-2 w-72 bg-[#0E0E0E] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden ring-1 ring-white/5"
-            >
-              <div class="p-3 border-b border-white/5">
-                <input 
-                  ref="symbolSearchInputRef"
-                  v-model="symbolSearchQuery"
-                  type="text" 
-                  placeholder="Search assets..." 
-                  class="w-full bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-colors"
-                />
-              </div>
-              
-              <!-- Pinned Assets -->
-              <div class="p-2 grid grid-cols-4 gap-2 border-b border-white/5">
-                <button 
-                  v-for="item in pinnedSymbols"
-                  :key="item.symbol"
-                  @click="selectSymbol(item.symbol)"
-                  class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/5 transition-colors"
-                >
-                  <img 
-                    v-if="!isImageFailed(item.symbol)"
-                    :src="item.iconUrl" 
-                    class="w-6 h-6 rounded-full"
-                    @error="(e) => handleImageError(item.symbol, e)"
-                  />
-                  <div
-                    v-else
-                    class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[10px] text-white font-bold"
+                
+                <!-- Pinned Assets -->
+                <div class="p-2 grid grid-cols-4 gap-2 border-b border-white/5">
+                  <button 
+                    v-for="item in pinnedSymbols"
+                    :key="item.symbol"
+                    @click="selectSymbol(item.symbol)"
+                    class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/5 transition-colors"
                   >
-                    {{ getBaseSymbol(item.symbol).charAt(0) }}
-                  </div>
-                  <span class="text-[10px] font-medium text-neutral-400">{{ item.symbol.substring(0,3) }}</span>
-                </button>
-              </div>
+                    <img 
+                      v-if="!isImageFailed(item.symbol)"
+                      :src="item.iconUrl" 
+                      class="w-6 h-6 rounded-full"
+                      @error="(e) => handleImageError(item.symbol, e)"
+                    />
+                    <div
+                      v-else
+                      class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[10px] text-white font-bold"
+                    >
+                      {{ getBaseSymbol(item.symbol).charAt(0) }}
+                    </div>
+                    <span class="text-[10px] font-medium text-neutral-400">{{ item.symbol.substring(0,3) }}</span>
+                  </button>
+                </div>
 
-              <!-- List -->
-              <div class="max-h-64 overflow-y-auto">
-                <button 
-                  v-for="item in filteredOtherSymbols"
-                  :key="item.symbol"
-                  @click="selectSymbol(item.symbol)"
-                  class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left"
-                >
-                  <img 
-                    v-if="!isImageFailed(item.symbol)"
-                    :src="item.iconUrl" 
-                    class="w-5 h-5 rounded-full bg-neutral-800"
-                    @error="(e) => handleImageError(item.symbol, e)"
-                  />
-                  <div
-                    v-else
-                    class="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[8px] text-white font-bold"
+                <!-- List -->
+                <div class="max-h-64 overflow-y-auto">
+                  <button 
+                    v-for="item in filteredOtherSymbols"
+                    :key="item.symbol"
+                    @click="selectSymbol(item.symbol)"
+                    class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left"
                   >
-                    {{ getBaseSymbol(item.symbol).charAt(0) }}
-                  </div>
-                  <span class="text-sm text-neutral-300">{{ item.symbol.replace('-USD-PERP', '') }}</span>
-                </button>
+                    <img 
+                      v-if="!isImageFailed(item.symbol)"
+                      :src="item.iconUrl" 
+                      class="w-5 h-5 rounded-full bg-neutral-800"
+                      @error="(e) => handleImageError(item.symbol, e)"
+                    />
+                    <div
+                      v-else
+                      class="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-[8px] text-white font-bold"
+                    >
+                      {{ getBaseSymbol(item.symbol).charAt(0) }}
+                    </div>
+                    <span class="text-sm text-neutral-300">{{ item.symbol.replace('-USD-PERP', '') }}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Quick Actions / Navigation -->
-      <div class="flex items-center gap-3">
-        <RouterLink 
-          to="/arbitrage"
-          class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-neutral-400 font-medium hover:text-white transition-colors"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"/>
-          </svg>
-          Back to Arbitrage
-        </RouterLink>
+    <!-- Arbitrage Section (Connected Chart + Strategy) -->
+    <div class="relative">
+      <!-- Shared Background Glow -->
+      <div class="absolute -inset-1 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 rounded-3xl blur-xl opacity-50"></div>
+      
+      <div class="relative grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 items-stretch">
+        <!-- Arbitrage History Chart -->
+        <div class="lg:col-span-2">
+          <div class="bg-[#0A0A0A]/90 backdrop-blur-xl border border-white/5 lg:border-r-0 rounded-2xl lg:rounded-r-none p-1 overflow-hidden flex flex-col min-h-[450px] shadow-2xl h-full">
+            <ArbitrageHistoryChart 
+              :symbol="selectedSymbol" 
+              :long-dex="selectedLongDex" 
+              :short-dex="selectedShortDex" 
+              @update:average-yield="handleAverageYieldUpdate"
+            />
+          </div>
+        </div>
+
+        <!-- Strategy Card -->
+        <div class="lg:col-span-1">
+          <div class="bg-[#0A0A0A]/90 backdrop-blur-xl border border-white/5 lg:border-l-0 rounded-2xl lg:rounded-l-none p-5 relative overflow-hidden shadow-2xl h-full">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
+            
+            <h2 class="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Arbitrage Strategy
+            </h2>
+
+            <!-- Configuration -->
+            <div class="space-y-4 mb-6">
+              <!-- Long Side -->
+              <div class="dropdown-container relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-emerald-500/30 transition-colors group">
+                <label class="text-[10px] uppercase text-emerald-400/80 font-bold tracking-wider mb-1 block flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 text-emerald-500 shadow-[0_0_8px_currentColor]"></span>
+                  Long Position
+                </label>
+                <button 
+                  @click.stop="toggleLongDexDropdown"
+                  class="w-full flex items-center justify-between text-white group-hover:bg-white/5 p-1 rounded transition-colors"
+                >
+                  <span class="font-medium text-lg">{{ selectedLongDex || 'Select Exchange' }}</span>
+                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform', showLongDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                
+                <!-- Dropdown -->
+                <div v-if="showLongDexDropdown" class="absolute left-0 right-0 top-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
+                  <button v-for="dex in availableDexesForSymbol" :key="dex" @click.stop="selectLongDex(dex)" :disabled="dex === selectedShortDex" class="w-full text-left px-4 py-2 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30">{{ dex }}</button>
+                </div>
+              </div>
+
+              <!-- Swap Btn -->
+              <div class="flex justify-center -my-3 relative z-10">
+                <button 
+                  @click="swapDexes"
+                  class="p-2 rounded-full bg-[#0E0E0E] border border-white/10 text-neutral-400 hover:text-white hover:border-indigo-500/50 hover:bg-white/5 transition-all hover:rotate-180 hover:scale-110 shadow-lg"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                </button>
+              </div>
+
+              <!-- Short Side -->
+              <div class="dropdown-container relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-red-500/30 transition-colors group">
+                <label class="text-[10px] uppercase text-red-400/80 font-bold tracking-wider mb-1 block flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-red-500 text-red-500 shadow-[0_0_8px_currentColor]"></span>
+                  Short Position
+                </label>
+                <button 
+                  @click.stop="toggleShortDexDropdown"
+                  class="w-full flex items-center justify-between text-white group-hover:bg-white/5 p-1 rounded transition-colors"
+                >
+                  <span class="font-medium text-lg">{{ selectedShortDex || 'Select Exchange' }}</span>
+                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform', showShortDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <!-- Dropdown -->
+                <div v-if="showShortDexDropdown" class="absolute left-0 right-0 top-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
+                  <button v-for="dex in availableDexesForSymbol" :key="dex" @click.stop="selectShortDex(dex)" :disabled="dex === selectedLongDex" class="w-full text-left px-4 py-2 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30">{{ dex }}</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- RESULTS -->
+            <div v-if="spreadData" class="space-y-3 pt-4 border-t border-white/5">
+              <!-- Position Size Selector -->
+              <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[10px] text-neutral-500 uppercase tracking-wider font-semibold">Position Size</span>
+                </div>
+                <div class="flex items-center gap-1 flex-wrap">
+                  <button
+                    v-for="option in positionSizeOptions"
+                    :key="option.value"
+                    @click="positionSize = option.value"
+                    :class="[
+                      'px-2 py-1 rounded text-[10px] font-medium transition-colors border',
+                      positionSize === option.value
+                        ? 'bg-white/10 text-white border-white/20 shadow-sm'
+                        : 'border-transparent text-neutral-500 hover:text-white hover:bg-white/5'
+                    ]"
+                  >
+                    {{ option.label }}
+                  </button>
+                  <!-- Custom Input with styled arrows -->
+                  <div class="relative flex items-center ml-auto">
+                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 z-10">$</span>
+                    <input
+                      type="number"
+                      v-model.number="positionSize"
+                      min="100"
+                      max="10000000"
+                      step="1000"
+                      class="position-input w-24 pl-4 pr-8 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-right appearance-none transition-colors"
+                      placeholder="Custom"
+                    />
+                    <!-- Custom Arrow Buttons -->
+                    <div class="absolute right-0.5 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        @click="positionSize = Math.min(positionSize + 1000, 10000000)"
+                        class="w-5 h-3 flex items-center justify-center rounded-t bg-white/5 hover:bg-indigo-500/30 border border-white/10 hover:border-indigo-500/50 transition-all group"
+                      >
+                        <svg class="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        @click="positionSize = Math.max(positionSize - 1000, 100)"
+                        class="w-5 h-3 flex items-center justify-center rounded-b bg-white/5 hover:bg-indigo-500/30 border border-white/10 hover:border-indigo-500/50 transition-all group"
+                      >
+                        <svg class="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Daily Return (from chart average - always annualized) -->
+              <div class="p-4 rounded-xl bg-white/5 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
+                <div class="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div class="flex justify-between items-center mb-2 relative z-10">
+                  <span class="text-xs text-neutral-400">Daily Return</span>
+                  <span class="text-[10px] text-neutral-500 bg-white/5 px-1.5 py-0.5 rounded">{{ chartYieldData.isLive ? 'Live' : 'avg. ' + chartYieldData.periodLabel }}</span>
+                </div>
+                <div class="flex items-baseline gap-2 relative z-10">
+                  <span class="text-2xl font-bold font-mono tracking-tight" :class="chartYieldData.average > 0 ? 'text-emerald-400' : 'text-red-400'">
+                    {{ chartYieldData.average > 0 ? '+' : ''}}{{ (chartYieldData.average / 365).toFixed(4) }}%
+                  </span>
+                  <span class="text-sm text-neutral-500">
+                    ≈ ${{ ((chartYieldData.average / 365) * positionSize / 100).toFixed(2) }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Annual Return (from chart average - already annualized) -->
+              <div class="p-4 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 relative overflow-hidden group hover:border-indigo-500/40 transition-colors">
+                <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl -mr-10 -mt-10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                <div class="flex justify-between items-center mb-2 relative z-10">
+                  <span class="text-xs text-indigo-300 font-medium">Annual Return</span>
+                  <span class="text-[10px] text-indigo-300/80 bg-indigo-500/20 px-2 py-0.5 rounded font-medium">{{ chartYieldData.isLive ? 'Live' : 'avg. ' + chartYieldData.periodLabel }}</span>
+                </div>
+                <div class="flex items-baseline gap-2 relative z-10">
+                  <span class="text-3xl font-bold font-mono tracking-tight" :class="chartYieldData.average > 0 ? 'text-indigo-400' : 'text-red-400'">
+                    {{ chartYieldData.average > 0 ? '+' : ''}}{{ chartYieldData.average.toFixed(2) }}%
+                  </span>
+                  <span class="text-sm text-indigo-300/50">
+                    ≈ ${{ (chartYieldData.average * positionSize / 100).toFixed(0) }}
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Split Info -->
+              <div class="flex items-start gap-2 text-[10px] text-neutral-500 bg-white/5 p-3 rounded-lg border border-white/5">
+                <svg class="w-3 h-3 mt-0.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>
+                  Split ${{ (positionSize / 2).toLocaleString() }} on <span class="text-emerald-400">{{ selectedLongDex }}</span> (Long) 
+                  + ${{ (positionSize / 2).toLocaleString() }} on <span class="text-red-400">{{ selectedShortDex }}</span> (Short)
+                </span>
+              </div>
+            </div>
+            
+            <div v-else class="text-center py-12 text-neutral-500 text-sm bg-white/5 rounded-xl border border-white/5 border-dashed">
+              Select both exchanges to analyze spread
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Main Dashboard Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-      
-      <!-- LEFT COL: Chart -->
-      <div class="lg:col-span-2 flex flex-col">
-        <!-- Main Chart -->
-        <div class="bg-[#0A0A0A] border border-white/5 rounded-2xl p-1 overflow-hidden flex-1 flex flex-col min-h-[450px]">
-          <FundingRateChart :symbol="selectedSymbol" />
-        </div>
-      </div>
-
-      <!-- RIGHT COL: Strategy & Analysis -->
-      <div class="flex flex-col">
-        
-        <!-- STRATEGY CARD -->
-        <div class="bg-[#0A0A0A] border border-white/5 rounded-2xl p-5 relative overflow-hidden h-full">
-          <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl"></div>
-          
-          <h2 class="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-5">Arbitrage Strategy</h2>
-
-          <!-- Configuration -->
-          <div class="space-y-4 mb-6">
-            <!-- Long Side -->
-            <div class="dropdown-container relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-emerald-500/30 transition-colors group">
-              <label class="text-[10px] uppercase text-emerald-400/80 font-bold tracking-wider mb-1 block">Long Position</label>
-              <button 
-                @click.stop="toggleLongDexDropdown"
-                class="w-full flex items-center justify-between text-white"
-              >
-                <span class="font-medium">{{ selectedLongDex || 'Select Exchange' }}</span>
-                <svg :class="['w-4 h-4 text-neutral-500 transition-transform', showLongDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-              </button>
-              
-              <!-- Dropdown -->
-              <div v-if="showLongDexDropdown" class="absolute left-0 right-0 top-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
-                <button v-for="dex in availableDexesForSymbol" :key="dex" @click.stop="selectLongDex(dex)" :disabled="dex === selectedShortDex" class="w-full text-left px-4 py-2 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30">{{ dex }}</button>
-              </div>
-            </div>
-
-            <!-- Swap Btn -->
-            <div class="flex justify-center -my-2 relative z-10">
-              <button 
-                @click="swapDexes"
-                class="p-2 rounded-full bg-[#0A0A0A] border border-white/10 text-neutral-400 hover:text-white hover:border-indigo-500/50 transition-all hover:rotate-180"
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
-              </button>
-            </div>
-
-            <!-- Short Side -->
-            <div class="dropdown-container relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-red-500/30 transition-colors group">
-              <label class="text-[10px] uppercase text-red-400/80 font-bold tracking-wider mb-1 block">Short Position</label>
-              <button 
-                @click.stop="toggleShortDexDropdown"
-                class="w-full flex items-center justify-between text-white"
-              >
-                <span class="font-medium">{{ selectedShortDex || 'Select Exchange' }}</span>
-                <svg :class="['w-4 h-4 text-neutral-500 transition-transform', showShortDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-              </button>
-
-              <!-- Dropdown -->
-              <div v-if="showShortDexDropdown" class="absolute left-0 right-0 top-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
-                <button v-for="dex in availableDexesForSymbol" :key="dex" @click.stop="selectShortDex(dex)" :disabled="dex === selectedLongDex" class="w-full text-left px-4 py-2 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30">{{ dex }}</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- RESULTS -->
-          <div v-if="spreadData" class="space-y-3 pt-4 border-t border-white/5">
-            <!-- Position Size Selector -->
-            <div class="mb-4">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-[10px] text-neutral-500 uppercase tracking-wider">Position Size</span>
-              </div>
-              <div class="flex items-center gap-1 flex-wrap">
-                <button
-                  v-for="option in positionSizeOptions"
-                  :key="option.value"
-                  @click="positionSize = option.value"
-                  :class="[
-                    'px-2 py-1 rounded text-[10px] font-medium transition-colors',
-                    positionSize === option.value
-                      ? 'bg-white/10 text-white border border-white/20'
-                      : 'text-neutral-500 hover:text-white hover:bg-white/5'
-                  ]"
-                >
-                  {{ option.label }}
-                </button>
-                <!-- Custom Input with styled arrows -->
-                <div class="relative flex items-center">
-                  <span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 z-10">$</span>
-                  <input
-                    type="number"
-                    v-model.number="positionSize"
-                    min="100"
-                    max="10000000"
-                    step="1000"
-                    class="position-input w-24 pl-4 pr-8 py-1.5 rounded-lg text-[11px] font-medium bg-white/5 border border-white/10 text-white focus:outline-none focus:border-indigo-500/50 text-right appearance-none"
-                    placeholder="Custom"
-                  />
-                  <!-- Custom Arrow Buttons -->
-                  <div class="absolute right-0.5 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
-                    <button
-                      type="button"
-                      @click="positionSize = Math.min(positionSize + 1000, 10000000)"
-                      class="w-5 h-3 flex items-center justify-center rounded-t bg-white/5 hover:bg-indigo-500/30 border border-white/10 hover:border-indigo-500/50 transition-all group"
-                    >
-                      <svg class="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/>
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      @click="positionSize = Math.max(positionSize - 1000, 100)"
-                      class="w-5 h-3 flex items-center justify-center rounded-b bg-white/5 hover:bg-indigo-500/30 border border-white/10 hover:border-indigo-500/50 transition-all group"
-                    >
-                      <svg class="w-2.5 h-2.5 text-neutral-500 group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Daily Return -->
-            <div class="p-4 rounded-xl bg-white/5 border border-white/5">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-xs text-neutral-400">Daily Return</span>
-              </div>
-              <div class="flex items-baseline gap-2">
-                <span class="text-2xl font-bold font-mono" :class="spreadData.dailyReturn > 0 ? 'text-emerald-400' : 'text-red-400'">
-                  {{ spreadData.dailyReturn > 0 ? '+' : ''}}{{ (spreadData.dailyReturn).toFixed(4) }}%
-                </span>
-                <span class="text-sm text-neutral-500">
-                  ≈ ${{ (spreadData.dailyReturn * positionSize / 100).toFixed(2) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Annual Return -->
-            <div class="p-4 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-xs text-indigo-300">Annual Return</span>
-                <span class="text-[10px] text-indigo-400/60 bg-indigo-500/10 px-2 py-0.5 rounded">projected</span>
-              </div>
-              <div class="flex items-baseline gap-2">
-                <span class="text-3xl font-bold font-mono" :class="spreadData.annualReturn > 0 ? 'text-indigo-400' : 'text-red-400'">
-                  {{ spreadData.annualReturn > 0 ? '+' : ''}}{{ (spreadData.annualReturn).toFixed(2) }}%
-                </span>
-                <span class="text-sm text-indigo-300/50">
-                  ≈ ${{ (spreadData.annualReturn * positionSize / 100).toFixed(0) }}
-                </span>
-              </div>
-            </div>
-            
-            <!-- Split Info -->
-            <div class="flex items-start gap-2 text-[10px] text-neutral-500 bg-white/5 p-3 rounded-lg">
-              <svg class="w-3 h-3 mt-0.5 text-neutral-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              <span>
-                Split ${{ (positionSize / 2).toLocaleString() }} on <span class="text-emerald-400">{{ selectedLongDex }}</span> (Long) 
-                + ${{ (positionSize / 2).toLocaleString() }} on <span class="text-red-400">{{ selectedShortDex }}</span> (Short)
-              </span>
-            </div>
-          </div>
-          
-          <div v-else class="text-center py-8 text-neutral-500 text-sm">
-            Select both exchanges to analyze spread
-          </div>
-
-        </div>
-
+    <!-- Funding Rate History (Full Width) -->
+    <div class="relative group mt-6">
+      <div class="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
+      <div class="relative bg-[#0A0A0A]/90 backdrop-blur-xl border border-white/5 rounded-2xl p-1 overflow-hidden flex flex-col min-h-[450px] shadow-2xl">
+        <FundingRateChart :symbol="selectedSymbol" />
       </div>
     </div>
   </div>
