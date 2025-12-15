@@ -26,8 +26,8 @@
         </h1>
 
         <!-- Dynamic Subline (Hacker Effect) -->
-        <div class="h-16 flex items-center justify-center lg:justify-start">
-             <p class="text-lg text-gray-400 max-w-xl font-mono leading-relaxed h-full flex items-center">
+        <div class="min-h-[5rem] lg:min-h-[4rem] flex items-center justify-center lg:justify-start w-full">
+             <p class="text-lg text-gray-400 max-w-xl font-mono leading-relaxed w-full inline-block text-center lg:text-left">
                 > {{ displayedText }}<span class="animate-pulse">_</span>
              </p>
         </div>
