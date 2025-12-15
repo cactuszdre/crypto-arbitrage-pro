@@ -20,7 +20,8 @@ const fundingRates = ref([])
 const loading = ref(true)
 const error = ref(null)
 const symbols = ref([]) // Available symbols
-const availableDexes = ref([]) // Available DEXes from database
+const availableDexes = ref([]) // Available DEX names from database
+const dexDataMap = ref({}) // Map of dexName -> { name, iconUrl, color, ... }
 const rawRates = ref([]) // Raw rates for DEX-specific data
 
 // Selected values
@@ -347,9 +348,19 @@ const loadAvailableDexes = async () => {
   try {
     const response = await dexApi.getAll()
     availableDexes.value = response.data.map(d => d.name)
+    // Store full DEX data for icons
+    dexDataMap.value = {}
+    response.data.forEach(d => {
+      dexDataMap.value[d.name] = d
+    })
   } catch (err) {
     console.error('Failed to load DEXes:', err)
   }
+}
+
+// Get DEX icon URL by name
+const getDexIconUrl = (dexName) => {
+  return dexDataMap.value[dexName]?.iconUrl || null
 }
 
 const fetchData = async () => {
@@ -585,22 +596,50 @@ onUnmounted(() => {
             <!-- Configuration -->
             <div class="space-y-4 mb-6">
               <!-- Long Side -->
-              <div class="dropdown-container relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-emerald-500/30 transition-colors group">
-                <label class="text-[10px] uppercase text-emerald-400/80 font-bold tracking-wider mb-1 block flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 text-emerald-500 shadow-[0_0_8px_currentColor]"></span>
-                  Long Position
-                </label>
-                <button 
-                  @click.stop="toggleLongDexDropdown"
-                  class="w-full flex items-center justify-between text-white group-hover:bg-white/5 p-1 rounded transition-colors"
-                >
-                  <span class="font-medium text-lg">{{ selectedLongDex || 'Select Exchange' }}</span>
-                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform', showLongDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </button>
+              <div 
+                class="dropdown-container relative rounded-xl border border-white/5 hover:border-emerald-500/40 transition-all cursor-pointer group"
+                :class="{ 'z-30': showLongDexDropdown }"
+                @click.stop="toggleLongDexDropdown"
+              >
+                <div class="flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-500/10 to-transparent rounded-xl">
+                  <!-- DEX Icon -->
+                  <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img 
+                      v-if="getDexIconUrl(selectedLongDex)"
+                      :src="getDexIconUrl(selectedLongDex)" 
+                      :alt="selectedLongDex"
+                      class="w-full h-full object-cover"
+                    />
+                    <span v-else class="text-lg font-bold text-emerald-400">{{ selectedLongDex?.charAt(0) || '?' }}</span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <label class="text-[10px] uppercase text-emerald-400/80 font-bold tracking-wider flex items-center gap-1.5">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                      Long Position
+                    </label>
+                    <span class="font-semibold text-lg text-white truncate block">{{ selectedLongDex || 'Select Exchange' }}</span>
+                  </div>
+                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform flex-shrink-0', showLongDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </div>
                 
                 <!-- Dropdown -->
-                <div v-if="showLongDexDropdown" class="absolute left-0 right-0 top-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
-                  <button v-for="dex in availableDexesForSymbol" :key="dex" @click.stop="selectLongDex(dex)" :disabled="dex === selectedShortDex" class="w-full text-left px-4 py-2 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30">{{ dex }}</button>
+                <div v-if="showLongDexDropdown" class="absolute left-0 right-0 top-full mt-1 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
+                  <button 
+                    v-for="dex in availableDexesForSymbol" 
+                    :key="dex" 
+                    @click.stop="selectLongDex(dex)" 
+                    :disabled="dex === selectedShortDex" 
+                    class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30 transition-colors"
+                  >
+                    <img 
+                      v-if="getDexIconUrl(dex)"
+                      :src="getDexIconUrl(dex)" 
+                      :alt="dex"
+                      class="w-6 h-6 rounded-lg object-cover"
+                    />
+                    <div v-else class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-xs font-bold text-neutral-400">{{ dex.charAt(0) }}</div>
+                    {{ dex }}
+                  </button>
                 </div>
               </div>
 
@@ -615,22 +654,50 @@ onUnmounted(() => {
               </div>
 
               <!-- Short Side -->
-              <div class="dropdown-container relative bg-white/5 rounded-xl p-3 border border-white/5 hover:border-red-500/30 transition-colors group">
-                <label class="text-[10px] uppercase text-red-400/80 font-bold tracking-wider mb-1 block flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-red-500 text-red-500 shadow-[0_0_8px_currentColor]"></span>
-                  Short Position
-                </label>
-                <button 
-                  @click.stop="toggleShortDexDropdown"
-                  class="w-full flex items-center justify-between text-white group-hover:bg-white/5 p-1 rounded transition-colors"
-                >
-                  <span class="font-medium text-lg">{{ selectedShortDex || 'Select Exchange' }}</span>
-                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform', showShortDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </button>
+              <div 
+                class="dropdown-container relative rounded-xl border border-white/5 hover:border-red-500/40 transition-all cursor-pointer group"
+                :class="{ 'z-30': showShortDexDropdown }"
+                @click.stop="toggleShortDexDropdown"
+              >
+                <div class="flex items-center gap-3 p-4 bg-gradient-to-r from-red-500/10 to-transparent rounded-xl">
+                  <!-- DEX Icon -->
+                  <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <img 
+                      v-if="getDexIconUrl(selectedShortDex)"
+                      :src="getDexIconUrl(selectedShortDex)" 
+                      :alt="selectedShortDex"
+                      class="w-full h-full object-cover"
+                    />
+                    <span v-else class="text-lg font-bold text-red-400">{{ selectedShortDex?.charAt(0) || '?' }}</span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <label class="text-[10px] uppercase text-red-400/80 font-bold tracking-wider flex items-center gap-1.5">
+                      <span class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></span>
+                      Short Position
+                    </label>
+                    <span class="font-semibold text-lg text-white truncate block">{{ selectedShortDex || 'Select Exchange' }}</span>
+                  </div>
+                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform flex-shrink-0', showShortDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </div>
 
                 <!-- Dropdown -->
-                <div v-if="showShortDexDropdown" class="absolute left-0 right-0 top-full mt-2 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
-                  <button v-for="dex in availableDexesForSymbol" :key="dex" @click.stop="selectShortDex(dex)" :disabled="dex === selectedLongDex" class="w-full text-left px-4 py-2 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30">{{ dex }}</button>
+                <div v-if="showShortDexDropdown" class="absolute left-0 right-0 top-full mt-1 bg-[#1A1A1A] border border-white/10 rounded-lg shadow-xl z-20 py-1">
+                  <button 
+                    v-for="dex in availableDexesForSymbol" 
+                    :key="dex" 
+                    @click.stop="selectShortDex(dex)" 
+                    :disabled="dex === selectedLongDex" 
+                    class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 text-sm text-neutral-300 disabled:opacity-30 transition-colors"
+                  >
+                    <img 
+                      v-if="getDexIconUrl(dex)"
+                      :src="getDexIconUrl(dex)" 
+                      :alt="dex"
+                      class="w-6 h-6 rounded-lg object-cover"
+                    />
+                    <div v-else class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center text-xs font-bold text-neutral-400">{{ dex.charAt(0) }}</div>
+                    {{ dex }}
+                  </button>
                 </div>
               </div>
             </div>

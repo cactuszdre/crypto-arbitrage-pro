@@ -39,6 +39,9 @@ public class Dex {
     @Column(name = "color", length = 20)
     private String color; // Hex color for frontend (e.g., "#10B981")
 
+    @Column(name = "icon_url", length = 500)
+    private String iconUrl; // URL to DEX logo/icon image
+
     @Column(name = "trade_url_pattern", length = 200)
     private String tradeUrlPattern; // URL pattern for trade links (e.g., "https://app.paradex.trade/trade/{symbol}")
 
