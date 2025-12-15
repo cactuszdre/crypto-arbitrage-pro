@@ -4,11 +4,6 @@ import { useAuth } from '../stores/auth'
 
 const routes = [
     {
-        path: '/login',
-        name: 'Login',
-        component: () => import('../views/Login.vue')
-    },
-    {
         path: '/',
         name: 'Home',
         component: () => import('../views/HomeView.vue')

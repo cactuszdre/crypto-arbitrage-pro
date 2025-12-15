@@ -37,11 +37,6 @@ api.interceptors.response.use(
     }
 );
 
-export const authApi = {
-    login: (username, password) => api.post('/auth/login', { username, password }),
-    register: (username, password) => api.post('/auth/register', { username, password })
-};
-
 export const dexApi = {
     getAll: () => api.get('/dex'),
     getActive: () => api.get('/dex/active'),
@@ -82,7 +77,7 @@ export const cryptoPriceApi = {
     getAll: () => api.get('/crypto-prices')
 };
 
-// Chart API - Pre-aggregated 5-minute data for charts
+// Chart API - Pre-aggregated data for charts
 export const chartApi = {
     // Get chart data for a specific symbol and DEX
     getChartData: (symbol, dex, hours = 24) =>
@@ -100,12 +95,16 @@ export const chartApi = {
     getLatestDataPoints: (symbol, dex, count = 12) =>
         api.get(`/charts/funding-rate/${symbol}/${dex}/latest`, { params: { count } }),
 
-    // Get comparison data across DEXs
+    // Get comparison data across DEXs (5-min data for Live/8H)
     getComparisonData: (symbol, hours = 24) =>
         api.get(`/charts/funding-rate/${symbol}/compare`, { params: { hours } }),
 
-    // Get daily comparison data for historical views (7D, 30D)
-    getDailyComparisonData: (symbol, days = 7) =>
+    // Get hourly comparison data for medium-term views (1D, 3D, 7D)
+    getHourlyComparisonData: (symbol, hours = 24) =>
+        api.get(`/charts/funding-rate/${symbol}/compare-hourly`, { params: { hours } }),
+
+    // Get daily comparison data for historical views (30D+)
+    getDailyComparisonData: (symbol, days = 30) =>
         api.get(`/charts/funding-rate/${symbol}/compare-daily`, { params: { days } }),
 
     // Get statistics summary

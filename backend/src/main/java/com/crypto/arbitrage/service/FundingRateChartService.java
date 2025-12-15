@@ -4,10 +4,12 @@ import com.crypto.arbitrage.dto.FundingRateChartDTO;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate5Min;
 import com.crypto.arbitrage.model.FundingRateDaily;
+import com.crypto.arbitrage.model.FundingRateHourly;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRate5MinRepository;
 import com.crypto.arbitrage.repository.FundingRateDailyRepository;
+import com.crypto.arbitrage.repository.FundingRateHourlyRepository;
 import com.crypto.arbitrage.repository.TickerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +33,7 @@ import java.util.stream.Collectors;
 public class FundingRateChartService {
 
     private final FundingRate5MinRepository fundingRate5MinRepository;
+    private final FundingRateHourlyRepository fundingRateHourlyRepository;
     private final FundingRateDailyRepository fundingRateDailyRepository;
     private final TickerRepository tickerRepository;
     private final DexRepository dexRepository;
@@ -154,7 +157,7 @@ public class FundingRateChartService {
     }
 
     /**
-     * Get daily chart data grouped by DEX for historical comparison charts (7D, 30D)
+     * Get daily chart data grouped by DEX for historical comparison charts (30D+)
      * Uses the funding_rate_daily table for aggregated daily data
      *
      * @param symbol The symbol to compare
@@ -179,6 +182,34 @@ public class FundingRateChartService {
                 .map(this::toDailyDTO)
                 .collect(Collectors.groupingBy(FundingRateChartDTO::getDexName));
     }
+
+    /**
+     * Get hourly chart data grouped by DEX for medium-term comparison charts (1D, 3D, 7D)
+     * Uses the funding_rate_hourly table for aggregated hourly data
+     *
+     * @param symbol The symbol to compare
+     * @param hours Number of hours (24 for 1D, 72 for 3D, 168 for 7D)
+     * @return Map of DEX name to chart data
+     */
+    public Map<String, List<FundingRateChartDTO>> getHourlyComparisonData(String symbol, int hours) {
+        Ticker ticker = tickerRepository.findByNormalizedSymbol(symbol).orElse(null);
+        
+        if (ticker == null) {
+            log.warn("Ticker not found: {}", symbol);
+            return Collections.emptyMap();
+        }
+        
+        LocalDateTime endTime = LocalDateTime.now();
+        LocalDateTime startTime = endTime.minusHours(hours);
+        
+        // Get all hourly data for this ticker since startTime
+        List<FundingRateHourly> hourlyData = fundingRateHourlyRepository.findChartDataByTicker(ticker, startTime, endTime);
+        
+        // Convert to DTOs and group by DEX
+        return hourlyData.stream()
+                .map(this::toHourlyDTO)
+                .collect(Collectors.groupingBy(FundingRateChartDTO::getDexName));
+    }
     
     /**
      * Convert FundingRateDaily entity to chart DTO
@@ -192,6 +223,26 @@ public class FundingRateChartService {
                 .avgRate(entity.getAvgRate())
                 .avgRate8h(entity.getAvgRate8h())
                 .avgRateAnnual(entity.getAvgRateAnnual())
+                .minRate(entity.getMinRate())
+                .maxRate(entity.getMaxRate())
+                .sampleCount(entity.getSampleCount())
+                .build();
+    }
+
+    /**
+     * Convert FundingRateHourly entity to chart DTO
+     */
+    private FundingRateChartDTO toHourlyDTO(FundingRateHourly entity) {
+        return FundingRateChartDTO.builder()
+                .id(entity.getId())
+                .symbol(entity.getSymbol())
+                .dexName(entity.getDexName())
+                .bucketTime(entity.getBucketTime())
+                .avgRate(entity.getAvgRate())
+                .avgRate8h(entity.getAvgRate8h())
+                .avgRateAnnual(entity.getAvgRateAnnual())
+                .openRate(entity.getOpenRate())
+                .closeRate(entity.getCloseRate())
                 .minRate(entity.getMinRate())
                 .maxRate(entity.getMaxRate())
                 .sampleCount(entity.getSampleCount())

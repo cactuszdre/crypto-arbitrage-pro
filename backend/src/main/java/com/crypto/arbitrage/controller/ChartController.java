@@ -3,6 +3,7 @@ package com.crypto.arbitrage.controller;
 import com.crypto.arbitrage.dto.FundingRateChartDTO;
 import com.crypto.arbitrage.service.FundingRateChartService;
 import com.crypto.arbitrage.service.FundingRate5MinAggregationService;
+import com.crypto.arbitrage.service.FundingRateHourlyAggregationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,7 +13,10 @@ import java.util.Map;
 
 /**
  * REST Controller for chart data endpoints.
- * Provides pre-aggregated 5-minute data optimized for real-time chart display.
+ * Provides pre-aggregated data optimized for real-time chart display.
+ * - 5-minute data for Live/24H charts
+ * - Hourly data for 1D, 3D, 7D charts  
+ * - Daily data for 30D+ charts
  */
 @RestController
 @RequestMapping("/api/charts")
@@ -21,6 +25,7 @@ public class ChartController {
 
     private final FundingRateChartService chartService;
     private final FundingRate5MinAggregationService aggregationService;
+    private final FundingRateHourlyAggregationService hourlyAggregationService;
 
     /**
      * Get chart data for a specific symbol and DEX
@@ -121,17 +126,33 @@ public class ChartController {
 
     /**
      * Get daily comparison data for a symbol across all DEXs, grouped by DEX
-     * Uses the funding_rate_daily table for historical data (7D, 30D views)
+     * Uses the funding_rate_daily table for historical data (30D+ views)
      * 
      * @param symbol Symbol to compare
-     * @param days Number of days (default: 7)
+     * @param days Number of days (default: 30)
      */
     @GetMapping("/funding-rate/{symbol}/compare-daily")
     public ResponseEntity<Map<String, List<FundingRateChartDTO>>> getDailyComparisonData(
             @PathVariable String symbol,
-            @RequestParam(defaultValue = "7") int days) {
+            @RequestParam(defaultValue = "30") int days) {
         
         Map<String, List<FundingRateChartDTO>> data = chartService.getDailyComparisonData(symbol, days);
+        return ResponseEntity.ok(data);
+    }
+
+    /**
+     * Get hourly comparison data for a symbol across all DEXs, grouped by DEX
+     * Uses the funding_rate_hourly table for medium-term data (1D, 3D, 7D views)
+     * 
+     * @param symbol Symbol to compare
+     * @param hours Number of hours (24 for 1D, 72 for 3D, 168 for 7D)
+     */
+    @GetMapping("/funding-rate/{symbol}/compare-hourly")
+    public ResponseEntity<Map<String, List<FundingRateChartDTO>>> getHourlyComparisonData(
+            @PathVariable String symbol,
+            @RequestParam(defaultValue = "24") int hours) {
+        
+        Map<String, List<FundingRateChartDTO>> data = chartService.getHourlyComparisonData(symbol, hours);
         return ResponseEntity.ok(data);
     }
 
@@ -144,11 +165,19 @@ public class ChartController {
     }
 
     /**
-     * Trigger manual aggregation (admin endpoint)
+     * Trigger manual 5-minute aggregation (admin endpoint)
      */
     @PostMapping("/admin/aggregate")
     public ResponseEntity<String> triggerAggregation() {
         aggregationService.manualAggregate();
-        return ResponseEntity.ok("Aggregation triggered");
+        return ResponseEntity.ok("5-minute aggregation triggered");
+    }
+
+    /**
+     * Get hourly aggregation statistics (admin endpoint)
+     */
+    @GetMapping("/admin/stats-hourly")
+    public ResponseEntity<String> getHourlyAggregationStats() {
+        return ResponseEntity.ok(hourlyAggregationService.getAggregationStats());
     }
 }

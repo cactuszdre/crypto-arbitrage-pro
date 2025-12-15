@@ -153,10 +153,11 @@ const fetchData = async (silent = false) => {
     let usedPreAggregated = false
     const hours = selectedPeriod.value
 
-    // For 24H: use 5-minute aggregated data
-    // For 7D/30D: use daily aggregated data
+    // For <= 24H: use 5-minute aggregated data
+    // For 1D-7D (>24h to <=168h): use hourly aggregated data
+    // For 30D+ (>168h): use daily aggregated data
     if (hours <= 24) {
-      // Use 5-minute aggregated API for 24H view
+      // Use 5-minute aggregated API for Live/24H view
       try {
         const response = await chartApi.getComparisonData(props.symbol, hours)
         if (response.data && Object.keys(response.data).length > 0) {
@@ -176,8 +177,29 @@ const fetchData = async (silent = false) => {
       } catch (e) {
         console.log('[Chart] Pre-aggregated API not available, falling back to raw data')
       }
+    } else if (hours <= 168) {
+      // Use hourly aggregated API for 1D/3D/7D views
+      try {
+        const response = await chartApi.getHourlyComparisonData(props.symbol, hours)
+        if (response.data && Object.keys(response.data).length > 0) {
+          for (const [dexName, dexData] of Object.entries(response.data)) {
+            for (const item of dexData) {
+              data.push({
+                dex: dexName,
+                timestamp: item.bucketTime,
+                rate: item.avgRate,
+                rate8h: item.avgRate8h,
+                rateAnnual: item.avgRateAnnual
+              })
+            }
+          }
+          usedPreAggregated = true
+        }
+      } catch (e) {
+        console.log('[Chart] Hourly API not available:', e)
+      }
     } else {
-      // Use daily aggregated API for 7D/30D views
+      // Use daily aggregated API for 30D+ views
       try {
         const days = Math.ceil(hours / 24)
         const response = await chartApi.getDailyComparisonData(props.symbol, days)
