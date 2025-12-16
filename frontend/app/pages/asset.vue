@@ -795,7 +795,7 @@ onUnmounted(() => {
                   <span v-else class="text-[10px] text-indigo-300/80 bg-indigo-500/20 px-2 py-0.5 rounded font-medium">avg. {{ chartYieldData.periodLabel }}</span>
                 </div>
                 <div class="flex items-baseline gap-2 relative z-10">
-                  <span class="text-3xl font-bold font-mono tracking-tight" :class="chartYieldData.average > 0 ? 'text-indigo-400' : 'text-red-400'">
+                  <span class="text-2xl font-bold font-mono tracking-tight" :class="chartYieldData.average > 0 ? 'text-indigo-400' : 'text-red-400'">
                     {{ chartYieldData.average > 0 ? '+' : ''}}{{ chartYieldData.average.toFixed(2) }}%
                   </span>
                   <span class="text-sm text-indigo-300/50">
