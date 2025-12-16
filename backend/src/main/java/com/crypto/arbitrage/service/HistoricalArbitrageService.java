@@ -187,11 +187,8 @@ public class HistoricalArbitrageService {
             // Skip if same DEX
             if (bestLongDex.equals(bestShortDex)) continue;
             
-            // Calculate spread
+            // Calculate spread (can be negative in historical data - this is accurate)
             BigDecimal spread = highestRate.subtract(lowestRate);
-            
-            // Only positive spreads
-            if (spread.compareTo(BigDecimal.ZERO) <= 0) continue;
             
             // Daily return = spread / 365
             BigDecimal dailyReturn = spread.divide(BigDecimal.valueOf(365), 8, RoundingMode.HALF_UP);

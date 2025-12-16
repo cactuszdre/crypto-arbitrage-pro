@@ -321,7 +321,7 @@ const swapDexes = () => {
 
 const updateUrlParams = () => {
   router.replace({
-    path: '/overview',
+    path: '/asset',
     query: {
       symbol: selectedSymbol.value,
       longDex: selectedLongDex.value,
@@ -519,7 +519,7 @@ onUnmounted(() => {
                   >
                     <img 
                       v-if="!isImageFailed(item.symbol)"
-                      :src="item.iconUrl" 
+                      :src="getFallbackIcon(item.symbol)" 
                       class="w-6 h-6 rounded-full"
                       @error="(e) => handleImageError(item.symbol, e)"
                     />
@@ -543,7 +543,7 @@ onUnmounted(() => {
                   >
                     <img 
                       v-if="!isImageFailed(item.symbol)"
-                      :src="item.iconUrl" 
+                      :src="getFallbackIcon(item.symbol)" 
                       class="w-5 h-5 rounded-full bg-neutral-800"
                       @error="(e) => handleImageError(item.symbol, e)"
                     />

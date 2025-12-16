@@ -1,6 +1,6 @@
 <script setup>
 // Nuxt auto-imports: ref, computed, watch, onMounted, onUnmounted
-import { fundingRateApi, chartApi, dexApi } from '~/services/api'
+import { fundingRateApi, chartApi, dexApi, arbitrageApi } from '~/services/api'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -48,6 +48,12 @@ const isChangingPeriod = ref(false)
 const isChangingDex = ref(false) // Loading state for DEX changes (for animation)
 const usingPreAggregated = ref(false) // Track if using pre-aggregated data
 
+// Data from funding_rate_daily table for accurate yield calculation (historical)
+const dailyRatesData = ref(null) // { symbols: [...], periodLabel, dataPointCount }
+
+// Data from last_funding table for accurate yield calculation (live)
+const liveRatesData = ref(null) // [{ symbol, rates: [...] }]
+
 const metrics = [
   { label: '1H Rate', value: 'rate' },
   { label: '8H Rate', value: 'rate8h' },
@@ -77,6 +83,49 @@ const dexesWithData = computed(() => {
 })
 
 const dexes = computed(() => ['All', ...dexesWithData.value])
+
+// Computed: Human-readable timeframe description based on selected period
+const timeframeDescription = computed(() => {
+  const now = new Date()
+  const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
+  
+  if (!currentPeriod) return ''
+  
+  const formatDate = (date, includeTime = false) => {
+    const options = { month: 'short', day: 'numeric' }
+    if (includeTime) {
+      return date.toLocaleDateString('en-US', options) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+    }
+    return date.toLocaleDateString('en-US', options)
+  }
+  
+  if (currentPeriod.isLive) {
+    // Live: use actual first data point from chart
+    if (historyData.value && historyData.value.length > 0) {
+      const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
+      const firstTime = timestamps[0]
+      const lastTime = timestamps[timestamps.length - 1]
+      return `${formatDate(firstTime, true)} - ${formatDate(lastTime, true)}`
+    }
+    // Fallback if no data
+    const startTime = new Date(now.getTime() - 8 * 60 * 60 * 1000)
+    return `${formatDate(startTime, true)} - Now`
+  } else {
+    // Historical: show date range
+    const endDate = new Date(now)
+    endDate.setDate(endDate.getDate() - 1) // Yesterday as end (daily data is from previous day)
+    const startDate = new Date(endDate)
+    startDate.setDate(startDate.getDate() - currentPeriod.days + 1)
+    
+    if (currentPeriod.days === 1) {
+      return `Yesterday (${formatDate(endDate)})`
+    } else if (startDate.getMonth() === endDate.getMonth()) {
+      return `${startDate.getDate()} - ${formatDate(endDate)}`
+    } else {
+      return `${formatDate(startDate)} - ${formatDate(endDate)}`
+    }
+  }
+})
 
 // Get color for a DEX (from API or fallback)
 const getDexColor = (dexName) => {
@@ -245,7 +294,9 @@ const fetchData = async (silent = false) => {
     }
 
     let finalData = data
-    if (hours <= 24 && data.length > 0) {
+    // Only aggregate if data was NOT already pre-aggregated from backend
+    // Pre-aggregated data already has correct resolution (5min for live, hourly for 1D-7D, daily for 30D+)
+    if (hours <= 24 && data.length > 0 && !usedPreAggregated) {
       finalData = aggregateByInterval(data, hours)
     }
     
@@ -261,9 +312,39 @@ const fetchData = async (silent = false) => {
   }
 }
 
+// Fetch daily aggregated data from funding_rate_daily table for accurate yield calculation
+// This is separate from chart data and used only for the Strategy Card yield display
+const fetchDailyYield = async () => {
+  try {
+    const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
+    if (!currentPeriod || currentPeriod.isLive) {
+      dailyRatesData.value = null
+      return
+    }
+    
+    const days = currentPeriod.days
+    const response = await arbitrageApi.getHistoricalRates(days)
+    dailyRatesData.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch daily rates:', error)
+    dailyRatesData.value = null
+  }
+}
+
+// Fetch live rates from last_funding table for accurate Live mode yield calculation
+const fetchLiveRates = async () => {
+  try {
+    const response = await arbitrageApi.getAllRates()
+    liveRatesData.value = response.data
+  } catch (error) {
+    console.error('Failed to fetch live rates:', error)
+    liveRatesData.value = null
+  }
+}
+
 watch(() => props.symbol, async () => {
   isChangingSymbol.value = true
-  await fetchData(false)
+  await Promise.all([fetchData(false), fetchDailyYield(), fetchLiveRates()])
   isChangingSymbol.value = false
 })
 
@@ -279,13 +360,13 @@ watch([() => props.longDex, () => props.shortDex], () => {
 
 watch(() => selectedPeriod.value, async () => {
   isChangingPeriod.value = true
-  await fetchData(false)
+  await Promise.all([fetchData(false), fetchDailyYield()])
   isChangingPeriod.value = false
 })
 
 onMounted(async () => {
   await loadDexConfigs()
-  fetchData(false)
+  await Promise.all([fetchData(false), fetchDailyYield(), fetchLiveRates()])
 })
 
 watch(() => selectedMetric.value, async () => {
@@ -352,43 +433,54 @@ const unifiedChartData = computed(() => {
         return shortVal - longVal
     })
     
-    // 4. Calculate the ANNUALIZED average for the Strategy card (always use rateAnnual)
-    const annualizedSpreadData = allTimestamps.map(t => {
-        const entries = historyData.value.filter(d => d.timestamp === t)
-        
-        const longEntry = entries.find(d => d.dex === longDex)
-        const shortEntry = entries.find(d => d.dex === shortDex)
-        
-        if (!longEntry || !shortEntry) return 0
-        
-        // Always use rateAnnual for the strategy card calculation
-        const longVal = longEntry.rateAnnual || 0
-        const shortVal = shortEntry.rateAnnual || 0
-        
-        return shortVal - longVal
-    })
-    
-    // Calculate average annualized yield for the period
-    const validAnnualValues = annualizedSpreadData.filter(v => v !== 0)
-    const averageAnnualYield = validAnnualValues.length > 0 
-      ? validAnnualValues.reduce((a, b) => a + b, 0) / validAnnualValues.length 
-      : 0
-    
-    // Find current period info
+    // 4. Calculate the ANNUALIZED average for the Strategy card
+    // Use data from funding_rate_daily table when available (more accurate)
+    // Fall back to chart data for Live view
     const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
-    
-    // For "Live", use the most recent annualized value; for historical, use average
     const isLive = currentPeriod?.isLive || false
-    const yieldValue = isLive && annualizedSpreadData.length > 0 
-      ? annualizedSpreadData[annualizedSpreadData.length - 1]  // Latest annualized value for live
-      : averageAnnualYield  // Average annualized for historical
+    
+    let yieldValue = 0
+    let dataPointCount = 0
+    
+    if (!isLive && dailyRatesData.value && dailyRatesData.value.symbols) {
+      // Use data from funding_rate_daily table for historical periods
+      const symbolData = dailyRatesData.value.symbols.find(s => s.symbol === props.symbol)
+      if (symbolData && symbolData.rates) {
+        const longRate = symbolData.rates.find(r => r.dex === longDex)
+        const shortRate = symbolData.rates.find(r => r.dex === shortDex)
+        
+        if (longRate && shortRate) {
+          // Calculate spread: shortRate - longRate (annualized)
+          const longVal = parseFloat(longRate.rateAnnual) || 0
+          const shortVal = parseFloat(shortRate.rateAnnual) || 0
+          yieldValue = shortVal - longVal
+        }
+      }
+      dataPointCount = dailyRatesData.value.dataPointCount || 0
+    } else {
+      // For Live view, use data from last_funding table (via arbitrage/rates API)
+      if (liveRatesData.value) {
+        const symbolData = liveRatesData.value.find(s => s.symbol === props.symbol)
+        if (symbolData && symbolData.rates) {
+          const longRate = symbolData.rates.find(r => r.dex === longDex)
+          const shortRate = symbolData.rates.find(r => r.dex === shortDex)
+          
+          if (longRate && shortRate) {
+            const longVal = parseFloat(longRate.rateAnnual) || 0
+            const shortVal = parseFloat(shortRate.rateAnnual) || 0
+            yieldValue = shortVal - longVal
+          }
+        }
+      }
+      dataPointCount = 1 // Live uses current snapshot
+    }
     
     // Emit annualized yield to parent (this is always the annualized rate)
     emit('update:averageYield', {
-      average: yieldValue,  // This is the annualized yield
+      average: yieldValue,  // This is the annualized yield from daily table
       periodLabel: currentPeriod?.label || 'Live',
-      periodDays: isLive ? 1 : (currentPeriod?.days || 1),  // Live uses 1 day for projection
-      dataPoints: validAnnualValues.length,
+      periodDays: isLive ? 1 : (currentPeriod?.days || 1),
+      dataPoints: dataPointCount,
       isLive: isLive
     })
 
@@ -507,7 +599,10 @@ const chartOptions = computed(() => ({
     <!-- Chart Header -->
     <div class="flex flex-col gap-3 sm:gap-4 mb-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-base sm:text-lg font-medium text-neutral-200 tracking-tight">Arbitrage Yield History</h2>
+        <div>
+          <h2 class="text-base sm:text-lg font-medium text-neutral-200 tracking-tight">Arbitrage Yield History</h2>
+          <p class="text-[10px] sm:text-xs text-neutral-500 mt-0.5">{{ timeframeDescription }}</p>
+        </div>
       </div>
 
       <!-- Controls -->

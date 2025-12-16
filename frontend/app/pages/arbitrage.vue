@@ -78,7 +78,7 @@ const router = useRouter()
 // Navigate to Asset Details page with crypto and DEX info
 const navigateToAssetDetails = (opp) => {
   router.push({
-    path: '/overview',
+    path: '/asset',
     query: {
       symbol: opp.symbol,
       longDex: opp.longDex,
@@ -108,6 +108,7 @@ const itemsPerPage = 8
 const failedImages = ref(new Set())
 const searchQuery = ref('')
 const isLoadingOpportunities = computed(() => isLoadingRates.value)
+const hasInitiallyLoaded = ref(false) // Track if initial load is complete (to hide skeleton on refresh)
 
 // Pro Plan Modal
 const showProModal = ref(false)
@@ -302,7 +303,8 @@ const getSortState = (column) => {
 }
 
 // Calculate best arbitrage routes from raw rates based on selected DEXes
-const calculateOpportunitiesFromRates = (rates, selectedDexList) => {
+// When includeNegativeSpreads is true (historical mode), we include all spreads to show true averages
+const calculateOpportunitiesFromRates = (rates, selectedDexList, includeNegativeSpreads = false) => {
   if (!rates || rates.length === 0 || selectedDexList.length < 2) return []
   
   return rates.map(item => {
@@ -326,8 +328,9 @@ const calculateOpportunitiesFromRates = (rates, selectedDexList) => {
     const shortRate = parseFloat(bestShort.rateAnnual)
     const spread = shortRate - longRate
     
-    // Only positive spreads
-    if (spread <= 0) return null
+    // For live data: only show positive spreads (exploitable opportunities)
+    // For historical data: include all spreads to show true average performance
+    if (!includeNegativeSpreads && spread <= 0) return null
     
     return {
       symbol: item.symbol,
@@ -342,12 +345,15 @@ const calculateOpportunitiesFromRates = (rates, selectedDexList) => {
 }
 
 // Computed opportunities - recalculates when DEX selection or raw rates change
+// When viewing historical data (historicalRatesOverride is set), include negative spreads for accurate averages
 const computedOpportunities = computed(() => {
   if (rawRates.value.length === 0) {
     // Fall back to pre-calculated opportunities if no raw rates
     return opportunities.value
   }
-  return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value)
+  // Include negative spreads when viewing historical data
+  const isHistoricalMode = historicalRatesOverride.value !== null
+  return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value, isHistoricalMode)
 })
 
 // Filter opportunities based on search query
@@ -575,8 +581,17 @@ onMounted(async () => {
     searchQuery.value = route.query.search
   }
   
+  // If SSR already has data, mark as loaded immediately (no skeleton flicker)
+  if (rawRatesData.value && rawRatesData.value.length > 0) {
+    hasInitiallyLoaded.value = true
+  }
+  
   // Fetch live data first (show immediately)
-  fetchOpportunities()
+  await fetchOpportunities()
+  
+  // Mark as loaded after first fetch completes
+  hasInitiallyLoaded.value = true
+  
   startAutoRefresh()
   
   // Note: Historical data is loaded on-demand when user clicks filters
@@ -775,8 +790,8 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Skeleton Loading -->
-        <div v-if="isLoadingOpportunities && opportunities.length === 0" class="p-3 sm:p-4">
+        <!-- Skeleton Loading (only on initial page load, not during refresh) -->
+        <div v-if="!hasInitiallyLoaded && isLoadingOpportunities && rawRates.length === 0" class="p-3 sm:p-4">
           <div class="space-y-2 sm:space-y-3">
             <div v-for="i in 8" :key="i" class="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-white/5 animate-pulse">
               <div class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-white/10"></div>
