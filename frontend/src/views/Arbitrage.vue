@@ -15,7 +15,7 @@ const router = useRouter()
 // Navigate to Asset Details page with crypto and DEX info
 const navigateToAssetDetails = (opp) => {
   router.push({
-    path: '/overview',
+    path: '/asset',
     query: {
       symbol: opp.symbol,
       longDex: opp.longDex,

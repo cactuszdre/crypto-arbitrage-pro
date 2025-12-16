@@ -296,7 +296,7 @@ const swapDexes = () => {
 
 const updateUrlParams = () => {
   router.replace({
-    path: '/overview',
+    path: '/asset',
     query: {
       symbol: selectedSymbol.value,
       longDex: selectedLongDex.value,

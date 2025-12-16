@@ -9,7 +9,7 @@ const routes = [
         component: () => import('../views/HomeView.vue')
     },
     {
-        path: '/overview',
+        path: '/asset',
         name: 'AssetDetails',
         component: Dashboard,
         props: (route) => ({

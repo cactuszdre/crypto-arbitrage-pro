@@ -19,6 +19,7 @@ Disallow: /billing
 
 # Allow main pages
 Allow: /
+Allow: /asset
 Allow: /arbitrage
 Allow: /learn
 Allow: /swap
