@@ -1,11 +1,40 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: true },
+  devtools: { enabled: process.env.NODE_ENV === 'development' },
 
   // Use same port as Vite frontend (for script compatibility)
   devServer: {
     port: 5173,
+  },
+
+  // Nitro server configuration
+  nitro: {
+    // Reduce memory usage during build
+    minify: false, // Disable minification to reduce memory
+  },
+
+  // Vite build optimization for low-memory environments
+  vite: {
+    build: {
+      // Reduce memory usage
+      sourcemap: false,
+      // Use terser with reduced memory footprint
+      minify: 'esbuild',
+      // Build in chunks to reduce peak memory
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          // Manual chunking to reduce memory pressure
+          manualChunks: {
+            'vendor-three': ['three'],
+            'vendor-ethers': ['ethers', 'viem'],
+            'vendor-wagmi': ['wagmi', '@reown/appkit', '@reown/appkit-adapter-wagmi'],
+            'vendor-chart': ['chart.js', 'vue-chartjs'],
+          },
+        },
+      },
+    },
   },
 
   // Modules
