@@ -37,8 +37,8 @@ const isInitialLoad = ref(true)
 const chartKey = ref(0) // Used to force chart re-render
 const historyData = ref([])
 const selectedDex = ref('All') // 'All', 'Paradex', 'Lighter', 'Hyperliquid'
-const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
-const selectedPeriod = ref(24) // Hours: 24, 168 (7d), 720 (30d)
+const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rate24h', 'rateAnnual'
+const selectedPeriod = ref(8) // Hours: 8 (Live), 24 (1D), 72 (3D), 168 (7D), 720 (30D), etc.
 const isChangingMetric = ref(false) // Loading state for metric changes
 const isChangingDex = ref(false) // Loading state for DEX changes
 const isChangingSymbol = ref(false) // Loading state for symbol changes
@@ -48,13 +48,18 @@ const usingPreAggregated = ref(false) // Track if using pre-aggregated data
 const metrics = [
   { label: '1H Rate', value: 'rate' },
   { label: '8H Rate', value: 'rate8h' },
+  { label: '24H Rate', value: 'rate24h' },
   { label: 'Annualized', value: 'rateAnnual' }
 ]
 
 const periods = [
-  { label: '24H', value: 24 },
-  { label: '7D', value: 168 },
-  { label: '30D', value: 720 }
+  { label: 'Live', value: 8, isLive: true },
+  { label: '1D', value: 24, isLive: false },
+  { label: '3D', value: 72, isLive: false },
+  { label: '7D', value: 168, isLive: false },
+  { label: '30D', value: 720, isLive: false },
+  { label: '3M', value: 2160, isLive: false },
+  { label: '6M', value: 4320, isLive: false }
 ]
 
 // Dynamic DEX config loaded from API
@@ -300,8 +305,9 @@ let refreshInterval = null
 onMounted(() => {
   
   refreshInterval = setInterval(() => {
-    // Only auto-refresh if looking at last 24H (live)
-    if (selectedPeriod.value === 24) {
+    // Only auto-refresh for Live mode (value = 8)
+    const isLive = selectedPeriod.value === 8
+    if (isLive) {
       fetchData(true)
     }
   }, 10000)
@@ -338,9 +344,16 @@ const unifiedChartData = computed(() => {
         const metricsData = allTimestamps.map(t => {
             const entry = historyData.value.find(d => d.dex === dexName && d.timestamp === t)
             if (!entry) return null
-            let val = entry[selectedMetric.value]
-            if (selectedMetric.value === 'rate') val *= 100 // Convert rate to %
-            return val
+            let val
+            if (selectedMetric.value === 'rate') {
+              val = entry.rate * 100 // Convert rate to %
+            } else if (selectedMetric.value === 'rate24h') {
+              // 24h rate = 8h rate * 3 (3 funding periods per day)
+              val = (entry.rate8h || 0) * 3
+            } else {
+              val = entry[selectedMetric.value]
+            }
+            return val || 0
         })
 
         return {
@@ -439,7 +452,8 @@ const chartOptions = computed(() => ({
           }
           if (context.parsed.y !== null) {
             const decimals = selectedMetric.value === 'rate' ? 6 :
-                            selectedMetric.value === 'rate8h' ? 4 : 2
+                            selectedMetric.value === 'rate8h' ? 4 :
+                            selectedMetric.value === 'rate24h' ? 3 : 2
             label += context.parsed.y.toFixed(decimals) + '%'
           }
           return label

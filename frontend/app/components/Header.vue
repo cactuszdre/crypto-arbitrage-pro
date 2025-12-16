@@ -19,9 +19,8 @@ let priceInterval = null
 // OS Detection for keyboard shortcut
 const isMac = ref(false)
 
-// AppKit (wallet connection) - client only
-const appKit = ref(null)
-const accountData = ref({ isConnected: false, address: null })
+// AppKit (wallet connection) - using composable
+const { appKit, accountData, isInitializing, openModal } = useAppKit()
 
 const searchShortcut = computed(() => isMac.value ? '⌘K' : 'Ctrl+K')
 
@@ -109,13 +108,12 @@ const formattedAddress = computed(() => {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 })
 
-// Open wallet modal
-const openWallet = async () => {
-  if (appKit.value?.open) {
-    appKit.value.open()
-  } else {
-    console.warn('AppKit not initialized yet')
-  }
+// AppKit loading state (from composable)
+const isAppKitLoading = isInitializing
+
+// Open wallet modal using composable
+const openWallet = () => {
+  openModal()
 }
 
 // Watch for wallet connection changes (client-side only)
