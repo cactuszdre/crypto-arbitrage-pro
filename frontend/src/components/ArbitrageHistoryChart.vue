@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { fundingRateApi, chartApi, dexApi } from '../services/api'
+import { fundingRateApi, chartApi, dexApi, arbitrageApi } from '../services/api'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -40,6 +40,7 @@ const loading = ref(true)
 const isInitialLoad = ref(true)
 const chartKey = ref(0) // Used to force chart re-render
 const historyData = ref([])
+const officialYield = ref(null) // Stores the official yield from daily table for consistency
 const selectedMetric = ref('rateAnnual') // 'rate', 'rate8h', 'rateAnnual'
 const selectedPeriod = ref(8) // Default to Live (8h)
 const isChangingMetric = ref(false) // Loading state for metric changes
@@ -150,6 +151,45 @@ const aggregateByInterval = (data, totalHours) => {
   return Array.from(buckets.values())
 }
 
+// Fetch official daily yield to match Arbitrage page calculation
+const fetchOfficialDailyYield = async (days) => {
+  try {
+    const response = await arbitrageApi.getGranularHistoricalRates(days)
+    const symbolData = response.data.symbols.find(s => s.symbol === props.symbol)
+    
+    if (symbolData && symbolData.dailyRates && symbolData.dailyRates.length > 0) {
+      const validSpreads = []
+      
+      symbolData.dailyRates.forEach(day => {
+        // Find rates for the two selected DEXes
+        const longRateObj = day.rates.find(r => r.dex === props.longDex)
+        const shortRateObj = day.rates.find(r => r.dex === props.shortDex)
+        
+        if (longRateObj && shortRateObj) {
+           const longRate = longRateObj.rateAnnual
+           const shortRate = shortRateObj.rateAnnual
+           // Calculate spread (Short - Long)
+           // Important: Include ALL spreads (even negative) for raw average, same as Arbitrage page
+           validSpreads.push(shortRate - longRate)
+        }
+      })
+      
+      if (validSpreads.length > 0) {
+        // Simple average of all daily spreads
+        officialYield.value = validSpreads.reduce((a, b) => a + b, 0) / validSpreads.length
+        console.log('[Chart] Official yield fetched:', officialYield.value, 'from', validSpreads.length, 'days')
+      } else {
+        officialYield.value = null
+      }
+    } else {
+      officialYield.value = null
+    }
+  } catch (e) {
+    console.error('[Chart] Failed to fetch official daily yield:', e)
+    officialYield.value = null
+  }
+}
+
 // Try to fetch from pre-aggregated API, fallback to raw data if needed
 const fetchData = async (silent = false) => {
   if (!silent) {
@@ -252,6 +292,20 @@ const fetchData = async (silent = false) => {
     historyData.value = finalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
 
     usingPreAggregated.value = usedPreAggregated
+    
+    // FETCH OFFICIAL YIELD FOR HISTORICAL CONSISTENCY
+    // If not Live (<= 24h), fetch the official daily data to overwrite the yield number
+    const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
+    const isLive = currentPeriod ? currentPeriod.isLive : (selectedPeriod.value <= 24)
+    
+    if (isLive) {
+      officialYield.value = null // Live mode uses chart data calculation
+    } else {
+      const days = currentPeriod ? currentPeriod.days : Math.ceil(selectedPeriod.value / 24)
+      // Call in background, don't await to not block chart render
+      fetchOfficialDailyYield(days)
+    }
+
     chartKey.value++
   } catch (error) {
     console.error('Failed to fetch history:', error)
@@ -270,6 +324,13 @@ watch(() => props.symbol, async () => {
 // Watch for DEX selection changes from parent
 watch([() => props.longDex, () => props.shortDex], () => {
   isChangingDex.value = true
+  // Re-fetch official yield when DEX changes (if in historical mode)
+  if (selectedPeriod.value > 24) {
+      const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
+      const days = currentPeriod ? currentPeriod.days : Math.ceil(selectedPeriod.value / 24)
+      fetchOfficialDailyYield(days)
+  }
+  
   chartKey.value++
   // Reset after animation completes
   setTimeout(() => {
@@ -377,11 +438,19 @@ const unifiedChartData = computed(() => {
     // Find current period info
     const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
     
-    // For "Live", use the most recent annualized value; for historical, use average
+    // For "Live", use the most recent annualized value;
+    // For historical, prioritize the officialYield from the daily table if available
     const isLive = currentPeriod?.isLive || false
-    const yieldValue = isLive && annualizedSpreadData.length > 0 
-      ? annualizedSpreadData[annualizedSpreadData.length - 1]  // Latest annualized value for live
-      : averageAnnualYield  // Average annualized for historical
+    
+    let yieldValue
+    if (isLive) {
+       yieldValue = annualizedSpreadData.length > 0 
+          ? annualizedSpreadData[annualizedSpreadData.length - 1] 
+          : 0
+    } else {
+       // Historical: Use official yield if available, otherwise fallback to chart average
+       yieldValue = officialYield.value !== null ? officialYield.value : averageAnnualYield
+    }
     
     // Emit annualized yield to parent (this is always the annualized rate)
     emit('update:averageYield', {

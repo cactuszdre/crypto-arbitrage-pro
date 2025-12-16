@@ -317,20 +317,18 @@ const calculateOpportunitiesFromGranularData = (symbols, selectedDexList) => {
       const shortRate = parseFloat(bestShort.rateAnnual)
       const spread = shortRate - longRate
       
-      // Only positive spreads
-      if (spread > 0) {
-        dailySpreads.push({
-          spread,
-          longDex: bestLong.dex,
-          shortDex: bestShort.dex,
-          longRate,
-          shortRate
-        })
-        
-        // Track DEX pair frequency
-        const pairKey = `${bestLong.dex}|${bestShort.dex}`
-        dexPairCounts[pairKey] = (dexPairCounts[pairKey] || 0) + 1
-      }
+      // Include ALL spreads for raw average
+      dailySpreads.push({
+        spread,
+        longDex: bestLong.dex,
+        shortDex: bestShort.dex,
+        longRate,
+        shortRate
+      })
+      
+      // Track DEX pair frequency
+      const pairKey = `${bestLong.dex}|${bestShort.dex}`
+      dexPairCounts[pairKey] = (dexPairCounts[pairKey] || 0) + 1
     }
     
     // Need at least one valid day
@@ -378,17 +376,26 @@ const calculateOpportunitiesFromGranularData = (symbols, selectedDexList) => {
 // Uses granular data for historical periods (point-by-point calculation)
 // Uses raw rates for live data (simple average calculation)
 const computedOpportunities = computed(() => {
+  console.log('[DEBUG] computedOpportunities - granularRates.length:', granularRates.value.length)
+  console.log('[DEBUG] computedOpportunities - rawRates.length:', rawRates.value.length)
+  console.log('[DEBUG] computedOpportunities - selectedDexes:', selectedDexes.value)
+  
   // For historical periods, use granular data if available
   if (granularRates.value.length > 0) {
-    return calculateOpportunitiesFromGranularData(granularRates.value, selectedDexes.value)
+    const result = calculateOpportunitiesFromGranularData(granularRates.value, selectedDexes.value)
+    console.log('[DEBUG] granular calculation result:', result.length, 'opportunities')
+    return result
   }
   
   // For live data, use raw rates
   if (rawRates.value.length > 0) {
-    return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value)
+    const result = calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value)
+    console.log('[DEBUG] rawRates calculation result:', result.length, 'opportunities')
+    return result
   }
   
   // Fall back to pre-calculated opportunities if nothing else
+  console.log('[DEBUG] falling back to pre-calculated opportunities:', opportunities.value.length)
   return opportunities.value
 })
 
@@ -412,6 +419,7 @@ const filteredOpportunities = computed(() => {
     )
   }
 
+  console.log('[DEBUG] filteredOpportunities result:', result.length)
   return result
 })
 
@@ -597,7 +605,9 @@ const preloadAllHistoricalData = async () => {
 // Apply cached historical data to current view (instant, no fetch)
 const applyHistoricalDataFromCache = (days) => {
   const cached = historicalDataCache.get(days)
+  console.log('[DEBUG] applyHistoricalDataFromCache - days:', days, 'cached:', cached ? 'found' : 'not found')
   if (cached) {
+    console.log('[DEBUG] cached.granularRates length:', cached.granularRates?.length)
     // Clear live data and set granular historical data
     rawRates.value = []
     granularRates.value = cached.granularRates
@@ -926,7 +936,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Empty State: No data at all -->
-        <div v-else-if="rawRates.length === 0 && opportunities.length === 0" class="p-8 sm:p-12 text-center">
+        <div v-else-if="rawRates.length === 0 && opportunities.length === 0 && granularRates.length === 0" class="p-8 sm:p-12 text-center">
           <div class="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 rounded-full bg-white/5 flex items-center justify-center">
             <svg class="w-6 h-6 sm:w-8 sm:h-8 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
