@@ -57,6 +57,7 @@ const liveRatesData = ref(null) // [{ symbol, rates: [...] }]
 const metrics = [
   { label: '1H Rate', value: 'rate' },
   { label: '8H Rate', value: 'rate8h' },
+  { label: '24H Rate', value: 'rate24h' },
   { label: 'Annualized', value: 'rateAnnual' }
 ]
 
@@ -100,16 +101,26 @@ const timeframeDescription = computed(() => {
   }
   
   if (currentPeriod.isLive) {
-    // Live: use actual first data point from chart
+    // Live: use actual first data point from chart (today's data)
     if (historyData.value && historyData.value.length > 0) {
       const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
       const firstTime = timestamps[0]
       const lastTime = timestamps[timestamps.length - 1]
-      return `${formatDate(firstTime, true)} - ${formatDate(lastTime, true)}`
+      return `Today: ${formatDate(firstTime, true)} - ${formatDate(lastTime, true)}`
     }
     // Fallback if no data
-    const startTime = new Date(now.getTime() - 8 * 60 * 60 * 1000)
-    return `${formatDate(startTime, true)} - Now`
+    return `Today (loading...)`
+  } else if (currentPeriod.days === 1) {
+    // 1D: yesterday's data - use actual chart data if available
+    if (historyData.value && historyData.value.length > 0) {
+      const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
+      const firstTime = timestamps[0]
+      const lastTime = timestamps[timestamps.length - 1]
+      return `Yesterday: ${formatDate(firstTime, true)} - ${formatDate(lastTime, true)}`
+    }
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    return `Yesterday (${formatDate(yesterday)})`
   } else {
     // Historical: show date range
     const endDate = new Date(now)
@@ -117,13 +128,26 @@ const timeframeDescription = computed(() => {
     const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - currentPeriod.days + 1)
     
-    if (currentPeriod.days === 1) {
-      return `Yesterday (${formatDate(endDate)})`
-    } else if (startDate.getMonth() === endDate.getMonth()) {
-      return `${startDate.getDate()} - ${formatDate(endDate)}`
-    } else {
-      return `${formatDate(startDate)} - ${formatDate(endDate)}`
-    }
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`
+  }
+})
+
+// Computed: Description of what each bar represents (aggregation interval)
+const barIntervalDescription = computed(() => {
+  const hours = selectedPeriod.value
+  const currentPeriod = periods.find(p => p.value === hours)
+  
+  if (currentPeriod?.isLive) {
+    return '5-min averages'
+  } else if (hours === 24) {
+    // 1D uses 15-min aggregated data
+    return '15-min averages'
+  } else if (hours <= 168) {
+    // 3D, 7D use hourly averages
+    return 'Hourly averages'
+  } else {
+    // 30D, 3M, 6M use daily averages
+    return 'Daily averages'
   }
 })
 
@@ -207,15 +231,29 @@ const fetchData = async (silent = false) => {
   try {
     const data = []
     let usedPreAggregated = false
-    const hours = selectedPeriod.value
+    const periodConfig = periods.find(p => p.value === selectedPeriod.value)
+    let hours = selectedPeriod.value
+    
+    // Dynamic hours calculation for Live and 1D
+    if (periodConfig?.isLive) {
+      // Live: data from today (since midnight), with 2h minimum fallback
+      const now = new Date()
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+      const hoursSinceMidnight = (now - midnight) / (1000 * 60 * 60)
+      hours = Math.max(hoursSinceMidnight, 2) // Minimum 2 hours to avoid empty chart
+    } else if (selectedPeriod.value === 24) {
+      // 1D: yesterday's complete data (24h offset by 24h)
+      // We'll fetch 48h and filter to yesterday
+      hours = 48
+    }
 
     // For <= 24H: use 5-minute aggregated data (Live)
     // For 1D-7D (>24h to <=168h): use hourly aggregated data
     // For 30D+ (>168h): use daily aggregated data
-    if (hours <= 24) {
-      // Use 5-minute aggregated API for Live view
+    if (periodConfig?.isLive || selectedPeriod.value === 24) {
+      // Use 5-minute aggregated API for Live view and 1D
       try {
-        const response = await chartApi.getComparisonData(props.symbol, hours)
+        const response = await chartApi.getComparisonData(props.symbol, Math.ceil(hours))
         if (response.data && Object.keys(response.data).length > 0) {
           for (const [dexName, dexData] of Object.entries(response.data)) {
             for (const item of dexData) {
@@ -232,6 +270,23 @@ const fetchData = async (silent = false) => {
         }
       } catch (e) {
         console.log('[Chart] Pre-aggregated API not available, falling back to raw data')
+      }
+      
+      // For 1D: filter to only yesterday's data
+      if (selectedPeriod.value === 24 && data.length > 0) {
+        const now = new Date()
+        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+        const yesterdayMidnight = new Date(todayMidnight.getTime() - 24 * 60 * 60 * 1000)
+        
+        // Keep only data from yesterday (between yesterdayMidnight and todayMidnight)
+        const filteredData = data.filter(d => {
+          const timestamp = new Date(d.timestamp)
+          return timestamp >= yesterdayMidnight && timestamp < todayMidnight
+        })
+        
+        // Replace data with filtered data
+        data.length = 0
+        data.push(...filteredData)
       }
     } else if (hours <= 168) {
       // Use hourly aggregated API for 1D/3D/7D views
@@ -298,6 +353,11 @@ const fetchData = async (silent = false) => {
     // Pre-aggregated data already has correct resolution (5min for live, hourly for 1D-7D, daily for 30D+)
     if (hours <= 24 && data.length > 0 && !usedPreAggregated) {
       finalData = aggregateByInterval(data, hours)
+    }
+    
+    // For 1D view: aggregate 5-min data to 15-min intervals (reduce 288 bars to 96)
+    if (selectedPeriod.value === 24 && finalData.length > 0) {
+      finalData = aggregateByInterval(finalData, 24) // This uses 15-min interval for hours <= 24
     }
     
     historyData.value = finalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
@@ -378,8 +438,11 @@ watch(() => selectedMetric.value, async () => {
 
 onMounted(() => {
   const refreshInterval = setInterval(() => {
-    if (selectedPeriod.value === 24) {
-      fetchData(true)
+    // Auto-refresh only for Live mode (value = 8)
+    const isLive = selectedPeriod.value === 8
+    if (isLive) {
+      fetchData(true)      // Refresh chart data
+      fetchLiveRates()     // Refresh Strategy Card yield data
     }
   }, 10000)
   
@@ -415,9 +478,16 @@ const unifiedChartData = computed(() => {
         const metric = selectedMetric.value
         
         const getVal = (entry) => {
-             let v = entry[metric]
-             if (metric === 'rate') v *= 100
-             return v
+             let v
+             if (metric === 'rate') {
+               v = entry.rate * 100
+             } else if (metric === 'rate24h') {
+               // 24h rate = 8h rate * 3 (3 funding periods per day)
+               v = (entry.rate8h || 0) * 3
+             } else {
+               v = entry[metric]
+             }
+             return v || 0
         }
 
         // Find entries for the two selected DEXes
@@ -539,6 +609,14 @@ const chartOptions = computed(() => ({
       padding: 12,
       displayColors: true,
       callbacks: {
+        title: function(tooltipItems) {
+          // For 1D view, prepend "Yesterday" to make it clear
+          const label = tooltipItems[0]?.label || ''
+          if (selectedPeriod.value === 24) {
+            return `Yesterday ${label}`
+          }
+          return label
+        },
         label: function(context) {
           let label = context.dataset.label || ''
           if (label) {
@@ -546,7 +624,8 @@ const chartOptions = computed(() => ({
           }
           if (context.parsed.y !== null) {
             const decimals = selectedMetric.value === 'rate' ? 6 :
-                            selectedMetric.value === 'rate8h' ? 4 : 2
+                            selectedMetric.value === 'rate8h' ? 4 :
+                            selectedMetric.value === 'rate24h' ? 3 : 2
             label += context.parsed.y.toFixed(decimals) + '%'
           }
           return label
@@ -601,7 +680,10 @@ const chartOptions = computed(() => ({
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-base sm:text-lg font-medium text-neutral-200 tracking-tight">Arbitrage Yield History</h2>
-          <p class="text-[10px] sm:text-xs text-neutral-500 mt-0.5">{{ timeframeDescription }}</p>
+          <div class="flex items-center gap-2 mt-0.5">
+            <p class="text-[10px] sm:text-xs text-neutral-500">{{ timeframeDescription }}</p>
+            <span class="text-[9px] sm:text-[10px] text-neutral-600 bg-white/5 px-1.5 py-0.5 rounded">{{ barIntervalDescription }}</span>
+          </div>
         </div>
       </div>
 

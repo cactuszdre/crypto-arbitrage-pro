@@ -432,7 +432,7 @@ onMounted(async () => {
   document.addEventListener('click', closeDropdowns)
   document.addEventListener('touchend', closeDropdowns)
   
-  // Use nextTick to ensure parent scroll container is ready
+  // Set up scroll listener on the main content container
   await nextTick()
   const scrollContainer = document.getElementById('main-scroll-container')
   if (scrollContainer) {
@@ -465,7 +465,7 @@ onUnmounted(() => {
             :class="[
               'flex items-center gap-3 pl-2 pr-4 py-2 rounded-2xl transition-all duration-300 ease-out group hover:bg-white/10 hover:border-white/20',
               isScrolled 
-                ? 'bg-[#0A0A0A]/70 backdrop-blur-xl border border-white/10 shadow-xl' 
+                ? 'bg-[#0A0A0A]/80 backdrop-blur-xl border border-white/10 shadow-xl' 
                 : 'bg-transparent border border-transparent'
             ]"
           >
