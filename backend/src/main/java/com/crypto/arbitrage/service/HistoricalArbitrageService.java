@@ -1,9 +1,12 @@
 package com.crypto.arbitrage.service;
 
+import com.crypto.arbitrage.dto.DailyRatesDTO;
 import com.crypto.arbitrage.dto.DexRateDTO;
 import com.crypto.arbitrage.dto.HistoricalArbitrageDTO;
 import com.crypto.arbitrage.dto.HistoricalArbitrageResponse;
+import com.crypto.arbitrage.dto.HistoricalGranularRatesResponse;
 import com.crypto.arbitrage.dto.HistoricalRatesResponse;
+import com.crypto.arbitrage.dto.SymbolDailyRatesDTO;
 import com.crypto.arbitrage.dto.SymbolRatesDTO;
 import com.crypto.arbitrage.model.FundingRateDaily;
 import com.crypto.arbitrage.model.Ticker;
@@ -310,6 +313,109 @@ public class HistoricalArbitrageService {
         log.info("Returning {} symbols with historical rates", symbols.size());
         
         return HistoricalRatesResponse.builder()
+                .symbols(symbols)
+                .actualStartDate(actualStartDate)
+                .actualEndDate(actualEndDate)
+                .dataPointCount(dataPointCount)
+                .periodLabel(periodLabel)
+                .requestedDays(days)
+                .build();
+    }
+
+    /**
+     * Get granular historical rates grouped by symbol and date.
+     * Returns daily data points instead of averages, enabling the frontend
+     * to calculate spreads point-by-point for accurate historical returns.
+     * This makes the Arbitrage page calculations consistent with Asset Details.
+     *
+     * @param days Number of days to look back
+     * @return Response containing symbols with their daily rate history
+     */
+    @Cacheable(value = "historicalGranularRates", key = "#days")
+    public HistoricalGranularRatesResponse getGranularHistoricalRates(int days) {
+        LocalDate requestedStartDate = LocalDate.now().minusDays(days);
+        
+        log.info("Cache MISS - Fetching granular historical rates for {} days", days);
+        
+        // Get actual date range from database
+        LocalDate actualStartDate = fundingRateDailyRepository.findMinDateSince(requestedStartDate);
+        LocalDate actualEndDate = fundingRateDailyRepository.findMaxDate();
+        int dataPointCount = fundingRateDailyRepository.countDistinctDatesSince(requestedStartDate);
+        
+        // Handle case where no data exists
+        if (actualStartDate == null || actualEndDate == null || dataPointCount == 0) {
+            log.info("No historical data found for period");
+            return HistoricalGranularRatesResponse.builder()
+                    .symbols(List.of())
+                    .actualStartDate(null)
+                    .actualEndDate(null)
+                    .dataPointCount(0)
+                    .periodLabel("No data available")
+                    .requestedDays(days)
+                    .build();
+        }
+        
+        // Build human-readable period label
+        String periodLabel = buildPeriodLabel(actualStartDate, actualEndDate, dataPointCount);
+        
+        // Get all daily data for the period
+        List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(requestedStartDate);
+        
+        // Group by ticker (symbol)
+        Map<Integer, List<FundingRateDaily>> dataByTicker = allDailyData.stream()
+                .collect(Collectors.groupingBy(d -> d.getTicker().getId()));
+        
+        List<SymbolDailyRatesDTO> symbols = new ArrayList<>();
+        
+        for (Map.Entry<Integer, List<FundingRateDaily>> entry : dataByTicker.entrySet()) {
+            List<FundingRateDaily> tickerData = entry.getValue();
+            
+            if (tickerData.isEmpty()) continue;
+            
+            Ticker ticker = tickerData.get(0).getTicker();
+            String symbol = ticker.getNormalizedSymbol();
+            
+            // Group by date
+            Map<LocalDate, List<FundingRateDaily>> dataByDate = tickerData.stream()
+                    .collect(Collectors.groupingBy(FundingRateDaily::getDate));
+            
+            // Build daily rates list
+            List<DailyRatesDTO> dailyRates = new ArrayList<>();
+            
+            for (Map.Entry<LocalDate, List<FundingRateDaily>> dateEntry : dataByDate.entrySet()) {
+                LocalDate date = dateEntry.getKey();
+                List<FundingRateDaily> dateData = dateEntry.getValue();
+                
+                // Build DEX rates for this date
+                List<DexRateDTO> dexRates = dateData.stream()
+                        .map(d -> DexRateDTO.builder()
+                                .dex(d.getDex().getName())
+                                .rateAnnual(d.getAvgRateAnnual())
+                                .build())
+                        .collect(Collectors.toList());
+                
+                dailyRates.add(DailyRatesDTO.builder()
+                        .date(date)
+                        .rates(dexRates)
+                        .build());
+            }
+            
+            // Sort daily rates by date ascending
+            dailyRates.sort((a, b) -> a.getDate().compareTo(b.getDate()));
+            
+            symbols.add(SymbolDailyRatesDTO.builder()
+                    .symbol(symbol)
+                    .dailyRates(dailyRates)
+                    .build());
+        }
+        
+        // Sort by symbol name
+        symbols.sort((a, b) -> a.getSymbol().compareToIgnoreCase(b.getSymbol()));
+        
+        log.info("Returning {} symbols with granular daily rates ({} total data points)", 
+                symbols.size(), dataPointCount);
+        
+        return HistoricalGranularRatesResponse.builder()
                 .symbols(symbols)
                 .actualStartDate(actualStartDate)
                 .actualEndDate(actualEndDate)

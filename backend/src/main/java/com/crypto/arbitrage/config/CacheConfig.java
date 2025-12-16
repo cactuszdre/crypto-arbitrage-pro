@@ -69,14 +69,24 @@ public class CacheConfig {
                 .recordStats()
                 .build());
         
+        // Granular historical rates cache for point-by-point spread calculation - 24h TTL
+        CaffeineCache historicalGranularCache = new CaffeineCache("historicalGranularRates",
+            Caffeine.newBuilder()
+                .expireAfterWrite(24, TimeUnit.HOURS)
+                .maximumSize(20)  // Cache different day ranges (1, 7, 30, 90, 180, 365)
+                .recordStats()
+                .build());
+        
         cacheManager.setCaches(Arrays.asList(
             arbitrageCache, 
             fundingRatesCache, 
             allRatesCache,
             historicalCache,
-            historicalRatesCache
+            historicalRatesCache,
+            historicalGranularCache
         ));
         
         return cacheManager;
     }
 }
+

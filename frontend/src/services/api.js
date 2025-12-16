@@ -60,6 +60,8 @@ export const arbitrageApi = {
     // New endpoints for raw rates (for frontend-side arbitrage calculation)
     getAllRates: () => api.get('/arbitrage/rates/all'),
     getHistoricalRates: (days) => api.get('/arbitrage/rates/historical', { params: { days } }),
+    // Granular historical rates (daily data points for point-by-point spread calculation)
+    getGranularHistoricalRates: (days) => api.get('/arbitrage/rates/historical/granular', { params: { days } }),
     calculate: (dex1, dex2) => api.get(`/arbitrage/calculate?dex1=${dex1}&dex2=${dex2}`)
 };
 

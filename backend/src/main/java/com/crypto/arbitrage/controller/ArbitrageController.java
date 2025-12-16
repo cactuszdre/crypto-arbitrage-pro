@@ -2,6 +2,7 @@ package com.crypto.arbitrage.controller;
 
 import com.crypto.arbitrage.dto.ArbitrageOpportunityDTO;
 import com.crypto.arbitrage.dto.HistoricalArbitrageResponse;
+import com.crypto.arbitrage.dto.HistoricalGranularRatesResponse;
 import com.crypto.arbitrage.dto.HistoricalRatesResponse;
 import com.crypto.arbitrage.dto.SymbolRatesDTO;
 import com.crypto.arbitrage.service.ArbitrageService;
@@ -47,6 +48,18 @@ public class ArbitrageController {
     public HistoricalRatesResponse getHistoricalRates(
             @RequestParam(defaultValue = "7") int days) {
         return historicalArbitrageService.getAllHistoricalRatesBySymbol(days);
+    }
+
+    /**
+     * Get granular historical rates grouped by symbol and date.
+     * Returns daily data points instead of averages, enabling the frontend
+     * to calculate spreads point-by-point for accurate historical returns.
+     * This makes the Arbitrage page calculations consistent with Asset Details.
+     */
+    @GetMapping("/rates/historical/granular")
+    public HistoricalGranularRatesResponse getGranularHistoricalRates(
+            @RequestParam(defaultValue = "7") int days) {
+        return historicalArbitrageService.getGranularHistoricalRates(days);
     }
 
     @GetMapping("/diagnose")

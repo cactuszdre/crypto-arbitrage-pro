@@ -29,7 +29,8 @@ const { state: authState } = useAuth()
 const isPro = computed(() => authState.user?.plan === 'PRO' || authState.user?.role === 'ADMIN')
 
 const opportunities = ref([])
-const rawRates = ref([]) // Raw rates by symbol for dynamic recalculation
+const rawRates = ref([]) // Raw rates by symbol for dynamic recalculation (live data)
+const granularRates = ref([]) // Granular daily rates for point-by-point calculation (historical data)
 const currentPage = ref(1)
 const itemsPerPage = 8
 const failedImages = ref(new Set())
@@ -271,13 +272,124 @@ const calculateOpportunitiesFromRates = (rates, selectedDexList) => {
   }).filter(Boolean)
 }
 
+/**
+ * Calculate arbitrage opportunities from granular daily data.
+ * This calculates the spread for EACH DAY and then averages,
+ * making it consistent with the Asset Details page calculation.
+ * 
+ * The key difference from calculateOpportunitiesFromRates:
+ * - Old: avg(shortRates) - avg(longRates) → spread
+ * - New: avg(shortRate[day] - longRate[day]) for each day → spread
+ */
+const calculateOpportunitiesFromGranularData = (symbols, selectedDexList) => {
+  if (!symbols || symbols.length === 0 || selectedDexList.length < 2) return []
+  
+  return symbols.map(symbolData => {
+    const symbol = symbolData.symbol
+    const dailyRates = symbolData.dailyRates || []
+    
+    if (dailyRates.length === 0) return null
+    
+    // For each day, calculate best long/short among selected DEXs and their spread
+    const dailySpreads = []
+    let consistentLongDex = null
+    let consistentShortDex = null
+    const dexPairCounts = {} // Track which DEX pairs appear most frequently
+    
+    for (const day of dailyRates) {
+      // Filter to only selected DEXes
+      const filteredRates = day.rates.filter(r => selectedDexList.includes(r.dex))
+      
+      if (filteredRates.length < 2) continue
+      
+      // Find best long (lowest rate) and best short (highest rate) for this day
+      const bestLong = filteredRates.reduce((a, b) => 
+        parseFloat(a.rateAnnual) < parseFloat(b.rateAnnual) ? a : b
+      )
+      const bestShort = filteredRates.reduce((a, b) => 
+        parseFloat(a.rateAnnual) > parseFloat(b.rateAnnual) ? a : b
+      )
+      
+      // Skip if same DEX (no arbitrage possible)
+      if (bestLong.dex === bestShort.dex) continue
+      
+      const longRate = parseFloat(bestLong.rateAnnual)
+      const shortRate = parseFloat(bestShort.rateAnnual)
+      const spread = shortRate - longRate
+      
+      // Only positive spreads
+      if (spread > 0) {
+        dailySpreads.push({
+          spread,
+          longDex: bestLong.dex,
+          shortDex: bestShort.dex,
+          longRate,
+          shortRate
+        })
+        
+        // Track DEX pair frequency
+        const pairKey = `${bestLong.dex}|${bestShort.dex}`
+        dexPairCounts[pairKey] = (dexPairCounts[pairKey] || 0) + 1
+      }
+    }
+    
+    // Need at least one valid day
+    if (dailySpreads.length === 0) return null
+    
+    // Calculate average spread across all valid days
+    const avgSpread = dailySpreads.reduce((sum, d) => sum + d.spread, 0) / dailySpreads.length
+    
+    // Find the most frequent DEX pair to display as the "route"
+    let maxCount = 0
+    let bestPairKey = null
+    for (const [pairKey, count] of Object.entries(dexPairCounts)) {
+      if (count > maxCount) {
+        maxCount = count
+        bestPairKey = pairKey
+      }
+    }
+    
+    // Parse the best pair
+    const [longDex, shortDex] = bestPairKey ? bestPairKey.split('|') : [null, null]
+    
+    // Calculate average rates for the most frequent pair
+    const pairDays = dailySpreads.filter(d => d.longDex === longDex && d.shortDex === shortDex)
+    const avgLongRate = pairDays.length > 0 
+      ? pairDays.reduce((sum, d) => sum + d.longRate, 0) / pairDays.length
+      : dailySpreads.reduce((sum, d) => sum + d.longRate, 0) / dailySpreads.length
+    const avgShortRate = pairDays.length > 0 
+      ? pairDays.reduce((sum, d) => sum + d.shortRate, 0) / pairDays.length
+      : dailySpreads.reduce((sum, d) => sum + d.shortRate, 0) / dailySpreads.length
+    
+    return {
+      symbol: symbol,
+      longDex: longDex,
+      shortDex: shortDex,
+      longRate: avgLongRate,
+      shortRate: avgShortRate,
+      spread: avgSpread,
+      projectedDailyReturn: avgSpread / 365,
+      dataPointCount: dailySpreads.length // How many days of valid data
+    }
+  }).filter(Boolean)
+}
+
 // Computed opportunities - recalculates when DEX selection or raw rates change
+// Uses granular data for historical periods (point-by-point calculation)
+// Uses raw rates for live data (simple average calculation)
 const computedOpportunities = computed(() => {
-  if (rawRates.value.length === 0) {
-    // Fall back to pre-calculated opportunities if no raw rates
-    return opportunities.value
+  // For historical periods, use granular data if available
+  if (granularRates.value.length > 0) {
+    return calculateOpportunitiesFromGranularData(granularRates.value, selectedDexes.value)
   }
-  return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value)
+  
+  // For live data, use raw rates
+  if (rawRates.value.length > 0) {
+    return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value)
+  }
+  
+  // Fall back to pre-calculated opportunities if nothing else
+  return opportunities.value
 })
 
 // Filter opportunities based on search query
@@ -416,14 +528,15 @@ const formatRate = (rate) => {
   return { value: formatted, class: 'text-neutral-400' }
 }
 
-// Fetch opportunities - now uses raw rates for dynamic recalculation
+// Fetch opportunities - now uses raw rates for dynamic recalculation (Live mode)
 const fetchOpportunities = async (silent = false) => {
   if (!silent) isLoadingOpportunities.value = true
   try {
     // Fetch raw rates for frontend-side calculation
     const response = await arbitrageApi.getAllRates()
     rawRates.value = response.data
-    // Clear pre-calculated opportunities since we're using rawRates now
+    // Clear historical data and pre-calculated opportunities
+    granularRates.value = []
     opportunities.value = []
   } catch (error) {
     console.error('Failed to fetch raw rates:', error)
@@ -432,25 +545,28 @@ const fetchOpportunities = async (silent = false) => {
       const fallbackResponse = await arbitrageApi.getOpportunities()
       opportunities.value = fallbackResponse.data
       rawRates.value = []
+      granularRates.value = []
     } catch (fallbackError) {
       console.error('Failed to fetch opportunities:', fallbackError)
       opportunities.value = []
       rawRates.value = []
+      granularRates.value = []
     }
   } finally {
     isLoadingOpportunities.value = false
   }
 }
 
-// Fetch and cache historical data for a given period
+// Fetch and cache historical data for a given period (uses granular endpoint)
 const fetchAndCacheHistoricalData = async (days) => {
   try {
-    const response = await arbitrageApi.getHistoricalRates(days)
+    // Use the granular endpoint that returns daily data points
+    const response = await arbitrageApi.getGranularHistoricalRates(days)
     const data = response.data
     
-    // Store in cache
+    // Store in cache - now stores granular daily rates
     historicalDataCache.set(days, {
-      rawRates: data.symbols || [],
+      granularRates: data.symbols || [],
       meta: {
         periodLabel: data.periodLabel,
         actualStartDate: data.actualStartDate,
@@ -461,7 +577,7 @@ const fetchAndCacheHistoricalData = async (days) => {
     })
     return true
   } catch (error) {
-    console.error(`Failed to fetch historical data for ${days} days:`, error)
+    console.error(`Failed to fetch granular historical data for ${days} days:`, error)
     return false
   }
 }
@@ -482,7 +598,9 @@ const preloadAllHistoricalData = async () => {
 const applyHistoricalDataFromCache = (days) => {
   const cached = historicalDataCache.get(days)
   if (cached) {
-    rawRates.value = cached.rawRates
+    // Clear live data and set granular historical data
+    rawRates.value = []
+    granularRates.value = cached.granularRates
     opportunities.value = []
     historicalMeta.value = cached.meta
     return true
@@ -490,7 +608,7 @@ const applyHistoricalDataFromCache = (days) => {
   return false
 }
 
-// Fetch historical opportunities - now uses cache first
+// Fetch historical opportunities - now uses cache first with granular data
 const fetchHistoricalOpportunities = async (days) => {
   // Try cache first (instant)
   if (applyHistoricalDataFromCache(days)) {
@@ -505,12 +623,13 @@ const fetchHistoricalOpportunities = async (days) => {
   if (success) {
     applyHistoricalDataFromCache(days)
   } else {
-    // Fallback to old endpoint
+    // Fallback to old endpoint (less accurate, uses averages)
     try {
       const fallbackResponse = await arbitrageApi.getHistoricalOpportunities(days)
       const fallbackData = fallbackResponse.data
       opportunities.value = fallbackData.opportunities || []
       rawRates.value = []
+      granularRates.value = []
       historicalMeta.value = {
         periodLabel: fallbackData.periodLabel,
         actualStartDate: fallbackData.actualStartDate,
@@ -522,6 +641,7 @@ const fetchHistoricalOpportunities = async (days) => {
       console.error('Failed to fetch historical opportunities:', fallbackError)
       opportunities.value = []
       rawRates.value = []
+      granularRates.value = []
       historicalMeta.value = null
     }
   }
