@@ -252,8 +252,11 @@ onUnmounted(() => {
       <div class="clock-section">
         <ClientOnly>
           <span class="iconify clock-icon" data-icon="lucide:clock" data-width="12"></span>
+          <span class="clock-time">{{ formatTimeUTC }}</span>
+          <template #fallback>
+            <span class="clock-time">--:--:-- UTC</span>
+          </template>
         </ClientOnly>
-        <span class="clock-time">{{ formatTimeUTC }}</span>
       </div>
     </div>
 
