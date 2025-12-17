@@ -1,14 +1,20 @@
 /**
  * GET /api/funding-rates
  * Fetches all funding rates
+ * Cached for 30 seconds
  */
-export default defineEventHandler(async () => {
+export default defineCachedEventHandler(async (): Promise<unknown[]> => {
     const backendUrl = getBackendUrl()
 
     try {
         return await $fetch(`${backendUrl}/api/funding-rates`)
-    } catch (error: any) {
-        console.error('[API] funding-rates error:', error.message)
+    } catch (error: unknown) {
+        console.error('[API] funding-rates error:', error)
         return []
     }
+}, {
+    maxAge: 30,
+    name: 'funding-rates',
+    getKey: () => 'all'
 })
+

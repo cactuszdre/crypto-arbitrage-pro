@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
     const backendUrl = getBackendUrl()
     const query = getQuery(event)
     const symbol = query.symbol || 'BTC-USD-PERP'
-    const hours = query.hours || 168
+    const hours = Math.round(Number(query.hours) || 168)
 
     try {
         return await $fetch(`${backendUrl}/api/charts/funding-rate/${symbol}/compare-hourly?hours=${hours}`)

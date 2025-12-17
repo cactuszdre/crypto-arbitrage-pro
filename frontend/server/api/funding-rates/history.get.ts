@@ -10,7 +10,7 @@ export default defineCachedEventHandler(async (event) => {
     const params = new URLSearchParams()
     if (query.dex) params.append('dex', String(query.dex))
     if (query.symbol) params.append('symbol', String(query.symbol))
-    if (query.hours) params.append('hours', String(query.hours))
+    if (query.hours) params.append('hours', String(Math.round(Number(query.hours))))
 
     try {
         return await $fetch(`${backendUrl}/api/funding-rates/history?${params.toString()}`)

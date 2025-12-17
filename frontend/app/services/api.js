@@ -45,15 +45,15 @@ export const userApi = {
 // Chart API
 export const chartApi = {
     getFundingRateHistory: (symbol, dex, days = 7) =>
-        apiFetch(`/charts/funding-rates?symbol=${symbol}&dex=${dex}&days=${days}`),
+        apiFetch(`/charts/funding-rates?symbol=${symbol}&dex=${dex}&days=${Math.round(days)}`),
     getSpreadHistory: (symbol, days = 7) =>
-        apiFetch(`/charts/spread?symbol=${symbol}&days=${days}`),
+        apiFetch(`/charts/spread?symbol=${symbol}&days=${Math.round(days)}`),
     getComparisonData: (symbol, hours = 24) =>
-        apiFetch(`/charts/comparison?symbol=${symbol}&hours=${hours}`),
+        apiFetch(`/charts/comparison?symbol=${symbol}&hours=${Math.round(hours)}`),
     getHourlyComparisonData: (symbol, hours = 168) =>
-        apiFetch(`/charts/comparison/hourly?symbol=${symbol}&hours=${hours}`),
+        apiFetch(`/charts/comparison/hourly?symbol=${symbol}&hours=${Math.round(hours)}`),
     getDailyComparisonData: (symbol, days = 30) =>
-        apiFetch(`/charts/comparison/daily?symbol=${symbol}&days=${days}`),
+        apiFetch(`/charts/comparison/daily?symbol=${symbol}&days=${Math.round(days)}`),
 }
 
 // Funding Rate API
@@ -61,7 +61,12 @@ export const fundingRateApi = {
     getAll: () => apiFetch('/funding-rates'),
     getAllSymbols: () => apiFetch('/funding-rates/symbols'),
     getHistory: (params) => {
-        const query = new URLSearchParams(params).toString()
+        // Ensure hours is an integer
+        const sanitizedParams = { ...params }
+        if (sanitizedParams.hours) {
+            sanitizedParams.hours = Math.round(Number(sanitizedParams.hours))
+        }
+        const query = new URLSearchParams(sanitizedParams).toString()
         return apiFetch(`/funding-rates/history?${query}`)
     },
 }
