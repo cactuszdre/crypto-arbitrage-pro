@@ -12,9 +12,9 @@ definePageMeta({
 
 // SEO with dynamic canonical
 useSeoMeta({
-  title: 'CactusFund - Crypto Funding Rate Arbitrage Scanner',
+  title: 'CactusFund',
   description: 'Real-time funding rate scanner across top DEXs. Find arbitrage opportunities, compare rates, and maximize crypto trading profits.',
-  ogTitle: 'CactusFund - Crypto Funding Rate Arbitrage Scanner',
+  ogTitle: 'CactusFund',
   ogDescription: 'Real-time funding rate scanner across top DEXs. Find arbitrage opportunities and maximize profits.',
   ogUrl: 'https://cactusfund.app/',
 })
