@@ -380,6 +380,24 @@ const getDexIconUrl = (dexName) => {
   return dexDataMap.value[dexName]?.iconUrl || null
 }
 
+// Get DEX trade URL with the selected symbol
+const getDexTradeUrl = (dexName) => {
+  const dex = dexDataMap.value[dexName]
+  if (!dex || !dex.tradeUrlPattern) return null
+  
+  // Get the base symbol (e.g., "btc" from "BTC-USD-PERP")
+  const baseSymbol = getBaseSymbol(selectedSymbol.value)
+  
+  // Replace all placeholders in the URL pattern:
+  // {symbol} = full symbol (e.g., BTC-USD-PERP)
+  // {base} = lowercase base (e.g., btc)
+  // {BASE} = uppercase base (e.g., BTC)
+  return dex.tradeUrlPattern
+    .replace('{symbol}', selectedSymbol.value)
+    .replace('{base}', baseSymbol.toLowerCase())
+    .replace('{BASE}', baseSymbol.toUpperCase())
+}
+
 // Refresh data using Nuxt's refresh functions
 const refreshData = async () => {
   error.value = null
@@ -619,9 +637,26 @@ onUnmounted(() => {
                       <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
                       Long Position
                     </label>
-                    <span class="font-semibold text-lg text-white truncate block">{{ selectedLongDex || 'Select Exchange' }}</span>
+                    <span class="font-semibold text-lg text-white truncate flex items-center gap-1.5">
+                      {{ selectedLongDex || 'Select Exchange' }}
+                      <!-- External Link Icon -->
+                      <a 
+                        v-if="getDexTradeUrl(selectedLongDex)"
+                        :href="getDexTradeUrl(selectedLongDex)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="inline-flex items-center hover:opacity-80 transition-opacity"
+                        title="Open on exchange"
+                      >
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                      </a>
+                    </span>
                   </div>
-                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform flex-shrink-0', showLongDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  <svg :class="['w-5 h-5 text-neutral-500 transition-transform flex-shrink-0', showLongDexDropdown ? 'rotate-180' : '']"
+ fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </div>
                 
                 <!-- Dropdown -->
@@ -677,7 +712,23 @@ onUnmounted(() => {
                       <span class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></span>
                       Short Position
                     </label>
-                    <span class="font-semibold text-lg text-white truncate block">{{ selectedShortDex || 'Select Exchange' }}</span>
+                    <span class="font-semibold text-lg text-white truncate flex items-center gap-1.5">
+                      {{ selectedShortDex || 'Select Exchange' }}
+                      <!-- External Link Icon -->
+                      <a 
+                        v-if="getDexTradeUrl(selectedShortDex)"
+                        :href="getDexTradeUrl(selectedShortDex)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="inline-flex items-center hover:opacity-80 transition-opacity"
+                        title="Open on exchange"
+                      >
+                        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                      </a>
+                    </span>
                   </div>
                   <svg :class="['w-5 h-5 text-neutral-500 transition-transform flex-shrink-0', showShortDexDropdown ? 'rotate-180' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </div>
