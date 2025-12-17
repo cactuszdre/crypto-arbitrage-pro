@@ -79,7 +79,15 @@ export default defineNuxtConfig({
         { property: 'twitter:image', content: 'https://cactusfund.app/logo_cactus_without-bg.png' },
       ],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/logo_cactus_without-bg.png' },
+        // Favicon principal
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' },
+        // Apple Touch Icon (pour iOS)
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+        // Web App Manifest (pour Android/PWA)
+        { rel: 'manifest', href: '/site.webmanifest' },
+        // Canonical URL
         { rel: 'canonical', href: 'https://cactusfund.app/' },
       ],
       script: [
