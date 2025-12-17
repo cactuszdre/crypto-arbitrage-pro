@@ -87,8 +87,7 @@ export default defineNuxtConfig({
         { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
         // Web App Manifest (pour Android/PWA)
         { rel: 'manifest', href: '/site.webmanifest' },
-        // Canonical URL
-        { rel: 'canonical', href: 'https://cactusfund.app/' },
+        // Note: Canonical URLs are now handled dynamically per page via useSeo composable
       ],
       script: [
         { src: 'https://code.iconify.design/3/3.1.0/iconify.min.js', defer: true },

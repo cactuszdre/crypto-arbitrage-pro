@@ -9,7 +9,14 @@
 // SEO
 useSeoMeta({
   title: 'Opportunities - CactusFund',
-  description: 'Find the best funding rate arbitrage opportunities across DEXs. Live data from Paradex, Hyperliquid, and Lighter.',
+  description: 'Discover live funding rate arbitrage opportunities. Compare rates across top DEXs, sorted by daily return. Updated every 10 seconds.',
+  ogTitle: 'Funding Rate Arbitrage Opportunities - CactusFund',
+  ogDescription: 'Live arbitrage opportunities across top DEXs. Compare rates. Updated every 10 seconds.',
+  ogUrl: 'https://cactusfund.app/opportunites',
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/opportunites' }]
 })
 
 // ===== SSR DATA FETCHING =====

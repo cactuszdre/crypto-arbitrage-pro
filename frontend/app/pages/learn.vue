@@ -3,13 +3,18 @@
 
 // ===== ENHANCED SEO =====
 useSeoMeta({
-  title: 'Learn | CactusFund',
+  title: 'Learn - CactusFund',
   description: 'Master funding rate arbitrage with our complete guide. Learn how to earn 0.1-1% daily returns with low-risk crypto strategies on top DEXs.',
-  ogTitle: 'Learn | CactusFund',
+  ogTitle: 'Learn - CactusFund',
   ogDescription: 'The ultimate guide to funding rate arbitrage. Discover how to earn passive income from crypto with delta-neutral strategies.',
+  ogUrl: 'https://cactusfund.app/learn',
   ogType: 'article',
   twitterCard: 'summary_large_image',
   robots: 'index, follow',
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/learn' }]
 })
 
 // Structured data for FAQ (SEO)

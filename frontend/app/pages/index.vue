@@ -10,9 +10,16 @@ definePageMeta({
   layout: 'landing'
 })
 
-// SEO
+// SEO with dynamic canonical
 useSeoMeta({
-  title: 'CactusFund',
-  description: 'Track live funding rates across Paradex, Hyperliquid, and Lighter DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.',
+  title: 'CactusFund - Crypto Funding Rate Arbitrage Scanner',
+  description: 'Real-time funding rate scanner across top DEXs. Find arbitrage opportunities, compare rates, and maximize crypto trading profits.',
+  ogTitle: 'CactusFund - Crypto Funding Rate Arbitrage Scanner',
+  ogDescription: 'Real-time funding rate scanner across top DEXs. Find arbitrage opportunities and maximize profits.',
+  ogUrl: 'https://cactusfund.app/',
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/' }]
 })
 </script>
