@@ -61,21 +61,21 @@ export default defineNuxtConfig({
       viewport: 'width=device-width, initial-scale=1',
       title: 'CactusFund',
       meta: [
-        { name: 'description', content: 'Track live funding rates across Paradex, Hyperliquid, and Lighter DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.' },
-        { name: 'keywords', content: 'crypto, funding rates, arbitrage, cryptocurrency, trading, defi, perpetuals, perps, hyperliquid, paradex, lighter' },
+        { name: 'description', content: 'Track live funding rates across top crypto DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.' },
+        { name: 'keywords', content: 'crypto, funding rates, arbitrage, cryptocurrency, trading, defi, perpetuals, perps, decentralized exchanges' },
         { name: 'author', content: 'CactusFund' },
         { name: 'theme-color', content: '#10b981' },
         // Open Graph
         { property: 'og:type', content: 'website' },
         { property: 'og:url', content: 'https://cactusfund.app/' },
         { property: 'og:title', content: 'CactusFund - Real-Time Crypto Funding Rates & Arbitrage Scanner' },
-        { property: 'og:description', content: 'Track live funding rates across Paradex, Hyperliquid, and Lighter DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.' },
+        { property: 'og:description', content: 'Track live funding rates across top crypto DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.' },
         { property: 'og:image', content: 'https://cactusfund.app/logo_cactus_without-bg.png' },
         // Twitter
         { property: 'twitter:card', content: 'summary' },
         { property: 'twitter:url', content: 'https://cactusfund.app/' },
         { property: 'twitter:title', content: 'CactusFund - Real-Time Crypto Funding Rates & Arbitrage Scanner' },
-        { property: 'twitter:description', content: 'Track live funding rates across Paradex, Hyperliquid, and Lighter DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.' },
+        { property: 'twitter:description', content: 'Track live funding rates across top crypto DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.' },
         { property: 'twitter:image', content: 'https://cactusfund.app/logo_cactus_without-bg.png' },
       ],
       link: [
