@@ -164,29 +164,29 @@ const activeCategory = ref('overview')
 const howItWorksSteps = [
   {
     step: 1,
-    title: 'Scan Multiple DEXs',
-    description: 'CactusFund monitors funding rates on top decentralized exchanges in real-time.',
+    title: 'We Scan For You',
+    description: 'We check prices on multiple exchanges every 10 seconds to find opportunities. You just sit back.',
     icon: 'lucide:scan',
     color: 'emerald'
   },
   {
     step: 2,
-    title: 'Identify Spread',
-    description: 'Find pairs where you receive funding on one exchange and pay less on another.',
+    title: 'Spot The Difference',
+    description: 'Different exchanges pay different rates. We find where you can earn more than you pay.',
     icon: 'lucide:target',
     color: 'blue'
   },
   {
     step: 3,
-    title: 'Open Positions',
-    description: 'Go LONG on the lower rate exchange and SHORT on the higher rate exchange.',
+    title: 'Balance Your Bets',
+    description: 'Open two opposite trades (one "buy", one "sell") on different exchanges. They cancel each other out.',
     icon: 'lucide:git-branch',
     color: 'purple'
   },
   {
     step: 4,
-    title: 'Collect Profits',
-    description: 'Your positions cancel price risk while you pocket the funding rate difference.',
+    title: 'Earn While You Sleep',
+    description: 'Price goes up or down? Doesn\'t matter. You earn the rate difference every 8 hours.',
     icon: 'lucide:wallet',
     color: 'orange'
   }
