@@ -576,10 +576,20 @@ const totalQuestions = computed(() => {
           
           <div class="grid sm:grid-cols-3 gap-4">
             <!-- Long Position -->
-            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+            <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 relative group/long">
               <div class="flex items-center gap-2 mb-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span class="text-xs font-medium text-emerald-400 uppercase tracking-wider">Long Position</span>
+                <!-- Tooltip trigger -->
+                <div class="relative ml-auto">
+                  <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-neutral-400 cursor-help hover:bg-white/20 hover:text-white transition-all">?</span>
+                  <!-- Tooltip -->
+                  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-300 opacity-0 invisible group-hover/long:opacity-100 group-hover/long:visible transition-all duration-200 z-20 shadow-xl">
+                    <span class="text-emerald-400 font-medium">Green label</span> = Long position type.<br/>
+                    <span class="text-red-400 font-medium">Red card</span> = You pay funding here.
+                    <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-neutral-900"></div>
+                  </div>
+                </div>
               </div>
               <p class="text-white font-semibold">$10,000 on Exchange A</p>
               <p class="text-sm text-neutral-400">Pay -0.02% = <span class="text-red-400">-$2</span></p>
@@ -593,10 +603,20 @@ const totalQuestions = computed(() => {
             </div>
 
             <!-- Short Position -->
-            <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+            <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 relative group/short">
               <div class="flex items-center gap-2 mb-2">
                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                 <span class="text-xs font-medium text-red-400 uppercase tracking-wider">Short Position</span>
+                <!-- Tooltip trigger -->
+                <div class="relative ml-auto">
+                  <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-neutral-400 cursor-help hover:bg-white/20 hover:text-white transition-all">?</span>
+                  <!-- Tooltip -->
+                  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 rounded-lg bg-neutral-900 border border-white/10 text-xs text-neutral-300 opacity-0 invisible group-hover/short:opacity-100 group-hover/short:visible transition-all duration-200 z-20 shadow-xl">
+                    <span class="text-red-400 font-medium">Red label</span> = Short position type.<br/>
+                    <span class="text-emerald-400 font-medium">Green card</span> = You receive funding here.
+                    <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-neutral-900"></div>
+                  </div>
+                </div>
               </div>
               <p class="text-white font-semibold">$10,000 on Exchange B</p>
               <p class="text-sm text-neutral-400">Receive +0.10% = <span class="text-emerald-400">+$10</span></p>
