@@ -26,10 +26,10 @@ export const dexApi = {
 
 // Arbitrage API
 export const arbitrageApi = {
-    getOpportunities: () => apiFetch('/arbitrage/opportunities'),
-    getAllRates: () => apiFetch('/arbitrage/rates'),
-    getHistoricalOpportunities: (days) => apiFetch(`/arbitrage/history?days=${days}`),
-    getHistoricalRates: (days) => apiFetch(`/arbitrage/rates-history?days=${days}`),
+    getOpportunities: () => apiFetch('/opportunites/opportunities'),
+    getAllRates: () => apiFetch('/opportunites/rates'),
+    getHistoricalOpportunities: (days) => apiFetch(`/opportunites/history?days=${days}`),
+    getHistoricalRates: (days) => apiFetch(`/opportunites/rates-history?days=${days}`),
 }
 
 // User API

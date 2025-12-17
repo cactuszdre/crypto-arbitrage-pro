@@ -12,7 +12,7 @@ definePageMeta({
 
 // SEO
 useSeoMeta({
-  title: 'CactusFund - Real-Time Crypto Funding Rates & Arbitrage Scanner',
+  title: 'CactusFund',
   description: 'Track live funding rates across Paradex, Hyperliquid, and Lighter DEXs. Discover arbitrage opportunities and maximize your crypto trading profits.',
 })
 </script>

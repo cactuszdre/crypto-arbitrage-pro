@@ -1,5 +1,5 @@
 /**
- * GET /api/arbitrage/rates
+ * GET /api/opportunites/rates
  * Fetches all funding rates for arbitrage calculation
  * Cached for 30 seconds to reduce latency
  */

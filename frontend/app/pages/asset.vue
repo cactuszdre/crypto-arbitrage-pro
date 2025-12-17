@@ -2,8 +2,14 @@
 // Nuxt auto-imports: ref, computed, watch, onMounted, onUnmounted, nextTick, useRoute, useRouter
 // Using Nuxt SSR data fetching
 
+// SEO
+useSeoMeta({
+  title: 'Asset Details - CactusFund',
+  description: 'Analyze funding rates and arbitrage strategies for specific crypto assets across DEXs.',
+})
+
 // SSR Data fetching
-const { data: rawRatesData, refresh: refreshRates } = await useFetch('/api/arbitrage/rates', {
+const { data: rawRatesData, refresh: refreshRates } = await useFetch('/api/opportunites/rates', {
   key: 'overview-rates',
   default: () => []
 })

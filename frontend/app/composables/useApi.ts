@@ -13,7 +13,7 @@ export const useDexList = () => {
 
 // Fetch all arbitrage rates
 export const useArbitrageRates = () => {
-    return useFetch('/api/arbitrage/rates', {
+    return useFetch('/api/opportunites/rates', {
         key: 'arbitrage-rates',
         default: () => []
     })

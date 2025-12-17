@@ -2,6 +2,12 @@
 // Nuxt auto-imports: ref, nextTick
 // Chat API will use $fetch directly
 
+// SEO
+useSeoMeta({
+  title: 'Learn - CactusFund',
+  description: 'Learn about funding rate arbitrage, crypto trading strategies, and how to use CactusFund.',
+})
+
 // Track which sections are open
 const openSections = ref({})
 
@@ -427,7 +433,7 @@ Look for daily returns above 0.1% for good opportunities.`
         <p class="text-neutral-400 text-sm">Check out today's best opportunities</p>
       </div>
       <NuxtLink 
-        to="/arbitrage" 
+        to="/opportunites" 
         class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-sm font-semibold hover:from-emerald-600 hover:to-green-700 transition-all"
       >
         <span>View Opportunities</span>

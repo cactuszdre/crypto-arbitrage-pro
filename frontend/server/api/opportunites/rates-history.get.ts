@@ -1,5 +1,5 @@
 /**
- * GET /api/arbitrage/rates-history
+ * GET /api/opportunites/rates-history
  * Fetches historical rates for arbitrage
  * Maps to backend: /api/arbitrage/rates/historical
  * Cached for 1 hour

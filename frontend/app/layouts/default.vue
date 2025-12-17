@@ -117,7 +117,7 @@ const closeMobileMenu = () => {
 
 // Nav items
 const navItems = [
-  { path: '/arbitrage', name: 'Opportunities', icon: 'lucide:zap' },
+  { path: '/opportunites', name: 'Opportunities', icon: 'lucide:zap' },
   { path: '/asset', name: 'Asset Details', icon: 'lucide:bar-chart-3' },
   { path: '/swap', name: 'Swap', icon: 'lucide:repeat' },
   { path: '/learn', name: 'Learn', icon: 'lucide:graduation-cap' },

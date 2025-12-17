@@ -34,7 +34,7 @@
 
         <!-- CTA Buttons -->
         <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-            <button @click="$router.push('/arbitrage')" class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-lg transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2 group">
+            <button @click="$router.push('/opportunites')" class="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-lg transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2 group">
                 Launch Opportunities
                 <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
             </button>
@@ -260,7 +260,7 @@ const fetchData = async () => {
     try {
         isLoadingData.value = true;
         // Using Nuxt's $fetch to call the server API route
-        const data = await $fetch('/api/arbitrage/rates');
+        const data = await $fetch('/api/opportunites/rates');
         const found = calculateTopOpportunities(data);
         if (found.length > 0) {
             topOpportunities.value = found;

@@ -2,6 +2,12 @@
 // Nuxt auto-imports: ref, onMounted
 import { dexApi, userApi } from '~/services/api'
 
+// SEO
+useSeoMeta({
+  title: 'Admin - CactusFund',
+  description: 'CactusFund administration panel.',
+})
+
 const { state: authState } = useAuth()
 
 // ===== DEX Management =====

@@ -27,9 +27,9 @@ const searchShortcut = computed(() => isMac.value ? '⌘K' : 'Ctrl+K')
 // Search functionality - redirect to arbitrage page
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
-    router.push({ path: '/arbitrage', query: { search: searchQuery.value.trim() } })
+    router.push({ path: '/opportunites', query: { search: searchQuery.value.trim() } })
   } else {
-    router.push('/arbitrage')
+    router.push('/opportunites')
   }
 }
 

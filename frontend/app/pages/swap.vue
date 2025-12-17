@@ -3,6 +3,12 @@
 // Note: Swap page temporarily disabled during migration
 // AppKit and ethers need proper setup for Nuxt
 
+// SEO
+useSeoMeta({
+  title: 'Swap - CactusFund',
+  description: 'Wrap and unwrap ETH to WETH instantly on Ethereum.',
+})
+
 // Placeholder state - wallet not yet connected
 const accountData = ref({ value: { isConnected: false, address: null } })
 const providerData = ref(null)

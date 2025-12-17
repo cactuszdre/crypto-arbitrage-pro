@@ -6,11 +6,17 @@
 // import { executeParadexOrder } from '~/services/paradex'
 // import { executeLighterOrder } from '~/services/lighter'
 
+// SEO
+useSeoMeta({
+  title: 'Opportunities - CactusFund',
+  description: 'Find the best funding rate arbitrage opportunities across DEXs. Live data from Paradex, Hyperliquid, and Lighter.',
+})
+
 // ===== SSR DATA FETCHING =====
 // All data is preloaded server-side for instant display
 
 // Live rates (refreshed every 10s client-side)
-const { data: rawRatesData, pending: isLoadingRates, refresh: refreshRates } = await useFetch('/api/arbitrage/rates', {
+const { data: rawRatesData, pending: isLoadingRates, refresh: refreshRates } = await useFetch('/api/opportunites/rates', {
   key: 'arbitrage-rates',
   default: () => []
 })
@@ -25,37 +31,37 @@ const { data: dexList } = await useFetch('/api/dex', {
 // Using getCachedData to avoid refetching on client hydration
 const historicalPeriods = [1, 7, 30, 90, 180, 365]
 
-const { data: historical1d } = await useFetch('/api/arbitrage/rates-history?days=1', {
+const { data: historical1d } = await useFetch('/api/opportunites/rates-history?days=1', {
   key: 'historical-1d',
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical7d } = await useFetch('/api/arbitrage/rates-history?days=7', {
+const { data: historical7d } = await useFetch('/api/opportunites/rates-history?days=7', {
   key: 'historical-7d',
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical30d } = await useFetch('/api/arbitrage/rates-history?days=30', {
+const { data: historical30d } = await useFetch('/api/opportunites/rates-history?days=30', {
   key: 'historical-30d',
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical90d } = await useFetch('/api/arbitrage/rates-history?days=90', {
+const { data: historical90d } = await useFetch('/api/opportunites/rates-history?days=90', {
   key: 'historical-90d',
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical180d } = await useFetch('/api/arbitrage/rates-history?days=180', {
+const { data: historical180d } = await useFetch('/api/opportunites/rates-history?days=180', {
   key: 'historical-180d',
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical365d } = await useFetch('/api/arbitrage/rates-history?days=365', {
+const { data: historical365d } = await useFetch('/api/opportunites/rates-history?days=365', {
   key: 'historical-365d',
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
