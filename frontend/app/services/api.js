@@ -76,8 +76,3 @@ export const chatApi = {
     sendMessage: (messages) =>
         apiFetch('/chat', { method: 'POST', body: messages }),
 }
-
-// Crypto Price API
-export const cryptoPriceApi = {
-    getAll: () => apiFetch('/crypto-prices'),
-}

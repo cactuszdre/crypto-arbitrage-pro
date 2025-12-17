@@ -4,17 +4,9 @@ const route = useRoute()
 const searchQuery = ref('')
 const { setUser, logout, state } = useAuth()
 
-// Check if on overview page
-const isOverviewPage = computed(() => route.path === '/')
-
 // Real-time clock
 const currentTime = ref(new Date())
 let clockInterval = null
-
-// Crypto prices
-const cryptoPrices = ref([])
-const pricesLoading = ref(true)
-let priceInterval = null
 
 // OS Detection for keyboard shortcut
 const isMac = ref(false)
@@ -48,55 +40,6 @@ const formatTimeUTC = computed(() => {
   const seconds = String(time.getUTCSeconds()).padStart(2, '0')
   return `${hours}:${minutes}:${seconds} UTC`
 })
-
-// Default fallback data when API fails
-const defaultPrices = [
-  { symbol: 'BTC', name: 'Bitcoin', price: 100000, change: 2.5 },
-  { symbol: 'ETH', name: 'Ethereum', price: 3800, change: 1.8 },
-  { symbol: 'USDT', name: 'Tether', price: 1.00, change: 0.01 },
-  { symbol: 'XRP', name: 'Ripple', price: 2.35, change: 3.2 },
-  { symbol: 'BNB', name: 'BNB', price: 720, change: 1.5 },
-  { symbol: 'SOL', name: 'Solana', price: 230, change: 4.2 },
-  { symbol: 'USDC', name: 'USD Coin', price: 1.00, change: 0.0 },
-  { symbol: 'DOGE', name: 'Dogecoin', price: 0.42, change: -1.2 },
-  { symbol: 'ADA', name: 'Cardano', price: 1.05, change: 2.1 },
-  { symbol: 'TRX', name: 'Tron', price: 0.26, change: 1.8 },
-  { symbol: 'AVAX', name: 'Avalanche', price: 48, change: 3.5 },
-  { symbol: 'LINK', name: 'Chainlink', price: 24, change: 2.8 },
-  { symbol: 'SHIB', name: 'Shiba Inu', price: 0.000027, change: -0.5 },
-  { symbol: 'TON', name: 'Toncoin', price: 6.20, change: 1.9 },
-  { symbol: 'DOT', name: 'Polkadot', price: 9.50, change: 2.3 },
-]
-
-// Initialize with default data
-cryptoPrices.value = [...defaultPrices]
-pricesLoading.value = false
-
-const fetchPrices = async () => {
-  try {
-    const data = await $fetch('/api/crypto-prices')
-    
-    if (data && data.length > 0) {
-      cryptoPrices.value = data.map(item => ({
-        symbol: item.symbol,
-        name: item.name,
-        price: parseFloat(item.price) || 0,
-        change: parseFloat(item.change24h) || 0
-      }))
-    }
-    pricesLoading.value = false
-  } catch (error) {
-    // Keep existing data on error (don't reset to empty)
-    console.warn('Backend API unavailable, using cached data:', error.message)
-    pricesLoading.value = false
-  }
-}
-
-const formatPrice = (price) => {
-  if (price >= 1000) return '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 })
-  if (price >= 1) return '$' + price.toFixed(2)
-  return '$' + price.toFixed(4)
-}
 
 const isConnected = computed(() => {
   return Boolean(accountData.value?.isConnected)
@@ -177,10 +120,6 @@ onMounted(() => {
     currentTime.value = new Date()
   }, 1000)
   
-  // Fetch prices immediately and then every 60 seconds
-  fetchPrices()
-  priceInterval = setInterval(fetchPrices, 60000)
-  
   // Initialize AppKit (done via plugin, get reference here)
   if (typeof window !== 'undefined' && window.__appKit) {
     appKit.value = window.__appKit
@@ -196,38 +135,10 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyboardShortcut)
   if (clockInterval) clearInterval(clockInterval)
-  if (priceInterval) clearInterval(priceInterval)
 })
 </script>
 
 <template>
-  <!-- Top Ticker Bar - Only on Overview page -->
-  <div v-if="isOverviewPage" class="ticker-bar">
-    <div class="ticker-wrapper">
-      <div class="ticker-content">
-        <!-- Duplicate content for seamless loop -->
-        <template v-for="n in 3" :key="n">
-          <div 
-            v-for="crypto in cryptoPrices" 
-            :key="`${n}-${crypto.symbol}`"
-            class="ticker-item"
-          >
-            <span class="ticker-symbol">{{ crypto.symbol }}</span>
-            <span :class="['ticker-price', crypto.change >= 0 ? 'positive' : 'negative']">
-              {{ formatPrice(crypto.price) }}
-            </span>
-            <span :class="['ticker-change', crypto.change >= 0 ? 'positive' : 'negative']">
-              {{ crypto.change >= 0 ? '▲' : '▼' }} {{ Math.abs(crypto.change).toFixed(1) }}%
-            </span>
-          </div>
-        </template>
-      </div>
-    </div>
-    <!-- Gradient fades for ticker -->
-    <div class="ticker-fade-left"></div>
-    <div class="ticker-fade-right"></div>
-  </div>
-
   <!-- Header -->
   <header class="header-main">
     <div class="header-left">
@@ -297,103 +208,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ===== TICKER BAR ===== */
-.ticker-bar {
-  height: 32px;
-  background: #000000;
-  border-bottom: 1px solid #27272a;
-  position: relative;
-  overflow: hidden;
-  z-index: 20;
-}
-
-.ticker-wrapper {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.ticker-content {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  padding: 0 1rem;
-  animation: ticker 30s linear infinite;
-  width: max-content;
-}
-
-.ticker-content:hover {
-  animation-play-state: paused;
-}
-
-.ticker-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
-  font-size: 12px;
-}
-
-.ticker-symbol {
-  color: #71717a;
-  font-weight: 500;
-}
-
-.ticker-price {
-  font-weight: 500;
-}
-
-.ticker-price.positive {
-  color: #34d399;
-}
-
-.ticker-price.negative {
-  color: #f87171;
-}
-
-.ticker-change {
-  font-size: 12px;
-}
-
-.ticker-change.positive {
-  color: #059669;
-}
-
-.ticker-change.negative {
-  color: #dc2626;
-}
-
-.ticker-fade-left,
-.ticker-fade-right {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 32px;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.ticker-fade-left {
-  left: 0;
-  background: linear-gradient(to right, #000000, transparent);
-}
-
-.ticker-fade-right {
-  right: 0;
-  background: linear-gradient(to left, #000000, transparent);
-}
-
-@keyframes ticker {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-33.33%);
-  }
-}
-
 /* ===== HEADER ===== */
 .header-main {
   height: 56px;
