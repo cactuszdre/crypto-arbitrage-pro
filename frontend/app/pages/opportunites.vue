@@ -1096,7 +1096,8 @@ onUnmounted(() => {
             <tr
               v-for="opp in paginatedOpportunities"
               :key="'table-' + opp.symbol"
-              class="group hover:bg-white/5 transition-colors"
+              @click="navigateToAssetDetails(opp)"
+              class="group hover:bg-white/5 transition-colors cursor-pointer"
             >
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
@@ -1123,6 +1124,7 @@ onUnmounted(() => {
                   <a
                     :href="getDexUrl(opp.longDex, opp.symbol)"
                     target="_blank"
+                    @click.stop
                     class="text-emerald-400 hover:text-emerald-300 hover:underline transition-all flex items-center gap-1"
                   >
                     Long {{ opp.longDex }}
@@ -1132,6 +1134,7 @@ onUnmounted(() => {
                   <a
                     :href="getDexUrl(opp.shortDex, opp.symbol)"
                     target="_blank"
+                    @click.stop
                     class="text-red-400 hover:text-red-300 hover:underline transition-all flex items-center gap-1"
                   >
                     Short {{ opp.shortDex }}
@@ -1156,8 +1159,8 @@ onUnmounted(() => {
               </td>
               <td class="w-12 px-2 py-3 text-center">
                 <button
-                  @click="navigateToAssetDetails(opp)"
-                  class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40 transition-all duration-200"
+                  @click.stop="navigateToAssetDetails(opp)"
+                  class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/40 transition-all duration-200"
                   title="View asset details"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1168,7 +1171,7 @@ onUnmounted(() => {
               <td class="w-16 pl-2 pr-4 py-3">
                 <div class="inline-block relative">
                   <button
-                    @click="isPro ? selectOpportunity(opp) : null"
+                    @click.stop="isPro ? selectOpportunity(opp) : null"
                     :class="[
                       'w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 peer',
                       selectedOpportunity?.symbol === opp.symbol
