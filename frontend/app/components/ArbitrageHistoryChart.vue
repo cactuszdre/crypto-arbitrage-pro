@@ -242,11 +242,11 @@ const fetchData = async (silent = false) => {
     
     // Dynamic hours calculation for Live and 1D
     if (periodConfig?.isLive) {
-      // Live: data from today (since midnight), with 2h minimum fallback
+      // Live: data from today UTC (since midnight UTC), with 2h minimum fallback
       const now = new Date()
-      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-      const hoursSinceMidnight = (now - midnight) / (1000 * 60 * 60)
-      hours = Math.max(hoursSinceMidnight, 2) // Minimum 2 hours to avoid empty chart
+      const midnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
+      const hoursSinceMidnightUTC = (now - midnightUTC) / (1000 * 60 * 60)
+      hours = Math.max(hoursSinceMidnightUTC, 2) // Minimum 2 hours to avoid empty chart
     } else if (selectedPeriod.value === 24) {
       // 1D: yesterday's complete data (24h offset by 24h)
       // We'll fetch 48h and filter to yesterday
