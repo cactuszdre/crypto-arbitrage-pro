@@ -30,20 +30,20 @@ public class ArbitrageService {
         List<String> info = new ArrayList<>();
         List<LastFunding> allRates = lastFundingRepository.findAll();
         info.add("Total Latest Rates Found: " + allRates.size());
-        
+
         // Group by ticker ID for efficiency
         Map<Integer, List<LastFunding>> ratesByTicker = allRates.stream()
                 .filter(r -> r.getTicker() != null)
                 .collect(Collectors.groupingBy(r -> r.getTicker().getId()));
-        
+
         info.add("Unique Symbols Found: " + ratesByTicker.keySet().size());
-        
+
         for (Map.Entry<Integer, List<LastFunding>> entry : ratesByTicker.entrySet()) {
             List<LastFunding> rates = entry.getValue();
             String symbol = rates.get(0).getSymbol();
             info.add("Symbol: " + symbol + " | Sources: " + rates.size());
-            for(LastFunding rate : rates) {
-                info.add("  -> DEX: " + (rate.getDex() != null ? rate.getDex().getName() : "null") 
+            for (LastFunding rate : rates) {
+                info.add("  -> DEX: " + (rate.getDex() != null ? rate.getDex().getName() : "null")
                         + " | AnnualRate: " + rate.getRateAnnual());
             }
         }
@@ -52,7 +52,6 @@ public class ArbitrageService {
 
     @Cacheable(value = "arbitrageOpportunities")
     public List<ArbitrageOpportunityDTO> getArbitrageOpportunities() {
-        log.info("Cache MISS - Recalculating arbitrage opportunities");
         // 1. Get latest rates from the optimized last_funding table
         List<LastFunding> allRates = lastFundingRepository.findAll();
 
@@ -67,7 +66,6 @@ public class ArbitrageService {
         for (Map.Entry<Integer, List<LastFunding>> entry : ratesByTicker.entrySet()) {
             List<LastFunding> rates = entry.getValue();
             String symbol = rates.get(0).getSymbol();
-
 
             if (rates.size() < 2) {
                 continue; // Need at least 2 exchanges to compare
@@ -93,7 +91,7 @@ public class ArbitrageService {
 
             // Calculate Spread
             BigDecimal spreadAnnual = bestShort.getRateAnnual().subtract(bestLong.getRateAnnual());
-            
+
             // Only consider strictly positive spreads
             if (spreadAnnual.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
@@ -124,14 +122,14 @@ public class ArbitrageService {
 
     /**
      * Get all rates grouped by symbol for frontend-side arbitrage calculation.
-     * This allows the frontend to recalculate best routes based on user-selected DEX filters.
+     * This allows the frontend to recalculate best routes based on user-selected
+     * DEX filters.
      *
      * @return List of symbols with all their DEX rates
      */
     @Cacheable(value = "allRatesBySymbol")
     public List<SymbolRatesDTO> getAllRatesBySymbol() {
-        log.info("Cache MISS - Fetching all rates by symbol");
-        
+
         List<LastFunding> allRates = lastFundingRepository.findAll();
 
         // Group by ticker ID
@@ -143,9 +141,10 @@ public class ArbitrageService {
 
         for (Map.Entry<Integer, List<LastFunding>> entry : ratesByTicker.entrySet()) {
             List<LastFunding> rates = entry.getValue();
-            
-            if (rates.isEmpty()) continue;
-            
+
+            if (rates.isEmpty())
+                continue;
+
             String symbol = rates.get(0).getSymbol();
 
             // Convert to DTOs
@@ -165,7 +164,6 @@ public class ArbitrageService {
         // Sort by symbol name for consistent ordering
         result.sort((a, b) -> a.getSymbol().compareToIgnoreCase(b.getSymbol()));
 
-        log.info("Returning {} symbols with rates", result.size());
         return result;
     }
 }

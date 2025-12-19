@@ -53,8 +53,8 @@ public class ExtendedService implements DexFetcher {
         }
 
         Dex dex = dexOpt.get();
-        String baseUrl = dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty() 
-                ? dex.getBaseUrl() 
+        String baseUrl = dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty()
+                ? dex.getBaseUrl()
                 : DEFAULT_BASE_URL;
 
         try {
@@ -66,7 +66,8 @@ public class ExtendedService implements DexFetcher {
                             .maxInMemorySize(16 * 1024 * 1024)) // 16MB buffer
                     .build();
 
-            // Extended uses /api/v1/info/markets which returns all markets with funding info
+            // Extended uses /api/v1/info/markets which returns all markets with funding
+            // info
             JsonNode response = webClient.get()
                     .uri("/api/v1/info/markets")
                     .retrieve()
@@ -98,7 +99,6 @@ public class ExtendedService implements DexFetcher {
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
                 lastFundingService.upsertAll(rates);
-                log.info("Extended: Fetched {} funding rates", rates.size());
             }
 
             return rates;
@@ -112,24 +112,25 @@ public class ExtendedService implements DexFetcher {
     private FundingRate parseMarketFundingRate(JsonNode market, Dex dex, LocalDateTime timestamp) {
         try {
             // Market structure:
-            // { "name": "BTC-USD", "marketStats": { "fundingRate": "-0.000018", ... }, ... }
-            
+            // { "name": "BTC-USD", "marketStats": { "fundingRate": "-0.000018", ... }, ...
+            // }
+
             if (!market.has("name") || !market.has("marketStats")) {
                 return null;
             }
 
             String marketName = market.get("name").asText(); // e.g., "BTC-USD"
             JsonNode stats = market.get("marketStats");
-            
+
             if (!stats.has("fundingRate")) {
                 return null;
             }
 
             String fundingRateStr = stats.get("fundingRate").asText();
-            
+
             // Skip invalid rates
-            if (fundingRateStr == null || fundingRateStr.isEmpty() || 
-                "nan".equalsIgnoreCase(fundingRateStr) || "null".equalsIgnoreCase(fundingRateStr)) {
+            if (fundingRateStr == null || fundingRateStr.isEmpty() ||
+                    "nan".equalsIgnoreCase(fundingRateStr) || "null".equalsIgnoreCase(fundingRateStr)) {
                 return null;
             }
 

@@ -43,17 +43,23 @@ public class FundingRate5MinAggregationService {
      * PostgreSQL returns Double for AVG() functions.
      */
     private BigDecimal toBigDecimal(Object value) {
-        if (value == null) return null;
-        if (value instanceof BigDecimal) return (BigDecimal) value;
-        if (value instanceof Double) return BigDecimal.valueOf((Double) value);
-        if (value instanceof Float) return BigDecimal.valueOf((Float) value);
-        if (value instanceof Number) return BigDecimal.valueOf(((Number) value).doubleValue());
+        if (value == null)
+            return null;
+        if (value instanceof BigDecimal)
+            return (BigDecimal) value;
+        if (value instanceof Double)
+            return BigDecimal.valueOf((Double) value);
+        if (value instanceof Float)
+            return BigDecimal.valueOf((Float) value);
+        if (value instanceof Number)
+            return BigDecimal.valueOf(((Number) value).doubleValue());
         return new BigDecimal(value.toString());
     }
 
     /**
      * Runs every 5 minutes to aggregate funding rate data into buckets.
-     * Creates a new 5-minute aggregate from the data collected in the last 5 minutes.
+     * Creates a new 5-minute aggregate from the data collected in the last 5
+     * minutes.
      */
     @Scheduled(cron = "0 */5 * * * *") // Every 5 minutes at :00, :05, :10, etc.
     @Transactional
@@ -65,7 +71,6 @@ public class FundingRate5MinAggregationService {
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime bucketStart = calculateBucketTime(now.minusMinutes(BUCKET_MINUTES));
             LocalDateTime bucketEnd = bucketStart.plusMinutes(BUCKET_MINUTES);
-
 
             // Get aggregated data for this bucket
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(bucketStart, bucketEnd);
@@ -90,7 +95,6 @@ public class FundingRate5MinAggregationService {
                     Dex dex = dexRepository.findById(dexId).orElse(null);
 
                     if (ticker == null || dex == null) {
-                        log.warn("Skipping aggregation for tickerId={}, dexId={} - not found", tickerId, dexId);
                         continue;
                     }
 
@@ -98,7 +102,8 @@ public class FundingRate5MinAggregationService {
                     BigDecimal openRate = getOpenRate(tickerId, dexId, bucketStart, bucketEnd);
                     BigDecimal closeRate = getCloseRate(tickerId, dexId, bucketStart, bucketEnd);
 
-                    // Check if we already have an entry for this bucket (using bucketEnd as the label)
+                    // Check if we already have an entry for this bucket (using bucketEnd as the
+                    // label)
                     FundingRate5Min existing = fundingRate5MinRepository
                             .findByTickerAndDexAndBucketTime(ticker, dex, bucketEnd)
                             .orElse(null);
@@ -230,7 +235,8 @@ public class FundingRate5MinAggregationService {
                     Ticker ticker = tickerRepository.findById(tickerId).orElse(null);
                     Dex dex = dexRepository.findById(dexId).orElse(null);
 
-                    if (ticker == null || dex == null) continue;
+                    if (ticker == null || dex == null)
+                        continue;
 
                     // Skip if already exists (using bucketEnd as the label)
                     if (fundingRate5MinRepository.existsByTickerAndDexAndBucketTime(ticker, dex, bucketEnd)) {
@@ -278,7 +284,6 @@ public class FundingRate5MinAggregationService {
 
         return String.format(
                 "Total 5-min buckets: %d, Buckets in last hour: %d",
-                totalBuckets, recentBuckets.size()
-        );
+                totalBuckets, recentBuckets.size());
     }
 }

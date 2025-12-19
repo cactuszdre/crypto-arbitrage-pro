@@ -16,8 +16,10 @@ import java.util.concurrent.Executors;
 
 /**
  * Scheduler for fetching funding rates from all DEXes.
- * Uses the DexFetcher interface to dynamically iterate over all registered DEX services.
- * Adding a new DEX only requires implementing DexFetcher - no changes needed here.
+ * Uses the DexFetcher interface to dynamically iterate over all registered DEX
+ * services.
+ * Adding a new DEX only requires implementing DexFetcher - no changes needed
+ * here.
  */
 @Component
 @Slf4j
@@ -27,7 +29,7 @@ public class FundingRateScheduler {
     private final ParadexService paradexService; // Special case: per-symbol fetch
     private final DexRepository dexRepository;
     private final DexMarketRepository dexMarketRepository;
-    
+
     private final ExecutorService executorService = Executors.newFixedThreadPool(20);
 
     public FundingRateScheduler(
@@ -39,10 +41,7 @@ public class FundingRateScheduler {
         this.paradexService = paradexService;
         this.dexRepository = dexRepository;
         this.dexMarketRepository = dexMarketRepository;
-        
-        log.info("FundingRateScheduler initialized with {} DexFetcher implementations: {}", 
-                dexFetchers.size(), 
-                dexFetchers.stream().map(DexFetcher::getDexName).toList());
+
     }
 
     /**
@@ -52,7 +51,8 @@ public class FundingRateScheduler {
     public void fetchFundingRatesLoop() {
         long startTime = System.currentTimeMillis();
 
-        // 1. Fetch from all DexFetcher implementations (global fetch DEXes like Hyperliquid, Lighter)
+        // 1. Fetch from all DexFetcher implementations (global fetch DEXes like
+        // Hyperliquid, Lighter)
         List<CompletableFuture<Void>> globalFetchers = dexFetchers.stream()
                 .filter(DexFetcher::isEnabled)
                 .map(fetcher -> CompletableFuture.runAsync(() -> {
@@ -68,10 +68,12 @@ public class FundingRateScheduler {
         CompletableFuture<Void> paradexFuture = CompletableFuture.runAsync(() -> {
             try {
                 dexRepository.findByName("Paradex").ifPresent(dex -> {
-                    if (!dex.getActive()) return;
-                    
+                    if (!dex.getActive())
+                        return;
+
                     List<DexMarket> markets = dexMarketRepository.findByDexAndActiveTrue(dex);
-                    if (markets.isEmpty()) return;
+                    if (markets.isEmpty())
+                        return;
 
                     List<CompletableFuture<Void>> marketFutures = markets.stream()
                             .map(market -> CompletableFuture.runAsync(() -> {
@@ -96,9 +98,7 @@ public class FundingRateScheduler {
         CompletableFuture.allOf(allGlobal, paradexFuture).join();
 
         long duration = System.currentTimeMillis() - startTime;
-        if (duration > 5000) {
-            log.warn("Funding rate fetch took {}ms", duration);
-        }
+
     }
 
     @Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE)
