@@ -20,64 +20,66 @@ import java.util.concurrent.TimeUnit;
 @EnableCaching
 public class CacheConfig {
 
-    /**
-     * Configure multiple Caffeine caches with different TTLs:
-     * - arbitrageOpportunities: 10 seconds (live data)
-     * - latestFundingRates: 10 seconds (live data)
-     * - historicalArbitrage: 5 minutes (historical data changes rarely)
-     */
-    @Bean
-    public CacheManager cacheManager() {
-        SimpleCacheManager cacheManager = new SimpleCacheManager();
+        /**
+         * Configure multiple Caffeine caches with different TTLs:
+         * - arbitrageOpportunities: 10 seconds (live data)
+         * - latestFundingRates: 10 seconds (live data)
+         * - historicalArbitrage: 5 minutes (historical data changes rarely)
+         */
+        @Bean
+        public CacheManager cacheManager() {
+                SimpleCacheManager cacheManager = new SimpleCacheManager();
 
-        // Live data caches - 10 seconds TTL
-        CaffeineCache arbitrageCache = new CaffeineCache("arbitrageOpportunities",
-                Caffeine.newBuilder()
-                        .expireAfterWrite(10, TimeUnit.SECONDS)
-                        .maximumSize(10)
-                        .recordStats()
-                        .build());
+                // Live data caches - 10 seconds TTL
+                CaffeineCache arbitrageCache = new CaffeineCache("arbitrageOpportunities",
+                                Caffeine.newBuilder()
+                                                .expireAfterWrite(10, TimeUnit.SECONDS)
+                                                .maximumSize(10)
+                                                .recordStats()
+                                                .build());
 
-        CaffeineCache fundingRatesCache = new CaffeineCache("latestFundingRates",
-                Caffeine.newBuilder()
-                        .expireAfterWrite(10, TimeUnit.SECONDS)
-                        .maximumSize(10)
-                        .recordStats()
-                        .build());
+                CaffeineCache fundingRatesCache = new CaffeineCache("latestFundingRates",
+                                Caffeine.newBuilder()
+                                                .expireAfterWrite(10, TimeUnit.SECONDS)
+                                                .maximumSize(10)
+                                                .recordStats()
+                                                .build());
 
-        // Raw rates cache for frontend-side arbitrage calculation - 10 seconds TTL
-        CaffeineCache allRatesCache = new CaffeineCache("allRatesBySymbol",
-                Caffeine.newBuilder()
-                        .expireAfterWrite(10, TimeUnit.SECONDS)
-                        .maximumSize(10)
-                        .recordStats()
-                        .build());
+                // Raw rates cache for frontend-side arbitrage calculation - 10 seconds TTL
+                CaffeineCache allRatesCache = new CaffeineCache("allRatesBySymbol",
+                                Caffeine.newBuilder()
+                                                .expireAfterWrite(10, TimeUnit.SECONDS)
+                                                .maximumSize(10)
+                                                .recordStats()
+                                                .build());
 
-        // Historical data cache - 5 minutes TTL (keyed by days parameter)
-        // Short TTL ensures fresh data after daily aggregation at 01:00
-        CaffeineCache historicalCache = new CaffeineCache("historicalArbitrage",
-                Caffeine.newBuilder()
-                        .expireAfterWrite(5, TimeUnit.MINUTES)
-                        .maximumSize(20) // Cache different day ranges (1, 7, 30, 90, 180, 365)
-                        .recordStats()
-                        .build());
+                // Historical data cache - 24 hours TTL (keyed by days parameter)
+                // Long TTL for performance - cache is evicted by CacheEvictionService at 01:02
+                // after daily aggregation
+                CaffeineCache historicalCache = new CaffeineCache("historicalArbitrage",
+                                Caffeine.newBuilder()
+                                                .expireAfterWrite(24, TimeUnit.HOURS)
+                                                .maximumSize(20) // Cache different day ranges (1, 7, 30, 90, 180, 365)
+                                                .recordStats()
+                                                .build());
 
-        // Historical raw rates cache for frontend-side calculation - 5 minutes TTL
-        // Short TTL ensures fresh data after daily aggregation at 01:00
-        CaffeineCache historicalRatesCache = new CaffeineCache("historicalRatesBySymbol",
-                Caffeine.newBuilder()
-                        .expireAfterWrite(5, TimeUnit.MINUTES)
-                        .maximumSize(20)
-                        .recordStats()
-                        .build());
+                // Historical raw rates cache for frontend-side calculation - 24 hours TTL
+                // Long TTL for performance - cache is evicted by CacheEvictionService at 01:02
+                // after daily aggregation
+                CaffeineCache historicalRatesCache = new CaffeineCache("historicalRatesBySymbol",
+                                Caffeine.newBuilder()
+                                                .expireAfterWrite(24, TimeUnit.HOURS)
+                                                .maximumSize(20)
+                                                .recordStats()
+                                                .build());
 
-        cacheManager.setCaches(Arrays.asList(
-                arbitrageCache,
-                fundingRatesCache,
-                allRatesCache,
-                historicalCache,
-                historicalRatesCache));
+                cacheManager.setCaches(Arrays.asList(
+                                arbitrageCache,
+                                fundingRatesCache,
+                                allRatesCache,
+                                historicalCache,
+                                historicalRatesCache));
 
-        return cacheManager;
-    }
+                return cacheManager;
+        }
 }
