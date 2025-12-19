@@ -87,17 +87,26 @@ const dexes = computed(() => ['All', ...dexesWithData.value])
 
 // Computed: Human-readable timeframe description based on selected period
 const timeframeDescription = computed(() => {
-  const now = new Date()
   const currentPeriod = periods.find(p => p.value === selectedPeriod.value)
   
   if (!currentPeriod) return ''
   
-  const formatDate = (date, includeTime = false) => {
-    const options = { month: 'short', day: 'numeric' }
+  // Format date in UTC to avoid timezone confusion
+  const formatDateUTC = (date, includeTime = false) => {
+    const options = { month: 'short', day: 'numeric', timeZone: 'UTC' }
+    const dateStr = date.toLocaleDateString('en-US', options)
     if (includeTime) {
-      return date.toLocaleDateString('en-US', options) + ' ' + date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+      const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })
+      return `${dateStr} ${timeStr}`
     }
-    return date.toLocaleDateString('en-US', options)
+    return dateStr
+  }
+  
+  // Get yesterday's date in UTC
+  const getYesterdayUTC = () => {
+    const now = new Date()
+    const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1))
+    return yesterday
   }
   
   if (currentPeriod.isLive) {
@@ -106,29 +115,26 @@ const timeframeDescription = computed(() => {
       const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
       const firstTime = timestamps[0]
       const lastTime = timestamps[timestamps.length - 1]
-      return `Today: ${formatDate(firstTime, true)} - ${formatDate(lastTime, true)}`
+      return `Today (UTC): ${formatDateUTC(firstTime, true)} - ${formatDateUTC(lastTime, true)}`
     }
-    // Fallback if no data
-    return `Today (loading...)`
+    return `Today (UTC) - loading...`
   } else if (currentPeriod.days === 1) {
-    // 1D: yesterday's data - use actual chart data if available
+    // 1D: yesterday's data in UTC
+    const yesterday = getYesterdayUTC()
     if (historyData.value && historyData.value.length > 0) {
       const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
       const firstTime = timestamps[0]
       const lastTime = timestamps[timestamps.length - 1]
-      return `Yesterday: ${formatDate(firstTime, true)} - ${formatDate(lastTime, true)}`
+      return `${formatDateUTC(yesterday)} (UTC): ${formatDateUTC(firstTime, true)} - ${formatDateUTC(lastTime, true)}`
     }
-    const yesterday = new Date(now)
-    yesterday.setDate(yesterday.getDate() - 1)
-    return `Yesterday (${formatDate(yesterday)})`
+    return `${formatDateUTC(yesterday)} (UTC)`
   } else {
-    // Historical: show date range
-    const endDate = new Date(now)
-    endDate.setDate(endDate.getDate() - 1) // Yesterday as end (daily data is from previous day)
-    const startDate = new Date(endDate)
-    startDate.setDate(startDate.getDate() - currentPeriod.days + 1)
+    // Historical: show date range ending at yesterday UTC
+    const yesterday = getYesterdayUTC()
+    const startDate = new Date(yesterday)
+    startDate.setUTCDate(startDate.getUTCDate() - currentPeriod.days + 1)
     
-    return `${formatDate(startDate)} - ${formatDate(endDate)}`
+    return `${formatDateUTC(startDate)} - ${formatDateUTC(yesterday)} (UTC)`
   }
 })
 
@@ -272,16 +278,18 @@ const fetchData = async (silent = false) => {
         console.log('[Chart] Pre-aggregated API not available, falling back to raw data')
       }
       
-      // For 1D: filter to only yesterday's data
+      // For 1D: filter to only yesterday's data (UTC)
       if (selectedPeriod.value === 24 && data.length > 0) {
         const now = new Date()
-        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-        const yesterdayMidnight = new Date(todayMidnight.getTime() - 24 * 60 * 60 * 1000)
+        // Today midnight UTC
+        const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
+        // Yesterday midnight UTC
+        const yesterdayMidnightUTC = new Date(todayMidnightUTC.getTime() - 24 * 60 * 60 * 1000)
         
-        // Keep only data from yesterday (between yesterdayMidnight and todayMidnight)
+        // Keep only data from yesterday UTC (between yesterdayMidnightUTC and todayMidnightUTC)
         const filteredData = data.filter(d => {
           const timestamp = new Date(d.timestamp)
-          return timestamp >= yesterdayMidnight && timestamp < todayMidnight
+          return timestamp >= yesterdayMidnightUTC && timestamp < todayMidnightUTC
         })
         
         // Replace data with filtered data
@@ -358,6 +366,18 @@ const fetchData = async (silent = false) => {
     // For 1D view: aggregate 5-min data to 15-min intervals (reduce 288 bars to 96)
     if (selectedPeriod.value === 24 && finalData.length > 0) {
       finalData = aggregateByInterval(finalData, 24) // This uses 15-min interval for hours <= 24
+    }
+    
+    // For ALL historical views (non-Live): filter out today's data (UTC)
+    // This ensures chart data matches the funding_rate_daily aggregates
+    if (!periodConfig?.isLive && finalData.length > 0) {
+      const now = new Date()
+      const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
+      
+      finalData = finalData.filter(d => {
+        const timestamp = new Date(d.timestamp)
+        return timestamp < todayMidnightUTC
+      })
     }
     
     historyData.value = finalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
