@@ -678,10 +678,13 @@ const chartOptions = computed(() => ({
       displayColors: true,
       callbacks: {
         title: function(tooltipItems) {
-          // For 1D view, prepend "Yesterday" to make it clear
+          // For 1D view, prepend the actual UTC date instead of "Yesterday"
           const label = tooltipItems[0]?.label || ''
           if (selectedPeriod.value === 24) {
-            return `Yesterday ${label}`
+            const now = new Date()
+            const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1))
+            const dateStr = yesterday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+            return `${dateStr} ${label}`
           }
           return label
         },
