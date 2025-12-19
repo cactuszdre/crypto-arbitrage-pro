@@ -71,6 +71,10 @@ const positionSize = ref(10000) // Total position size in $
 // Chart yield data (from ArbitrageHistoryChart)
 const chartYieldData = ref({
   average: 0,
+  averageFromChart: 0,
+  chartDataPoints: 0,
+  actualDays: 0,
+  totalReturn: 0,
   periodLabel: 'Live',
   periodDays: 1,
   dataPoints: 0,
@@ -612,7 +616,7 @@ onUnmounted(() => {
 
         <!-- Strategy Card -->
         <div class="lg:col-span-1">
-          <div class="bg-[#0A0A0A]/90 backdrop-blur-xl border border-white/5 lg:border-l-0 rounded-2xl lg:rounded-l-none p-5 relative overflow-hidden shadow-2xl h-full">
+          <div class="bg-[#0A0A0A]/90 backdrop-blur-xl border border-white/5 lg:border-l-0 rounded-2xl lg:rounded-l-none p-5 relative shadow-2xl h-full">
             <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
             
             <h2 class="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-5 flex items-center gap-2">
@@ -820,51 +824,142 @@ onUnmounted(() => {
                 </div>
               </div>
               
-              <!-- Daily Return (from chart average - always annualized) -->
-              <div class="p-4 rounded-xl bg-white/5 border border-white/5 relative overflow-hidden group hover:border-white/10 transition-colors">
-                <div class="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div class="flex justify-between items-center mb-2 relative z-10">
-                  <span class="text-xs text-neutral-400">Daily Return</span>
-                  <span v-if="chartYieldData.isLive" class="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    <span class="relative flex h-2 w-2">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              <!-- Yield Comparison Cards -->
+              <div class="grid grid-cols-2 gap-3">
+                <!-- LEFT: Real-time (Live) / Total Return (Historical) -->
+                <div class="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 relative group hover:border-emerald-500/40 transition-colors">
+                  <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl -mr-8 -mt-8 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                  
+                  <!-- LIVE MODE: Real-time snapshot -->
+                  <template v-if="chartYieldData.isLive">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-3 relative z-10">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">Real-time</span>
+                        <div class="relative group/tooltip">
+                          <svg class="w-3 h-3 text-emerald-400/50 hover:text-emerald-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <div class="absolute bottom-full left-0 mb-2 w-48 p-2 bg-neutral-900 border border-white/10 rounded-lg text-[10px] text-neutral-300 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                            Current funding rate snapshot in real-time
+                          </div>
+                        </div>
+                      </div>
+                      <span class="flex items-center gap-1 text-[9px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                        <span class="relative flex h-1.5 w-1.5">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        Live
+                      </span>
+                    </div>
+                    
+                    <!-- Daily -->
+                    <div class="mb-3 relative z-10">
+                      <div class="text-[10px] text-neutral-500 mb-0.5">Daily</div>
+                      <div class="flex items-baseline gap-1.5">
+                        <span class="text-lg font-bold font-mono" :class="chartYieldData.average > 0 ? 'text-emerald-400' : 'text-red-400'">
+                          {{ chartYieldData.average > 0 ? '+' : ''}}{{ (chartYieldData.average / 365).toFixed(4) }}%
+                        </span>
+                        <span class="text-[10px] text-neutral-500">
+                          ${{ ((chartYieldData.average / 365) * positionSize / 100).toFixed(2) }}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <!-- Annual -->
+                    <div class="relative z-10 pt-2 border-t border-emerald-500/10">
+                      <div class="text-[10px] text-neutral-500 mb-0.5">Annual</div>
+                      <div class="flex items-baseline gap-1.5">
+                        <span class="text-xl font-bold font-mono" :class="chartYieldData.average > 0 ? 'text-emerald-300' : 'text-red-400'">
+                          {{ chartYieldData.average > 0 ? '+' : ''}}{{ chartYieldData.average.toFixed(2) }}%
+                        </span>
+                        <span class="text-[10px] text-neutral-500">
+                          ${{ (chartYieldData.average * positionSize / 100).toFixed(0) }}
+                        </span>
+                      </div>
+                    </div>
+                  </template>
+                  
+                  <!-- HISTORICAL MODE: Total Return -->
+                  <template v-else>
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-3 relative z-10">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">Total Return</span>
+                        <div class="relative group/tooltip">
+                          <svg class="w-3 h-3 text-emerald-400/50 hover:text-emerald-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <div class="absolute bottom-full left-0 mb-2 w-52 p-2 bg-neutral-900 border border-white/10 rounded-lg text-[10px] text-neutral-300 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                            Cumulative yield if you had held this arbitrage position for {{ chartYieldData.actualDays }} days
+                          </div>
+                        </div>
+                      </div>
+                      <span class="text-[9px] text-emerald-300/80 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                        {{ chartYieldData.actualDays }} days
+                      </span>
+                    </div>
+                    
+                    <!-- Cumulative Return - Main Display (Vertically Centered) -->
+                    <div class="relative z-10 flex flex-col items-start justify-center flex-1 py-2">
+                      <div class="text-[10px] text-neutral-500 mb-1">{{ chartYieldData.periodLabel }} Period</div>
+                      <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-bold font-mono" :class="chartYieldData.totalReturn > 0 ? 'text-emerald-400' : 'text-red-400'">
+                          {{ chartYieldData.totalReturn > 0 ? '+' : ''}}{{ chartYieldData.totalReturn.toFixed(2) }}%
+                        </span>
+                      </div>
+                      <span class="text-sm text-neutral-500 mt-1">
+                        ${{ (chartYieldData.totalReturn * positionSize / 100).toFixed(0) }}
+                      </span>
+                    </div>
+                  </template>
+                </div>
+                
+                <!-- RIGHT: Today's Average (Live) / Period Average (Historical) -->
+                <div class="p-4 rounded-xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 relative group hover:border-cyan-500/40 transition-colors">
+                  <div class="absolute top-0 right-0 w-20 h-20 bg-cyan-500/10 rounded-full blur-2xl -mr-8 -mt-8 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                  
+                  <!-- Header -->
+                  <div class="flex items-center justify-between mb-3 relative z-10">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] uppercase tracking-wider text-cyan-400 font-semibold">
+                        {{ chartYieldData.isLive ? "Today's Avg" : 'Period Avg' }}
+                      </span>
+                      <div class="relative group/tooltip">
+                        <svg class="w-3 h-3 text-cyan-400/50 hover:text-cyan-400 cursor-help transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <div class="absolute bottom-full left-0 mb-2 w-52 p-2 bg-neutral-900 border border-white/10 rounded-lg text-[10px] text-neutral-300 opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                          <span v-if="chartYieldData.isLive">Average yield calculated from all data collected today</span>
+                          <span v-else>Average daily and annualized yield over the {{ chartYieldData.periodLabel }} period</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="text-[9px] text-cyan-300/80 bg-cyan-500/20 px-1.5 py-0.5 rounded">
+                      {{ chartYieldData.isLive ? 'Today' : chartYieldData.periodLabel }}
                     </span>
-                    Real-time
-                  </span>
-                  <span v-else class="text-[10px] text-neutral-500 bg-white/5 px-1.5 py-0.5 rounded">avg. {{ chartYieldData.periodLabel }}</span>
-                </div>
-                <div class="flex items-baseline gap-2 relative z-10">
-                  <span class="text-2xl font-bold font-mono tracking-tight" :class="chartYieldData.average > 0 ? 'text-emerald-400' : 'text-red-400'">
-                    {{ chartYieldData.average > 0 ? '+' : ''}}{{ (chartYieldData.average / 365).toFixed(4) }}%
-                  </span>
-                  <span class="text-sm text-neutral-500">
-                    ≈ ${{ ((chartYieldData.average / 365) * positionSize / 100).toFixed(2) }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Annual Return (from chart average - already annualized) -->
-              <div class="p-4 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 relative overflow-hidden group hover:border-indigo-500/40 transition-colors">
-                <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl -mr-10 -mt-10 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                <div class="flex justify-between items-center mb-2 relative z-10">
-                  <span class="text-xs text-indigo-300 font-medium">Annual Return</span>
-                  <span v-if="chartYieldData.isLive" class="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    <span class="relative flex h-2 w-2">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    Real-time
-                  </span>
-                  <span v-else class="text-[10px] text-indigo-300/80 bg-indigo-500/20 px-2 py-0.5 rounded font-medium">avg. {{ chartYieldData.periodLabel }}</span>
-                </div>
-                <div class="flex items-baseline gap-2 relative z-10">
-                  <span class="text-2xl font-bold font-mono tracking-tight" :class="chartYieldData.average > 0 ? 'text-indigo-400' : 'text-red-400'">
-                    {{ chartYieldData.average > 0 ? '+' : ''}}{{ chartYieldData.average.toFixed(2) }}%
-                  </span>
-                  <span class="text-sm text-indigo-300/50">
-                    ≈ ${{ (chartYieldData.average * positionSize / 100).toFixed(0) }}
-                  </span>
+                  </div>
+                  
+                  <!-- Daily -->
+                  <div class="mb-3 relative z-10">
+                    <div class="text-[10px] text-neutral-500 mb-0.5">Daily</div>
+                    <div class="flex items-baseline gap-1.5">
+                      <span class="text-lg font-bold font-mono" :class="chartYieldData.averageFromChart > 0 ? 'text-cyan-400' : 'text-red-400'">
+                        {{ chartYieldData.averageFromChart > 0 ? '+' : ''}}{{ (chartYieldData.averageFromChart / 365).toFixed(4) }}%
+                      </span>
+                      <span class="text-[10px] text-neutral-500">
+                        ${{ ((chartYieldData.averageFromChart / 365) * positionSize / 100).toFixed(2) }}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <!-- Annual -->
+                  <div class="relative z-10 pt-2 border-t border-cyan-500/10">
+                    <div class="text-[10px] text-neutral-500 mb-0.5">Annual</div>
+                    <div class="flex items-baseline gap-1.5">
+                      <span class="text-xl font-bold font-mono" :class="chartYieldData.averageFromChart > 0 ? 'text-cyan-300' : 'text-red-400'">
+                        {{ chartYieldData.averageFromChart > 0 ? '+' : ''}}{{ chartYieldData.averageFromChart.toFixed(2) }}%
+                      </span>
+                      <span class="text-[10px] text-neutral-500">
+                        ${{ (chartYieldData.averageFromChart * positionSize / 100).toFixed(0) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
               

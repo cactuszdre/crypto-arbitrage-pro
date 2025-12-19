@@ -545,9 +545,57 @@ const unifiedChartData = computed(() => {
       dataPointCount = 1 // Live uses current snapshot
     }
     
+    // Calculate average from chart data (average of all spreads shown in chart)
+    // This computes the spread at each timestamp using rateAnnual metric and averages them
+    let chartAverageYield = 0
+    let chartDataPointCount = 0
+    let actualDays = 0
+    let totalReturn = 0
+    
+    if (allTimestamps.length > 0 && longDex && shortDex) {
+      const spreadsForAverage = []
+      
+      for (const t of allTimestamps) {
+        const entries = historyData.value.filter(d => d.timestamp === t)
+        const longEntry = entries.find(d => d.dex === longDex)
+        const shortEntry = entries.find(d => d.dex === shortDex)
+        
+        if (longEntry && shortEntry) {
+          // Use rateAnnual for consistency with yield display
+          const longVal = longEntry.rateAnnual || 0
+          const shortVal = shortEntry.rateAnnual || 0
+          spreadsForAverage.push(shortVal - longVal)
+        }
+      }
+      
+      if (spreadsForAverage.length > 0) {
+        chartAverageYield = spreadsForAverage.reduce((sum, v) => sum + v, 0) / spreadsForAverage.length
+        chartDataPointCount = spreadsForAverage.length
+      }
+      
+      // Calculate actual number of unique days covered by the data
+      const uniqueDays = new Set()
+      for (const t of allTimestamps) {
+        const date = new Date(t)
+        const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+        uniqueDays.add(dayKey)
+      }
+      actualDays = uniqueDays.size
+      
+      // Calculate total cumulative return for the period
+      // Total Return = (Annual Rate / 365) × Number of Days
+      if (chartAverageYield !== 0 && actualDays > 0) {
+        totalReturn = (chartAverageYield / 365) * actualDays
+      }
+    }
+    
     // Emit annualized yield to parent (this is always the annualized rate)
     emit('update:averageYield', {
-      average: yieldValue,  // This is the annualized yield from daily table
+      average: yieldValue,  // This is the annualized yield from daily table (snapshot for live, average for historical)
+      averageFromChart: chartAverageYield,  // Average of all chart data points (spreads)
+      chartDataPoints: chartDataPointCount,  // Number of data points in the chart average
+      actualDays: actualDays,  // Number of unique days covered by the data
+      totalReturn: totalReturn,  // Cumulative return for the period: (annual / 365) × days
       periodLabel: currentPeriod?.label || 'Live',
       periodDays: isLive ? 1 : (currentPeriod?.days || 1),
       dataPoints: dataPointCount,
