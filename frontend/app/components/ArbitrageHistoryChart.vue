@@ -593,11 +593,11 @@ const unifiedChartData = computed(() => {
         chartDataPointCount = spreadsForAverage.length
       }
       
-      // Calculate actual number of unique days covered by the data
+      // Calculate actual number of unique days covered by the data (using UTC)
       const uniqueDays = new Set()
       for (const t of allTimestamps) {
         const date = new Date(t)
-        const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+        const dayKey = `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`
         uniqueDays.add(dayKey)
       }
       actualDays = uniqueDays.size
