@@ -242,11 +242,11 @@ const fetchData = async (silent = false) => {
     
     // Dynamic hours calculation for Live and 1D
     if (periodConfig?.isLive) {
-      // Live: data from today UTC (since midnight UTC), with 2h minimum fallback
+      // Live: data from today UTC (since midnight UTC), no fallback
       const now = new Date()
       const midnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
       const hoursSinceMidnightUTC = (now - midnightUTC) / (1000 * 60 * 60)
-      hours = Math.max(hoursSinceMidnightUTC, 2) // Minimum 2 hours to avoid empty chart
+      hours = Math.max(hoursSinceMidnightUTC, 0.1) // Small minimum to avoid 0
     } else if (selectedPeriod.value === 24) {
       // 1D: yesterday's complete data (24h offset by 24h)
       // We'll fetch 48h and filter to yesterday
@@ -479,16 +479,16 @@ const unifiedChartData = computed(() => {
     // 1. Collect all unique timestamps, sorted
     const allTimestamps = [...new Set(historyData.value.map(d => d.timestamp))].sort()
 
-    // 2. Create labels
+    // 2. Create labels (always in UTC)
     const labels = allTimestamps.map(t => {
       const date = new Date(t)
       if (selectedPeriod.value > 24) {
         if (selectedPeriod.value > 168) {
-             return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
         }
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) + ' ' + date.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12: false, timeZone: 'UTC'})
       }
-      return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      return date.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12: false, timeZone: 'UTC'})
     })
 
     // 3. Calculate Spread between longDex and shortDex for each timestamp (for chart display)
