@@ -33,12 +33,14 @@ const handleKeyboardShortcut = (e) => {
   }
 }
 
-const formatTimeUTC = computed(() => {
+const formatTimeLocal = computed(() => {
   const time = currentTime.value
-  const hours = String(time.getUTCHours()).padStart(2, '0')
-  const minutes = String(time.getUTCMinutes()).padStart(2, '0')
-  const seconds = String(time.getUTCSeconds()).padStart(2, '0')
-  return `${hours}:${minutes}:${seconds} UTC`
+  return time.toLocaleTimeString([], { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit',
+    hour12: false 
+  })
 })
 
 const isConnected = computed(() => {
@@ -163,9 +165,9 @@ onUnmounted(() => {
       <div class="clock-section">
         <ClientOnly>
           <span class="iconify clock-icon" data-icon="lucide:clock" data-width="12"></span>
-          <span class="clock-time">{{ formatTimeUTC }}</span>
+          <span class="clock-time">{{ formatTimeLocal }}</span>
           <template #fallback>
-            <span class="clock-time">--:--:-- UTC</span>
+            <span class="clock-time">--:--:--</span>
           </template>
         </ClientOnly>
       </div>

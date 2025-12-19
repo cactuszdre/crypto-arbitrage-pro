@@ -902,11 +902,11 @@ onUnmounted(() => {
                       <div class="text-[10px] text-neutral-500 mb-1">{{ chartYieldData.periodLabel }} Period</div>
                       <div class="flex items-baseline gap-2">
                         <span class="text-3xl font-bold font-mono" :class="chartYieldData.totalReturn > 0 ? 'text-emerald-400' : 'text-red-400'">
-                          {{ chartYieldData.totalReturn > 0 ? '+' : ''}}{{ chartYieldData.totalReturn.toFixed(2) }}%
+                          {{ chartYieldData.totalReturn > 0 ? '+' : ''}}{{ chartYieldData.totalReturn.toFixed(4) }}%
                         </span>
                       </div>
                       <span class="text-sm text-neutral-500 mt-1">
-                        ${{ (chartYieldData.totalReturn * positionSize / 100).toFixed(0) }}
+                        ${{ (chartYieldData.totalReturn * positionSize / 100).toFixed(2) }}
                       </span>
                     </div>
                   </template>
