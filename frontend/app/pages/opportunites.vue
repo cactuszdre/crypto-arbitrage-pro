@@ -9,7 +9,14 @@
 // SEO
 useSeoMeta({
   title: 'Opportunities - CactusFund',
-  description: 'Find the best funding rate arbitrage opportunities across DEXs. Live data from Paradex, Hyperliquid, and Lighter.',
+  description: 'Discover live funding rate arbitrage opportunities. Compare rates across top DEXs, sorted by daily return. Updated every 10 seconds.',
+  ogTitle: 'Funding Rate Arbitrage Opportunities - CactusFund',
+  ogDescription: 'Live arbitrage opportunities across top DEXs. Compare rates. Updated every 10 seconds.',
+  ogUrl: 'https://cactusfund.app/opportunites',
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/opportunites' }]
 })
 
 // ===== SSR DATA FETCHING =====
@@ -1096,7 +1103,8 @@ onUnmounted(() => {
             <tr
               v-for="opp in paginatedOpportunities"
               :key="'table-' + opp.symbol"
-              class="group hover:bg-white/5 transition-colors"
+              @click="navigateToAssetDetails(opp)"
+              class="group/row hover:bg-white/5 transition-colors cursor-pointer"
             >
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
@@ -1113,16 +1121,19 @@ onUnmounted(() => {
                   >
                     {{ getBaseSymbol(opp.symbol).charAt(0).toUpperCase() }}
                   </div>
-                  <span class="text-xs font-medium text-neutral-300 group-hover:text-white">
+                  <span class="text-xs font-medium text-neutral-300 group-hover/row:text-white">
                     {{ opp.symbol.replace('-USD-PERP', '') }}
                   </span>
                 </div>
               </td>
               <td class="px-4 py-3">
-                <div class="flex items-center gap-2 text-xs text-neutral-400">
+                <div class="flex items-center gap-2 text-xs text-neutral-400 group/dex">
                   <a
                     :href="getDexUrl(opp.longDex, opp.symbol)"
                     target="_blank"
+                    @click.stop
+                    @mouseenter="$event.currentTarget.closest('tr').classList.add('no-btn-hover')"
+                    @mouseleave="$event.currentTarget.closest('tr').classList.remove('no-btn-hover')"
                     class="text-emerald-400 hover:text-emerald-300 hover:underline transition-all flex items-center gap-1"
                   >
                     Long {{ opp.longDex }}
@@ -1132,6 +1143,9 @@ onUnmounted(() => {
                   <a
                     :href="getDexUrl(opp.shortDex, opp.symbol)"
                     target="_blank"
+                    @click.stop
+                    @mouseenter="$event.currentTarget.closest('tr').classList.add('no-btn-hover')"
+                    @mouseleave="$event.currentTarget.closest('tr').classList.remove('no-btn-hover')"
                     class="text-red-400 hover:text-red-300 hover:underline transition-all flex items-center gap-1"
                   >
                     Short {{ opp.shortDex }}
@@ -1156,8 +1170,8 @@ onUnmounted(() => {
               </td>
               <td class="w-12 px-2 py-3 text-center">
                 <button
-                  @click="navigateToAssetDetails(opp)"
-                  class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40 transition-all duration-200"
+                  @click.stop="navigateToAssetDetails(opp)"
+                  class="view-details-btn w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-neutral-400 hover:text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/40 transition-all duration-200"
                   title="View asset details"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1168,7 +1182,9 @@ onUnmounted(() => {
               <td class="w-16 pl-2 pr-4 py-3">
                 <div class="inline-block relative">
                   <button
-                    @click="isPro ? selectOpportunity(opp) : null"
+                    @click.stop="isPro ? selectOpportunity(opp) : null"
+                    @mouseenter="$event.currentTarget.closest('tr').classList.add('no-btn-hover')"
+                    @mouseleave="$event.currentTarget.closest('tr').classList.remove('no-btn-hover')"
                     :class="[
                       'w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 peer',
                       selectedOpportunity?.symbol === opp.symbol
@@ -1560,6 +1576,13 @@ onUnmounted(() => {
 
 .animate-modal-enter {
   animation: modal-enter 0.3s ease-out;
+}
+
+/* View Details button: highlight on row hover, but NOT when hovering interactive elements */
+tr.group\/row:hover:not(.no-btn-hover) .view-details-btn {
+  color: rgb(129 140 248); /* indigo-400 */
+  background-color: rgb(99 102 241 / 0.1); /* indigo-500/10 */
+  border-color: rgb(99 102 241 / 0.4); /* indigo-500/40 */
 }
 </style>
 

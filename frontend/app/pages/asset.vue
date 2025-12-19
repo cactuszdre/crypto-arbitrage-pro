@@ -5,7 +5,14 @@
 // SEO
 useSeoMeta({
   title: 'Asset Details - CactusFund',
-  description: 'Analyze funding rates and arbitrage strategies for specific crypto assets across DEXs.',
+  description: 'Analyze funding rates across exchanges for any crypto asset. Historical charts, spread calculations, and arbitrage strategy builder.',
+  ogTitle: 'Crypto Asset Funding Rate Analysis - CactusFund',
+  ogDescription: 'Analyze funding rates across exchanges. Historical charts and arbitrage strategy builder.',
+  ogUrl: 'https://cactusfund.app/asset',
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/asset' }]
 })
 
 // SSR Data fetching
@@ -891,18 +898,16 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.glass-card {
-  /* Retaining basic glass class just in case global css relies on it, but overriding visuals inline */
-}
-
 /* Hide native number input arrows */
 .position-input::-webkit-outer-spin-button,
 .position-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
+  appearance: none;
   margin: 0;
 }
 
 .position-input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 </style>

@@ -6,7 +6,14 @@
 // SEO
 useSeoMeta({
   title: 'Swap - CactusFund',
-  description: 'Wrap and unwrap ETH to WETH instantly on Ethereum.',
+  description: 'Wrap ETH to WETH or unwrap WETH to ETH instantly on Ethereum. No protocol fees, only gas costs.',
+  ogTitle: 'ETH/WETH Swap - CactusFund',
+  ogDescription: 'Wrap or unwrap ETH instantly on Ethereum. No protocol fees.',
+  ogUrl: 'https://cactusfund.app/swap',
+})
+
+useHead({
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/swap' }]
 })
 
 // Placeholder state - wallet not yet connected

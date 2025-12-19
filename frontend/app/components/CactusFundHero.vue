@@ -70,7 +70,7 @@
          </div>
 
          <!-- REAL DATA CARD (Carousel of Top 3 Opportunities) -->
-         <div v-else-if="currentOpp" class="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-500 bg-gradient-to-br from-white/[0.08] to-white/[0.02] border-emerald-500/30 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20">
+         <div v-else-if="currentOpp" @click="navigateToAsset(currentOpp)" class="group relative p-5 rounded-2xl border backdrop-blur-xl transition-all duration-500 bg-gradient-to-br from-white/[0.08] to-white/[0.02] border-emerald-500/30 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/20 cursor-pointer hover:border-emerald-500/50 hover:shadow-emerald-500/20 hover:scale-[1.02]">
             <!-- Glass reflection effect -->
             <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
               <div class="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-white/10 to-transparent rotate-12 opacity-50"></div>
@@ -82,12 +82,19 @@
                 <!-- Icon -->
                 <div class="relative shrink-0">
                   <img
+                    v-if="!isImageFailed(currentOpp.symbol)"
                     :key="currentOpp.symbol"
                     :src="`https://app.paradex.trade/static/market/${getBaseSymbol(currentOpp.symbol).toUpperCase()}.svg`"
                     :alt="getBaseSymbol(currentOpp.symbol)"
                     class="w-12 h-12 rounded-xl border border-white/10 bg-neutral-800/50 object-cover shadow-lg transition-opacity duration-300"
-                    @error="(e) => e.target.style.display = 'none'"
+                    @error="(e) => handleImageError(currentOpp.symbol, e)"
                   >
+                  <div
+                    v-else
+                    class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-lg text-white font-bold border border-white/10 shadow-lg"
+                  >
+                    {{ getBaseSymbol(currentOpp.symbol).charAt(0).toUpperCase() }}
+                  </div>
                 </div>
                 <!-- Symbol name -->
                 <div class="min-w-0">
@@ -103,7 +110,7 @@
                 <button
                   v-for="(opp, index) in topOpportunities"
                   :key="index"
-                  @click="goToSlide(index)"
+                  @click.stop="goToSlide(index)"
                   :class="[
                     'w-2 h-2 rounded-full transition-all duration-300',
                     currentIndex === index 
@@ -187,6 +194,8 @@ const topOpportunities = ref([]);
 const currentIndex = ref(0);
 const isLoadingData = ref(true);
 let carouselInterval = null;
+const failedImages = ref(new Set());
+const router = useRouter();
 
 // Current opportunity to display
 const currentOpp = computed(() => topOpportunities.value[currentIndex.value] || null);
@@ -222,6 +231,28 @@ const formatRate = (rate) => {
 const getBaseSymbol = (symbol) => {
     if (!symbol) return 'BTC';
     return symbol.split('-')[0].replace('PERP', '').replace('USD', '');
+};
+
+// --- Image Error Handling ---
+const handleImageError = (symbol, event) => {
+    failedImages.value.add(symbol);
+    event.target.style.display = 'none';
+};
+
+const isImageFailed = (symbol) => {
+    return failedImages.value.has(symbol);
+};
+
+// --- Navigation ---
+const navigateToAsset = (opp) => {
+    router.push({
+        path: '/asset',
+        query: {
+            symbol: opp.symbol,
+            longDex: opp.longDex,
+            shortDex: opp.shortDex
+        }
+    });
 };
 
 const calculateTopOpportunities = (rawRates) => {
