@@ -2,9 +2,9 @@
  * GET /api/charts/comparison
  * Fetches chart comparison data for a symbol
  * Maps to backend: /api/charts/funding-rate/{symbol}/compare
- * Cached for 60 seconds
+ * NO CACHE for live data (hours <= 24) to ensure freshness
  */
-export default defineCachedEventHandler(async (event) => {
+export default defineEventHandler(async (event) => {
     const backendUrl = getBackendUrl()
     const query = getQuery(event)
     const symbol = query.symbol || 'BTC-USD-PERP'
@@ -15,13 +15,6 @@ export default defineCachedEventHandler(async (event) => {
     } catch (error: any) {
         console.error('[API] charts/comparison error:', error.message)
         return {}
-    }
-}, {
-    maxAge: 60,
-    name: 'charts-comparison',
-    getKey: (event) => {
-        const query = getQuery(event)
-        return `${query.symbol}-${query.hours}`
     }
 })
 
