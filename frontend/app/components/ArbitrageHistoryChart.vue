@@ -368,6 +368,18 @@ const fetchData = async (silent = false) => {
       finalData = aggregateByInterval(finalData, 24) // This uses 15-min interval for hours <= 24
     }
     
+    // For LIVE mode: filter to only show TODAY's data (after midnight UTC)
+    // This prevents yesterday's data from appearing when fetching "last X hours"
+    if (periodConfig?.isLive && finalData.length > 0) {
+      const now = new Date()
+      const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
+      
+      finalData = finalData.filter(d => {
+        const timestamp = new Date(d.timestamp)
+        return timestamp >= todayMidnightUTC
+      })
+    }
+    
     // For ALL historical views (non-Live): filter out today's data (UTC)
     // This ensures chart data matches the funding_rate_daily aggregates
     if (!periodConfig?.isLive && finalData.length > 0) {
