@@ -48,6 +48,17 @@ const isChangingPeriod = ref(false)
 const isChangingDex = ref(false) // Loading state for DEX changes (for animation)
 const usingPreAggregated = ref(false) // Track if using pre-aggregated data
 
+// Helper to parse timestamp as UTC (backend returns timestamps without Z suffix)
+const parseAsUTC = (timestamp) => {
+  const ts = String(timestamp)
+  // If already has timezone info, parse as-is
+  if (ts.endsWith('Z') || ts.includes('+') || ts.includes('-', 10)) {
+    return new Date(ts)
+  }
+  // Otherwise, append Z to force UTC interpretation
+  return new Date(ts + 'Z')
+}
+
 // Data from funding_rate_daily table for accurate yield calculation (historical)
 const dailyRatesData = ref(null) // { symbols: [...], periodLabel, dataPointCount }
 
@@ -112,7 +123,7 @@ const timeframeDescription = computed(() => {
   if (currentPeriod.isLive) {
     // Live: use actual first data point from chart (today's data)
     if (historyData.value && historyData.value.length > 0) {
-      const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
+      const timestamps = historyData.value.map(d => parseAsUTC(d.timestamp)).sort((a, b) => a - b)
       const firstTime = timestamps[0]
       const lastTime = timestamps[timestamps.length - 1]
       return `Today (UTC): ${formatDateUTC(firstTime, true)} - ${formatDateUTC(lastTime, true)}`
@@ -122,7 +133,7 @@ const timeframeDescription = computed(() => {
     // 1D: yesterday's data in UTC
     const yesterday = getYesterdayUTC()
     if (historyData.value && historyData.value.length > 0) {
-      const timestamps = historyData.value.map(d => new Date(d.timestamp)).sort((a, b) => a - b)
+      const timestamps = historyData.value.map(d => parseAsUTC(d.timestamp)).sort((a, b) => a - b)
       const firstTime = timestamps[0]
       const lastTime = timestamps[timestamps.length - 1]
       return `${formatDateUTC(yesterday)} (UTC): ${formatDateUTC(firstTime, true)} - ${formatDateUTC(lastTime, true)}`
@@ -375,7 +386,7 @@ const fetchData = async (silent = false) => {
       const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
       
       finalData = finalData.filter(d => {
-        const timestamp = new Date(d.timestamp)
+        const timestamp = parseAsUTC(d.timestamp)
         return timestamp >= todayMidnightUTC
       })
     }
@@ -387,12 +398,12 @@ const fetchData = async (silent = false) => {
       const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
       
       finalData = finalData.filter(d => {
-        const timestamp = new Date(d.timestamp)
+        const timestamp = parseAsUTC(d.timestamp)
         return timestamp < todayMidnightUTC
       })
     }
     
-    historyData.value = finalData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    historyData.value = finalData.sort((a, b) => parseAsUTC(a.timestamp) - parseAsUTC(b.timestamp))
 
     usingPreAggregated.value = usedPreAggregated
     chartKey.value++
@@ -491,9 +502,9 @@ const unifiedChartData = computed(() => {
     // 1. Collect all unique timestamps, sorted
     const allTimestamps = [...new Set(historyData.value.map(d => d.timestamp))].sort()
 
-    // 2. Create labels (always in UTC)
+    // 2. Create labels (always in UTC, using parseAsUTC for consistent parsing)
     const labels = allTimestamps.map(t => {
-      const date = new Date(t)
+      const date = parseAsUTC(t)
       if (selectedPeriod.value > 24) {
         if (selectedPeriod.value > 168) {
              return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
@@ -608,7 +619,7 @@ const unifiedChartData = computed(() => {
       // Calculate actual number of unique days covered by the data (using UTC)
       const uniqueDays = new Set()
       for (const t of allTimestamps) {
-        const date = new Date(t)
+        const date = parseAsUTC(t)
         const dayKey = `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`
         uniqueDays.add(dayKey)
       }
