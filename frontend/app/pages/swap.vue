@@ -1,7 +1,5 @@
 <script setup>
 // Nuxt auto-imports
-// Note: Swap page temporarily disabled during migration
-// AppKit and ethers need proper setup for Nuxt
 
 // SEO
 useSeoMeta({
@@ -16,13 +14,23 @@ useHead({
   link: [{ rel: 'canonical', href: 'https://cactusfund.app/swap' }]
 })
 
-// Placeholder state - wallet not yet connected
-const accountData = ref({ value: { isConnected: false, address: null } })
-const providerData = ref(null)
+// AppKit (wallet connection) - using composable
+const { accountData, openModal } = useAppKit()
 
-const provider = computed(() => null) // TODO: Re-enable with proper AppKit/ethers setup
-const isConnected = computed(() => false)
-const userAddress = computed(() => '')
+// WETH operations - using composable
+const { getEthBalance, getWethBalance, wrapEth, unwrapWeth, getExplorerTxUrl } = useWeth()
+
+// Wallet state from AppKit
+const isConnected = computed(() => Boolean(accountData.value?.isConnected))
+const userAddress = computed(() => {
+  if (!accountData.value?.address) return ''
+  let addr = String(accountData.value.address)
+  // Remove CAIP prefix if present (e.g., "eip155:1:")
+  if (addr.includes(':')) {
+    addr = addr.split(':').pop()
+  }
+  return addr
+})
 
 // Swap state
 const direction = ref('wrap') // 'wrap' or 'unwrap'
@@ -30,7 +38,8 @@ const amount = ref('')
 const ethBalance = ref('0')
 const wethBalance = ref('0')
 const isLoading = ref(false)
-const txStatus = ref(null) // { success, hash, message }
+const isLoadingBalances = ref(false)
+const txStatus = ref(null) // { success, hash, message, pending }
 
 // Computed for display
 const fromToken = computed(() => direction.value === 'wrap' ? 'ETH' : 'WETH')
@@ -38,15 +47,22 @@ const toToken = computed(() => direction.value === 'wrap' ? 'WETH' : 'ETH')
 const fromBalance = computed(() => direction.value === 'wrap' ? ethBalance.value : wethBalance.value)
 const toBalance = computed(() => direction.value === 'wrap' ? wethBalance.value : ethBalance.value)
 
-// Fetch balances
+// Fetch balances using useWeth composable
 const fetchBalances = async () => {
   if (!isConnected.value || !userAddress.value) return
 
+  isLoadingBalances.value = true
   try {
-    ethBalance.value = await getTokenBalance(provider.value, 'ETH', userAddress.value)
-    wethBalance.value = await getTokenBalance(provider.value, 'WETH', userAddress.value)
+    const [eth, weth] = await Promise.all([
+      getEthBalance(userAddress.value),
+      getWethBalance(userAddress.value)
+    ])
+    ethBalance.value = eth
+    wethBalance.value = weth
   } catch (error) {
     console.error('Failed to fetch balances:', error)
+  } finally {
+    isLoadingBalances.value = false
   }
 }
 
@@ -54,6 +70,10 @@ const fetchBalances = async () => {
 watch([isConnected, userAddress], () => {
   if (isConnected.value && userAddress.value) {
     fetchBalances()
+  } else {
+    // Reset balances when disconnected
+    ethBalance.value = '0'
+    wethBalance.value = '0'
   }
 }, { immediate: true })
 
@@ -75,15 +95,18 @@ const setMax = () => {
   }
 }
 
-// Execute swap
+// Execute swap using useWeth composable
 const executeSwapAction = async () => {
   if (!isConnected.value || !amount.value || parseFloat(amount.value) <= 0) return
 
   isLoading.value = true
-  txStatus.value = { pending: true, message: 'Waiting for confirmation...' }
+  txStatus.value = { pending: true, message: 'Waiting for wallet confirmation...' }
 
   try {
-    const tx = await executeSwap(provider.value, fromToken.value, toToken.value, amount.value)
+    // Call wrap or unwrap based on direction
+    const tx = direction.value === 'wrap' 
+      ? await wrapEth(amount.value, userAddress.value)
+      : await unwrapWeth(amount.value, userAddress.value)
 
     txStatus.value = { pending: true, hash: tx.hash, message: 'Transaction pending...' }
 
@@ -103,7 +126,7 @@ const executeSwapAction = async () => {
     console.error('Swap failed:', error)
     txStatus.value = {
       success: false,
-      message: error.reason || error.message || 'Transaction failed'
+      message: error.shortMessage || error.reason || error.message || 'Transaction failed'
     }
   } finally {
     isLoading.value = false
@@ -115,6 +138,11 @@ const formatBalance = (balance) => {
   const num = parseFloat(balance)
   if (isNaN(num)) return '0'
   return num.toFixed(6)
+}
+
+// Handle connect wallet click
+const handleConnectWallet = () => {
+  openModal()
 }
 
 onMounted(() => {
