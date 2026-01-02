@@ -860,7 +860,7 @@ onUnmounted(() => {
                           {{ chartYieldData.average > 0 ? '+' : ''}}{{ (chartYieldData.average / 365).toFixed(4) }}%
                         </span>
                         <span class="text-[10px] text-neutral-500">
-                          ${{ ((chartYieldData.average / 365) * positionSize / 100).toFixed(2) }}
+                          ${{ ((chartYieldData.average / 365) * (positionSize / 2) / 100).toFixed(2) }}
                         </span>
                       </div>
                     </div>
@@ -873,7 +873,7 @@ onUnmounted(() => {
                           {{ chartYieldData.average > 0 ? '+' : ''}}{{ chartYieldData.average.toFixed(2) }}%
                         </span>
                         <span class="text-[10px] text-neutral-500">
-                          ${{ (chartYieldData.average * positionSize / 100).toFixed(0) }}
+                          ${{ (chartYieldData.average * (positionSize / 2) / 100).toFixed(0) }}
                         </span>
                       </div>
                     </div>
@@ -906,7 +906,7 @@ onUnmounted(() => {
                         </span>
                       </div>
                       <span class="text-sm text-neutral-500 mt-1">
-                        ${{ (chartYieldData.totalReturn * positionSize / 100).toFixed(2) }}
+                        ${{ (chartYieldData.totalReturn * (positionSize / 2) / 100).toFixed(2) }}
                       </span>
                     </div>
                   </template>
@@ -943,7 +943,7 @@ onUnmounted(() => {
                         {{ chartYieldData.averageFromChart > 0 ? '+' : ''}}{{ (chartYieldData.averageFromChart / 365).toFixed(4) }}%
                       </span>
                       <span class="text-[10px] text-neutral-500">
-                        ${{ ((chartYieldData.averageFromChart / 365) * positionSize / 100).toFixed(2) }}
+                        ${{ ((chartYieldData.averageFromChart / 365) * (positionSize / 2) / 100).toFixed(2) }}
                       </span>
                     </div>
                   </div>
@@ -956,7 +956,7 @@ onUnmounted(() => {
                         {{ chartYieldData.averageFromChart > 0 ? '+' : ''}}{{ chartYieldData.averageFromChart.toFixed(2) }}%
                       </span>
                       <span class="text-[10px] text-neutral-500">
-                        ${{ (chartYieldData.averageFromChart * positionSize / 100).toFixed(0) }}
+                        ${{ (chartYieldData.averageFromChart * (positionSize / 2) / 100).toFixed(0) }}
                       </span>
                     </div>
                   </div>
