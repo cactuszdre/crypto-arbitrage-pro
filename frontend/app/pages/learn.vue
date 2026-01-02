@@ -87,11 +87,53 @@ const openAndScrollTo = (questionId) => {
   })
 }
 
-// Parse answer text and convert [[term|questionId]] to clickable links
+// Parse answer text: convert [[term|questionId]] to links AND markdown to HTML
 const parseAnswer = (answer) => {
-  return answer.replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, (match, text, id) => {
+  let html = answer
+  
+  // 1. Handle FAQ links first: [[text|id]] -> clickable button
+  html = html.replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, (match, text, id) => {
     return `<button class="faq-link" onclick="window.openFaqSection('${id}')">${text}</button>`
   })
+  
+  // 2. Convert markdown to HTML
+  
+  // Bold: **text** or __text__
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>')
+  html = html.replace(/__([^_]+)__/g, '<strong class="text-white">$1</strong>')
+  
+  // Italic: _text_ (single underscore)
+  html = html.replace(/(?<![a-zA-Z])_([^_]+)_(?![a-zA-Z])/g, '<em class="text-neutral-400 italic">$1</em>')
+  
+  // Headers: ### text (convert to styled span)
+  html = html.replace(/^### (.+)$/gm, '<span class="block text-white font-semibold mt-4 mb-2">$1</span>')
+  html = html.replace(/^## (.+)$/gm, '<span class="block text-white font-bold text-lg mt-4 mb-2">$1</span>')
+  
+  // Horizontal rule: ---
+  html = html.replace(/^---$/gm, '<hr class="border-white/10 my-3" />')
+  
+  // Numbered lists: 1. text, 2. text, etc.
+  html = html.replace(/^(\d+)\. (.+)$/gm, '<div class="flex gap-2 mt-1"><span class="text-emerald-400 font-medium">$1.</span><span>$2</span></div>')
+  
+  // Bullet lists with dash: - text (at start of line)
+  html = html.replace(/^- (.+)$/gm, '<div class="flex gap-2 mt-1"><span class="text-neutral-500">•</span><span>$1</span></div>')
+  
+  // Indented bullet lists (3+ spaces followed by dash)
+  html = html.replace(/^   - (.+)$/gm, '<div class="flex gap-2 mt-1 ml-4"><span class="text-neutral-600">◦</span><span class="text-neutral-400">$1</span></div>')
+  
+  // Checkbox unchecked: ☐ text
+  html = html.replace(/^☐ (.+)$/gm, '<div class="flex gap-2 mt-1"><span class="text-neutral-500">☐</span><span>$1</span></div>')
+  
+  // Code/monospace: `text`
+  html = html.replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-white/10 text-emerald-400 text-xs font-mono">$1</code>')
+  
+  // Convert double newlines to paragraph breaks
+  html = html.replace(/\n\n/g, '</p><p class="mt-3">')
+  
+  // Wrap in paragraph
+  html = '<p>' + html + '</p>'
+  
+  return html
 }
 
 // Expose function to window for onclick handlers
@@ -381,14 +423,15 @@ Annual returns can range from 36% (0.1% daily) to 365%+ (1% daily) depending on 
       {
         id: 'what-risks',
         question: "What are the risks of funding rate arbitrage?",
-        answer: `Main risks include:
-- **Execution risk**: Timing both trades simultaneously
-- **Rate changes**: Funding rates can flip before next payment
-- **Liquidation**: If one side moves too fast (use max 5x leverage)
-- **Smart contract risk**: Rare on major DEXs but possible
-- **Exchange issues**: Downtime, withdrawal problems
+        answer: `While funding rate arbitrage is considered low-risk, it's NOT risk-free. Here are the main risks you should understand:
 
-Start small and learn the mechanics first. Never invest more than you can afford to lose.`
+⚠️ **[[Rate Reversal Risk|risk-rate-reversal]]** - Funding rates can change direction
+⚠️ **[[Platform & Security Risk|risk-platform-hack]]** - Exchange hacks or failures
+⚠️ **[[Liquidation Risk|risk-liquidation]]** - Getting liquidated without hedging
+
+Click each risk above to learn more about it and how to protect yourself.
+
+**Golden rule**: Start small, learn the mechanics, and never invest more than you can afford to lose.`
       },
       {
         id: 'delta-neutral',
@@ -398,6 +441,148 @@ Start small and learn the mechanics first. Never invest more than you can afford
 If BTC goes up 10%, your long position gains and your short position loses - they cancel out.
 
 You're protected from price moves in either direction, allowing you to focus purely on collecting funding rate spreads.`
+      }
+    ]
+  },
+  {
+    id: 'risks',
+    title: 'Risks & Security',
+    icon: 'lucide:shield-alert',
+    questions: [
+      {
+        id: 'risk-rate-reversal',
+        question: "What is rate reversal risk and how can it affect my profits?",
+        answer: `**Rate reversal** happens when the funding rate direction changes while you're holding a position.
+
+📊 **Simple example:**
+- Day 1: You go LONG on Exchange A (rate +0.05%) and SHORT on Exchange B (rate -0.02%)
+- You earn +0.05% - 0.02% = **+0.03% profit**
+
+- Day 2: Rates flip! Exchange A is now -0.03% and Exchange B is +0.04%
+- Now you're PAYING -0.03% + 0.04% = **-0.01% loss**
+
+If you keep your position too long after rates reverse, your profits will slowly disappear!
+
+🛡️ **How to protect yourself:**
+1. **Monitor rates regularly** - Check at least once per day
+2. **Set alerts** - Use CactusFund notifications (coming soon)
+3. **Don't be greedy** - Close positions when spread becomes too small
+4. **Be ready to act** - Have a plan to exit or reverse your positions
+
+Remember: Funding rates change based on market sentiment. During volatile periods, they can flip quickly!`
+      },
+      {
+        id: 'risk-platform-hack',
+        question: "What happens if a DEX gets hacked? Platform security risks explained",
+        answer: `**Platform risk** is the possibility that something goes wrong with the exchange itself, not your trading strategy.
+
+🔓 **Types of platform risks:**
+
+1. **Smart Contract Hacks**
+   - DEXs run on code (smart contracts) that could have bugs
+   - Hackers can exploit these bugs to steal funds
+   - Even audited contracts aren't 100% safe
+
+2. **Exchange Insolvency**
+   - The exchange runs out of money (like FTX in 2022)
+   - Your funds could be frozen or lost
+
+3. **Withdrawal Issues**
+   - Exchange might pause withdrawals
+   - Network congestion can delay transactions
+
+4. **Oracle Manipulation**
+   - Price feeds can be manipulated
+   - Could cause unfair liquidations
+
+🛡️ **How to protect yourself:**
+1. **Spread across multiple DEXs** - Don't put all eggs in one basket
+2. **Use established DEXs** - Hyperliquid, Paradex, etc. have track records
+3. **Only deposit what you need** - Keep most funds in your personal wallet
+4. **Monitor DEX health** - Check TVL, audit reports, team reputation
+5. **Have an exit plan** - Know how to withdraw quickly if needed
+
+_Note: CactusFund is non-custodial. We never hold your funds - you're trading directly on the DEXs._`
+      },
+      {
+        id: 'risk-liquidation',
+        question: "What is liquidation risk and how do take-profit orders protect me?",
+        answer: `**Liquidation** happens when your position loses too much money and the exchange forcibly closes it to prevent further losses.
+
+📉 **How liquidation works (for beginners):**
+
+When you open a leveraged position, you put down "margin" (collateral). If your losses approach this margin, you get liquidated.
+
+Example with 5x leverage:
+- You deposit $1,000 and open a $5,000 position
+- If the price moves 20% against you, you lose $1,000 (your entire margin)
+- The exchange liquidates you = position closed + margin gone
+
+⚠️ **The BIG hidden risk in arbitrage:**
+
+You have TWO positions (long + short). If one gets liquidated:
+- Your "hedge" is gone
+- You're now fully exposed to price movement
+- The other position can cause massive losses!
+
+**Scenario:**
+1. BTC pumps 30% very fast
+2. Your SHORT position gets liquidated (loss)
+3. Your LONG is still open but you panic and don't close it
+4. BTC drops 20% → now your LONG loses too!
+
+🛡️ **How to protect yourself:**
+
+1. **Use low leverage** - Max 5x, ideally 2-3x
+2. **Set take-profit on BOTH sides**
+   - If one position closes, the other should auto-close too
+   - This keeps you delta-neutral even in chaos
+
+3. **Monitor margin levels**
+   - Keep margin above 50% if possible
+   - Add more collateral when needed
+
+4. **Use stop-losses wisely**
+   - Set them WIDER than normal trading
+   - You want to avoid unnecessary liquidations
+
+5. **Position sizing**
+   - Never risk more than 10-20% of your total capital on one trade
+
+**What is a Take-Profit order?**
+An automatic order that closes your position when it reaches a certain profit. Set TP on both positions so if one closes profitably, the other closes too.`
+      },
+      {
+        id: 'risk-summary',
+        question: "Quick risk checklist before opening an arbitrage position",
+        answer: `✅ **Pre-trade checklist:**
+
+**Capital Management:**
+☐ Am I risking less than 20% of my total capital?
+☐ Can I afford to lose this entire amount?
+☐ Is my leverage 5x or lower?
+
+**Position Setup:**
+☐ Are both positions the exact same size?
+☐ Have I set take-profit on BOTH positions?
+☐ Is my margin level healthy (above 30%)?
+
+**Platform Check:**
+☐ Am I using reputable DEXs?
+☐ Do I have enough gas for transactions?
+☐ Can I access both exchanges right now?
+
+**Monitoring Plan:**
+☐ Will I check rates at least once per day?
+☐ Do I know how to close both positions quickly?
+☐ Have I bookmarked both exchange interfaces?
+
+**Exit Strategy:**
+☐ At what spread will I close the position?
+☐ How will I react if rates reverse?
+☐ What's my maximum loss tolerance?
+
+**Remember:** The goal is consistent, small gains - not home runs. A 0.1% daily return = 44% annually. Don't get greedy!`
       }
     ]
   },
@@ -443,6 +628,8 @@ Click an opportunity to see the [[Long/Short pair|what-is-arb]] and execute both
 - FOMO trading every opportunity you see
 - Forgetting about tax implications
 - NEVER share your seed phrase with anyone
+
+**Most importantly:** Not understanding the [[risks|what-risks]] before trading. Read our [[Risks & Security|risk-summary]] section!
 
 The best traders are patient and disciplined. Start slow, learn the mechanics, then scale up.`
       }
@@ -528,6 +715,369 @@ const totalQuestions = computed(() => {
               <span class="text-base sm:text-lg font-bold text-white">{{ totalQuestions }}+</span>
             </div>
             <span class="text-[10px] text-neutral-500 uppercase tracking-wider">Questions</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BEGINNER TUTORIAL SECTION -->
+    <section class="py-12 px-4" id="tutorial">
+      <div class="max-w-5xl mx-auto">
+        <!-- Section Header -->
+        <div class="text-center mb-10">
+          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 mb-4">
+            <span class="iconify text-emerald-400" data-icon="lucide:graduation-cap" data-width="18"></span>
+            <span class="text-sm font-semibold text-emerald-400">Beginner Tutorial</span>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-3">
+            How To Make Money
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-400">
+              Step by Step
+            </span>
+          </h2>
+          <p class="text-neutral-400 text-sm sm:text-base max-w-2xl mx-auto">
+            Even if you know nothing about crypto, follow this guide and you can start earning in less than an hour.
+          </p>
+        </div>
+
+        <!-- Tutorial Steps -->
+        <div class="space-y-6">
+          
+          <!-- STEP 0: Prerequisites -->
+          <div class="glass-card rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-blue-500/10 to-transparent border-b border-white/5 flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                0
+              </div>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-white">Before You Start</h3>
+                <p class="text-xs text-neutral-400">What you need • 5 min read</p>
+              </div>
+              <span class="iconify text-blue-400" data-icon="lucide:info" data-width="20"></span>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-neutral-300 text-sm">
+                To do funding rate arbitrage, you'll need:
+              </p>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div class="p-4 rounded-xl bg-white/5 border border-white/5">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="iconify text-purple-400" data-icon="lucide:wallet" data-width="20"></span>
+                    <span class="font-medium text-white">A crypto wallet</span>
+                  </div>
+                  <p class="text-xs text-neutral-400">
+                    MetaMask, Rabby, Coinbase Wallet, or Rainbow. Free and takes 2 minutes to install.
+                    <br><span class="text-purple-400">→ Download at metamask.io or rabby.io</span>
+                  </p>
+                </div>
+                <div class="p-4 rounded-xl bg-white/5 border border-white/5">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="iconify text-green-400" data-icon="lucide:banknote" data-width="20"></span>
+                    <span class="font-medium text-white">Capital (minimum ~$500)</span>
+                  </div>
+                  <p class="text-xs text-neutral-400">
+                    In USDC or ETH. The more capital you have, the more you earn. Start small to learn.
+                  </p>
+                </div>
+                <div class="p-4 rounded-xl bg-white/5 border border-white/5">
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="iconify text-cyan-400" data-icon="lucide:monitor" data-width="20"></span>
+                    <span class="font-medium text-white">2 browser tabs</span>
+                  </div>
+                  <p class="text-xs text-neutral-400">
+                    One for each exchange. You'll need to act on both at the same time.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 1: Create Accounts -->
+          <div class="glass-card rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-emerald-500/10 to-transparent border-b border-white/5 flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                1
+              </div>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-white">Create Accounts on 2 Platforms</h3>
+                <p class="text-xs text-neutral-400">About 10 minutes</p>
+              </div>
+              <span class="iconify text-emerald-400" data-icon="lucide:user-plus" data-width="20"></span>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-neutral-300 text-sm">
+                Arbitrage works by exploiting <strong class="text-white">rate differences</strong> between platforms. So you need an account on at least 2 different exchanges.
+              </p>
+              
+              <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <p class="text-sm text-neutral-300 mb-3">
+                  <strong class="text-emerald-400">Good news:</strong> On DEXs (decentralized exchanges), no account creation needed! You simply connect with your MetaMask wallet.
+                </p>
+              </div>
+
+              <div class="space-y-3">
+                <p class="text-xs font-medium text-neutral-500 uppercase tracking-wider">Recommended platforms:</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <a href="https://app.hyperliquid.xyz" target="_blank" rel="noopener" class="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-orange-500/30 transition-all group">
+                    <img src="/dex-icons/hyperliquid.png" alt="Hyperliquid" class="w-8 h-8 rounded-lg">
+                    <div class="flex-1">
+                      <span class="text-white font-medium group-hover:text-orange-400 transition-colors">Hyperliquid</span>
+                      <p class="text-[10px] text-neutral-500">Best rates, very liquid</p>
+                    </div>
+                    <span class="iconify text-neutral-500 group-hover:text-orange-400" data-icon="lucide:external-link" data-width="14"></span>
+                  </a>
+                  <a href="https://app.paradex.trade" target="_blank" rel="noopener" class="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-green-500/30 transition-all group">
+                    <img src="/dex-icons/paradex.png" alt="Paradex" class="w-8 h-8 rounded-lg">
+                    <div class="flex-1">
+                      <span class="text-white font-medium group-hover:text-green-400 transition-colors">Paradex</span>
+                      <p class="text-[10px] text-neutral-500">On Starknet, very low fees</p>
+                    </div>
+                    <span class="iconify text-neutral-500 group-hover:text-green-400" data-icon="lucide:external-link" data-width="14"></span>
+                  </a>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-3 p-3 rounded-xl bg-white/5">
+                <span class="iconify text-yellow-400 mt-0.5" data-icon="lucide:alert-circle" data-width="16"></span>
+                <p class="text-xs text-neutral-400">
+                  <strong class="text-white">Important:</strong> Connect your wallet to both platforms and deposit funds on each. Half your capital on each.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 2: Find Opportunity -->
+          <div class="glass-card rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-purple-500/10 to-transparent border-b border-white/5 flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                2
+              </div>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-white">Find an Opportunity on CactusFund</h3>
+                <p class="text-xs text-neutral-400">2 minutes</p>
+              </div>
+              <span class="iconify text-purple-400" data-icon="lucide:search" data-width="20"></span>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-neutral-300 text-sm">
+                CactusFund scans all platforms for you. Go to the <strong class="text-emerald-400">Opportunities</strong> page and find an interesting trade.
+              </p>
+
+              <div class="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                <p class="text-sm font-medium text-white mb-2">What to look for:</p>
+                <ul class="space-y-2 text-sm text-neutral-300">
+                  <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 mt-1">✓</span>
+                    <span><strong class="text-white">Positive spread</strong> — Higher is better (0.1%+ daily = good)</span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 mt-1">✓</span>
+                    <span><strong class="text-white">Platforms where you have funds</strong> — Make sure you can trade on both</span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <span class="text-emerald-400 mt-1">✓</span>
+                    <span><strong class="text-white">An asset you know</strong> — BTC, ETH, SOL are the simplest</span>
+                  </li>
+                </ul>
+              </div>
+
+              <NuxtLink 
+                to="/opportunites"
+                class="flex items-center justify-center gap-2 w-full p-3 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium hover:from-purple-600 hover:to-indigo-700 transition-all"
+              >
+                <span class="iconify" data-icon="lucide:zap" data-width="18"></span>
+                View Real-Time Opportunities
+                <span class="iconify" data-icon="lucide:arrow-right" data-width="16"></span>
+              </NuxtLink>
+            </div>
+          </div>
+
+          <!-- STEP 3: Open Positions -->
+          <div class="glass-card rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-orange-500/10 to-transparent border-b border-white/5 flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                3
+              </div>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-white">Open 2 Positions at the Same Time</h3>
+                <p class="text-xs text-neutral-400">Be quick! • 2-5 minutes</p>
+              </div>
+              <span class="iconify text-orange-400" data-icon="lucide:split" data-width="20"></span>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-neutral-300 text-sm">
+                This is the key step! You'll open <strong class="text-white">two opposite trades</strong> on both platforms. The idea: if the price goes up, you win on one side and lose on the other → it cancels out. But you keep the <strong class="text-emerald-400">funding</strong>!
+              </p>
+
+              <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <div class="flex items-start gap-3">
+                  <span class="iconify text-amber-400 mt-0.5" data-icon="lucide:timer" data-width="18"></span>
+                  <div>
+                    <p class="text-sm font-medium text-white mb-1">IMPORTANT: Do both trades at the same time!</p>
+                    <p class="text-xs text-neutral-300">
+                      Open 2 tabs side by side. Prepare both trades, then execute them one after the other within seconds. If you wait too long, the price can move and you lose money.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid sm:grid-cols-2 gap-4">
+                <!-- Long Side -->
+                <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <div class="flex items-center gap-2 mb-3">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Platform A</span>
+                  </div>
+                  <p class="text-white font-semibold mb-2">Open a LONG</p>
+                  <ul class="space-y-1 text-xs text-neutral-300">
+                    <li>• Go to the pair (e.g., BTC-USD-PERP)</li>
+                    <li>• Click on <span class="text-emerald-400">"Buy"</span> or <span class="text-emerald-400">"Long"</span></li>
+                    <li>• Enter the amount (e.g., $500)</li>
+                    <li>• Choose your leverage (max 5x recommended)</li>
+                    <li>• Confirm the trade</li>
+                  </ul>
+                </div>
+                
+                <!-- Short Side -->
+                <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <div class="flex items-center gap-2 mb-3">
+                    <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span class="text-xs font-bold text-red-400 uppercase tracking-wider">Platform B</span>
+                  </div>
+                  <p class="text-white font-semibold mb-2">Open a SHORT</p>
+                  <ul class="space-y-1 text-xs text-neutral-300">
+                    <li>• Go to the same pair (BTC-USD-PERP)</li>
+                    <li>• Click on <span class="text-red-400">"Sell"</span> or <span class="text-red-400">"Short"</span></li>
+                    <li>• <strong class="text-white">SAME amount</strong> (e.g., $500)</li>
+                    <li>• <strong class="text-white">SAME leverage</strong> as the other side</li>
+                    <li>• Confirm the trade</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-3 p-3 rounded-xl bg-white/5">
+                <span class="iconify text-emerald-400 mt-0.5" data-icon="lucide:check-circle" data-width="16"></span>
+                <p class="text-xs text-neutral-400">
+                  <strong class="text-white">Well done!</strong> You're now "delta-neutral". If BTC goes up 10%, you win ~$50 on the LONG and lose ~$50 on the SHORT → 0. But you collect funding from both sides!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 4: Wait & Collect -->
+          <div class="glass-card rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-cyan-500/10 to-transparent border-b border-white/5 flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                4
+              </div>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-white">Wait and Collect Your Earnings</h3>
+                <p class="text-xs text-neutral-400">Every 8 hours</p>
+              </div>
+              <span class="iconify text-cyan-400" data-icon="lucide:clock" data-width="20"></span>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-neutral-300 text-sm">
+                Funding is paid <strong class="text-white">every 8 hours</strong> (00:00, 08:00, 16:00 UTC). As long as you keep your positions open, you collect automatically.
+              </p>
+
+              <div class="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20">
+                <p class="text-sm font-medium text-white mb-3">Example with $1,000:</p>
+                <div class="grid sm:grid-cols-3 gap-3 text-center">
+                  <div class="p-3 rounded-lg bg-black/20">
+                    <p class="text-xs text-neutral-400 mb-1">Every 8h</p>
+                    <p class="text-lg font-bold text-emerald-400">+$0.40</p>
+                  </div>
+                  <div class="p-3 rounded-lg bg-black/20">
+                    <p class="text-xs text-neutral-400 mb-1">Per day</p>
+                    <p class="text-lg font-bold text-emerald-400">+$1.20</p>
+                  </div>
+                  <div class="p-3 rounded-lg bg-black/20">
+                    <p class="text-xs text-neutral-400 mb-1">Per month</p>
+                    <p class="text-lg font-bold text-emerald-400">+$36</p>
+                  </div>
+                </div>
+                <p class="text-xs text-neutral-500 text-center mt-2">Based on a 0.12% daily spread. Results vary with market conditions.</p>
+              </div>
+
+              <div class="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <span class="iconify text-amber-400 mt-0.5" data-icon="lucide:eye" data-width="16"></span>
+                <div class="text-xs text-neutral-300">
+                  <strong class="text-white">Monitor your positions!</strong>
+                  <br>Rates change. If the spread stays negative for 2+ days, it's time to close your positions. Check at least 1x per day.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 5: Close Positions -->
+          <div class="glass-card rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-pink-500/10 to-transparent border-b border-white/5 flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                5
+              </div>
+              <div class="flex-1">
+                <h3 class="text-lg font-semibold text-white">Close Positions (Take Your Profits)</h3>
+                <p class="text-xs text-neutral-400">Whenever you want • 2 minutes</p>
+              </div>
+              <span class="iconify text-pink-400" data-icon="lucide:log-out" data-width="20"></span>
+            </div>
+            <div class="p-5 space-y-4">
+              <p class="text-neutral-300 text-sm">
+                When you want to stop (spread becomes small, you need your money, etc.), close both positions at the same time.
+              </p>
+
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div class="p-4 rounded-xl bg-white/5 border border-white/5">
+                  <p class="text-xs font-medium text-neutral-500 uppercase tracking-wider mb-2">On Platform A</p>
+                  <p class="text-white font-medium">Close the LONG</p>
+                  <p class="text-xs text-neutral-400 mt-1">Click on "Close" or "Sell" to close</p>
+                </div>
+                <div class="p-4 rounded-xl bg-white/5 border border-white/5">
+                  <p class="text-xs font-medium text-neutral-500 uppercase tracking-wider mb-2">On Platform B</p>
+                  <p class="text-white font-medium">Close the SHORT</p>
+                  <p class="text-xs text-neutral-400 mt-1">Click on "Close" or "Buy to Close"</p>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span class="iconify text-emerald-400 mt-0.5" data-icon="lucide:party-popper" data-width="16"></span>
+                <p class="text-xs text-neutral-300">
+                  <strong class="text-emerald-400">That's it!</strong> Your funding earnings are yours. You can withdraw to your wallet or start again with a new opportunity.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Quick Tips Summary -->
+        <div class="mt-8 p-6 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-white/10">
+          <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <span class="iconify text-purple-400" data-icon="lucide:lightbulb" data-width="20"></span>
+            Summary & Pro Tips
+          </h3>
+          <div class="grid sm:grid-cols-2 gap-4 text-sm">
+            <div class="flex items-start gap-2">
+              <span class="text-emerald-400">✓</span>
+              <span class="text-neutral-300"><strong class="text-white">Start small</strong> — $500-1000 max to learn</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-emerald-400">✓</span>
+              <span class="text-neutral-300"><strong class="text-white">Same size on both sides</strong> — This is mandatory</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-emerald-400">✓</span>
+              <span class="text-neutral-300"><strong class="text-white">Max 5x leverage</strong> — Less is better</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-emerald-400">✓</span>
+              <span class="text-neutral-300"><strong class="text-white">Check 1x/day</strong> — Rates can change</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-amber-400">⚠</span>
+              <span class="text-neutral-300"><strong class="text-white">Close if spread stays inverted 2+ days</strong> — Don't rush, but don't ignore trends</span>
+            </div>
           </div>
         </div>
       </div>
@@ -670,6 +1220,100 @@ const totalQuestions = computed(() => {
             <h3 class="text-base font-semibold text-white mb-1">{{ benefit.title }}</h3>
             <p class="text-sm text-neutral-400">{{ benefit.description }}</p>
           </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Risks Section -->
+    <section class="py-12 px-4" id="risks">
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-10">
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 mb-4">
+            <span class="iconify text-amber-400" data-icon="lucide:alert-triangle" data-width="14"></span>
+            <span class="text-xs font-medium text-amber-400 uppercase tracking-wider">Important</span>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-bold text-white mb-3">
+            Understand The Risks
+          </h2>
+          <p class="text-neutral-400 text-sm sm:text-base max-w-xl mx-auto">
+            Funding rate arbitrage is considered low-risk, but it's <strong class="text-white">NOT risk-free</strong>. Learn about these risks before trading.
+          </p>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-4">
+          <!-- Risk 1: Rate Reversal -->
+          <button 
+            @click="openAndScrollTo('risk-rate-reversal')"
+            class="glass-card rounded-2xl p-5 text-left group hover:border-amber-500/30 transition-all duration-300 cursor-pointer"
+          >
+            <div class="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <span class="iconify text-amber-400" data-icon="lucide:refresh-ccw" data-width="24"></span>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2">
+              Rate Reversal
+              <span class="iconify text-neutral-500 group-hover:text-amber-400 transition-colors" data-icon="lucide:arrow-right" data-width="14"></span>
+            </h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-3">
+              Funding rates can change direction. If you hold too long, profits can turn into losses.
+            </p>
+            <span class="text-xs text-amber-400 font-medium">Learn how to protect yourself →</span>
+          </button>
+
+          <!-- Risk 2: Platform/Hack -->
+          <button 
+            @click="openAndScrollTo('risk-platform-hack')"
+            class="glass-card rounded-2xl p-5 text-left group hover:border-red-500/30 transition-all duration-300 cursor-pointer"
+          >
+            <div class="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <span class="iconify text-red-400" data-icon="lucide:shield-off" data-width="24"></span>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2">
+              Platform Risk
+              <span class="iconify text-neutral-500 group-hover:text-red-400 transition-colors" data-icon="lucide:arrow-right" data-width="14"></span>
+            </h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-3">
+              Exchanges can get hacked, go offline, or face liquidity issues. Your funds could be at risk.
+            </p>
+            <span class="text-xs text-red-400 font-medium">Learn how to minimize exposure →</span>
+          </button>
+
+          <!-- Risk 3: Liquidation -->
+          <button 
+            @click="openAndScrollTo('risk-liquidation')"
+            class="glass-card rounded-2xl p-5 text-left group hover:border-orange-500/30 transition-all duration-300 cursor-pointer"
+          >
+            <div class="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <span class="iconify text-orange-400" data-icon="lucide:zap-off" data-width="24"></span>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2">
+              Liquidation Risk
+              <span class="iconify text-neutral-500 group-hover:text-orange-400 transition-colors" data-icon="lucide:arrow-right" data-width="14"></span>
+            </h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-3">
+              If one position gets liquidated without a take-profit on the other, you lose your hedge.
+            </p>
+            <span class="text-xs text-orange-400 font-medium">Learn about take-profit protection →</span>
+          </button>
+        </div>
+
+        <!-- Quick Tip -->
+        <div class="mt-6 p-4 rounded-xl bg-gradient-to-r from-amber-500/5 via-transparent to-red-500/5 border border-white/5">
+          <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+              <span class="iconify text-neutral-400" data-icon="lucide:lightbulb" data-width="16"></span>
+            </div>
+            <div>
+              <p class="text-sm text-neutral-300">
+                <strong class="text-white">Golden Rule:</strong> Never invest more than you can afford to lose. Start with small positions and scale up as you learn.
+              </p>
+              <button 
+                @click="openAndScrollTo('risk-summary')"
+                class="mt-2 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+              >
+                View pre-trade checklist →
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
