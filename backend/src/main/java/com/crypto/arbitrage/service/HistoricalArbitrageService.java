@@ -44,7 +44,6 @@ public class HistoricalArbitrageService {
     public HistoricalArbitrageResponse getHistoricalOpportunities(int days) {
         LocalDate requestedStartDate = LocalDate.now().minusDays(days);
         
-        log.info("Cache MISS - Calculating historical arbitrage for {} days (requested start: {})", days, requestedStartDate);
         
         // Get actual date range from database
         LocalDate actualStartDate = fundingRateDailyRepository.findMinDateSince(requestedStartDate);
@@ -53,7 +52,6 @@ public class HistoricalArbitrageService {
         
         // Handle case where no data exists
         if (actualStartDate == null || actualEndDate == null || dataPointCount == 0) {
-            log.info("No historical data found for period");
             return HistoricalArbitrageResponse.builder()
                     .opportunities(List.of())
                     .actualStartDate(null)
@@ -67,7 +65,6 @@ public class HistoricalArbitrageService {
         // Build human-readable period label
         String periodLabel = buildPeriodLabel(actualStartDate, actualEndDate, dataPointCount);
         
-        log.info("Actual data range: {} to {} ({} days)", actualStartDate, actualEndDate, dataPointCount);
         
         // Get all daily data for the period
         List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(requestedStartDate);
@@ -75,7 +72,6 @@ public class HistoricalArbitrageService {
         // Calculate opportunities
         List<HistoricalArbitrageDTO> opportunities = calculateOpportunities(allDailyData, actualStartDate, actualEndDate);
         
-        log.info("Found {} historical arbitrage opportunities", opportunities.size());
         
         return HistoricalArbitrageResponse.builder()
                 .opportunities(opportunities)
@@ -232,7 +228,6 @@ public class HistoricalArbitrageService {
     public HistoricalRatesResponse getAllHistoricalRatesBySymbol(int days) {
         LocalDate requestedStartDate = LocalDate.now().minusDays(days);
         
-        log.info("Cache MISS - Fetching all historical rates by symbol for {} days", days);
         
         // Get actual date range from database
         LocalDate actualStartDate = fundingRateDailyRepository.findMinDateSince(requestedStartDate);
@@ -241,7 +236,6 @@ public class HistoricalArbitrageService {
         
         // Handle case where no data exists
         if (actualStartDate == null || actualEndDate == null || dataPointCount == 0) {
-            log.info("No historical data found for period");
             return HistoricalRatesResponse.builder()
                     .symbols(List.of())
                     .actualStartDate(null)
@@ -304,7 +298,6 @@ public class HistoricalArbitrageService {
         // Sort by symbol name
         symbols.sort((a, b) -> a.getSymbol().compareToIgnoreCase(b.getSymbol()));
         
-        log.info("Returning {} symbols with historical rates", symbols.size());
         
         return HistoricalRatesResponse.builder()
                 .symbols(symbols)

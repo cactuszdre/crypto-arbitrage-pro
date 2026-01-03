@@ -76,7 +76,6 @@ public class ParadexService {
                 }
             }
 
-            log.info("Loaded market info for {} Paradex symbols", marketFundingPeriodCache.size());
 
         } catch (Exception e) {
             log.error("Error loading Paradex market info: {}", e.getMessage());

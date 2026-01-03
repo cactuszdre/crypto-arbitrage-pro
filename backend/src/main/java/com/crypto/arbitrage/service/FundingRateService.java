@@ -39,7 +39,6 @@ public class FundingRateService {
      */
     @Cacheable(value = "latestFundingRates")
     public List<FundingRateDTO> getAllLatestRates() {
-        log.info("Cache MISS - Fetching latest funding rates");
         // Use the optimized last_funding table
         List<LastFunding> rates = lastFundingRepository.findAll();
         return rates.stream()

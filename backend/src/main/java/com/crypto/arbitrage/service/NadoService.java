@@ -75,7 +75,6 @@ public class NadoService implements DexFetcher {
                 return List.of();
             }
 
-            log.info("Fetched {} perp symbols from Nado", productIdToSymbol.size());
 
             // Step 2: Fetch funding rates for all product IDs
             List<Integer> productIds = new ArrayList<>(productIdToSymbol.keySet());
@@ -107,7 +106,6 @@ public class NadoService implements DexFetcher {
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
                 lastFundingService.upsertAll(rates);
-                log.info("Saved {} funding rates from Nado", rates.size());
             }
 
             return rates;

@@ -59,7 +59,6 @@ public class FundingRateHourlyAggregationService {
     @Scheduled(cron = "0 5 * * * *") // Every hour at :05 (e.g., 10:05, 11:05, 12:05)
     @Transactional
     public void aggregateHourlyFundingRates() {
-        log.info("Starting 1-hour funding rate aggregation...");
 
         try {
             // Calculate the bucket time window (previous hour)
@@ -67,11 +66,9 @@ public class FundingRateHourlyAggregationService {
             LocalDateTime bucketEnd = now.truncatedTo(ChronoUnit.HOURS); // Current hour start
             LocalDateTime bucketStart = bucketEnd.minusHours(1); // Previous hour start
 
-            log.info("Aggregating hourly data for bucket: {} to {}", bucketStart, bucketEnd);
 
             // Get aggregated data for this bucket from raw 10-second data
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(bucketStart, bucketEnd);
-            log.info("Found {} ticker/dex combinations to aggregate for hourly bucket {}", aggregatedData.size(), bucketEnd);
 
             int savedCount = 0;
             int updatedCount = 0;
@@ -142,7 +139,6 @@ public class FundingRateHourlyAggregationService {
                 }
             }
 
-            log.info("Hourly aggregation completed. New: {}, Updated: {}", savedCount, updatedCount);
 
         } catch (Exception e) {
             log.error("Error during hourly aggregation: {}", e.getMessage(), e);
@@ -156,12 +152,9 @@ public class FundingRateHourlyAggregationService {
     @Scheduled(cron = "0 0 3 * * *") // Every day at 3:00 AM
     @Transactional
     public void cleanupOldHourlyData() {
-        log.info("Starting hourly data cleanup...");
-
         try {
             LocalDateTime cutoffTime = LocalDateTime.now().minusDays(RETENTION_DAYS);
             int deletedCount = fundingRateHourlyRepository.deleteByBucketTimeBefore(cutoffTime);
-            log.info("Deleted {} old hourly records (older than {} days)", deletedCount, RETENTION_DAYS);
         } catch (Exception e) {
             log.error("Error during hourly data cleanup: {}", e.getMessage(), e);
         }
@@ -190,7 +183,6 @@ public class FundingRateHourlyAggregationService {
      */
     @Transactional
     public void manualAggregate() {
-        log.info("Manual hourly aggregation triggered");
         aggregateHourlyFundingRates();
     }
 
@@ -200,7 +192,6 @@ public class FundingRateHourlyAggregationService {
      */
     @Transactional
     public void backfillBuckets(LocalDateTime startTime, LocalDateTime endTime) {
-        log.info("Backfilling hourly buckets from {} to {}", startTime, endTime);
 
         LocalDateTime currentBucket = startTime.truncatedTo(ChronoUnit.HOURS);
         int bucketsCreated = 0;
@@ -259,7 +250,6 @@ public class FundingRateHourlyAggregationService {
             currentBucket = currentBucket.plusHours(1);
         }
 
-        log.info("Hourly backfill completed. Created {} buckets", bucketsCreated);
     }
 
     /**

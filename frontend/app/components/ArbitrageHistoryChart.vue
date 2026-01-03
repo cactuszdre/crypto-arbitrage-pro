@@ -79,8 +79,14 @@ const periods = [
   { label: '7D', value: 168, days: 7, isLive: false },
   { label: '30D', value: 720, days: 30, isLive: false },
   { label: '3M', value: 2160, days: 90, isLive: false },
-  { label: '6M', value: 4320, days: 180, isLive: false }
+  { label: '6M', value: 4320, days: 180, isLive: false },
+  { label: 'Custom', value: -1, days: 0, isLive: false, isCustom: true }  // Custom timeframe
 ]
+
+// Custom timeframe state
+const customDateRange = ref(null) // [startDate, endDate]
+const customTimeframeActive = ref(false)
+const customTimeframeLabel = ref('')
 
 const emit = defineEmits(['update:averageYield'])
 
@@ -95,6 +101,86 @@ const dexesWithData = computed(() => {
 })
 
 const dexes = computed(() => ['All', ...dexesWithData.value])
+
+// Handle custom period selection  
+const selectPeriod = (period) => {
+  if (!period.isCustom) {
+    customTimeframeActive.value = false
+    customDateRange.value = null
+    selectedPeriod.value = period.value
+  }
+}
+
+// Compute the data precision based on selected date range
+const customPrecision = computed(() => {
+  if (!customDateRange.value || !customDateRange.value[0]) {
+    return { label: 'Select dates', interval: null, enableTime: false }
+  }
+  
+  const now = new Date()
+  const start = new Date(customDateRange.value[0])
+  
+  // How many days ago is the start date?
+  const daysAgoStart = (now - start) / (1000 * 60 * 60 * 24)
+  
+  if (daysAgoStart <= 1) {
+    return { 
+      label: '5-min precision', 
+      interval: '5min',
+      description: 'Data every 5 minutes',
+      enableTime: true
+    }
+  } else if (daysAgoStart <= 7) {
+    return { 
+      label: 'Hourly precision', 
+      interval: 'hourly',
+      description: 'Data rounded to hour',
+      enableTime: true
+    }
+  } else {
+    return { 
+      label: 'Daily precision', 
+      interval: 'daily',
+      description: 'Daily data only',
+      enableTime: false
+    }
+  }
+})
+
+// Format date for display
+const formatDateLabel = (date, precision) => {
+  if (!date) return ''
+  const d = new Date(date)
+  
+  if (precision === 'daily') {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  } else {
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    const hours = d.getUTCHours().toString().padStart(2, '0')
+    const mins = d.getUTCMinutes().toString().padStart(2, '0')
+    return `${dateStr} ${hours}:${mins}`
+  }
+}
+
+// Handle date range change from picker
+const onDateRangeChange = (range) => {
+  if (!range || !range[0] || !range[1]) return
+  
+  const start = new Date(range[0])
+  const end = new Date(range[1])
+  const diffHours = Math.ceil((end - start) / (1000 * 60 * 60))
+  
+  if (diffHours <= 0) return
+  
+  // Format label
+  const precision = customPrecision.value.interval || 'daily'
+  const startLabel = formatDateLabel(start, precision)
+  const endLabel = formatDateLabel(end, precision)
+  
+  selectedPeriod.value = diffHours
+  customTimeframeActive.value = true
+  customTimeframeLabel.value = `${startLabel} → ${endLabel}`
+}
 
 // Computed: Human-readable timeframe description based on selected period
 const timeframeDescription = computed(() => {
@@ -782,28 +868,40 @@ const chartOptions = computed(() => ({
       </div>
 
       <!-- Controls -->
-      <div class="flex flex-col sm:flex-row gap-2 sm:gap-0 sm:items-center sm:bg-white/5 sm:rounded-lg sm:p-1 sm:w-fit">
+      <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
         <!-- Period Tabs -->
-        <div class="flex items-center bg-white/5 sm:bg-transparent rounded-lg p-1 sm:p-0 overflow-x-auto">
+        <div class="flex items-center bg-white/5 rounded-lg p-1 overflow-x-auto">
           <button
-            v-for="period in periods"
+            v-for="period in periods.filter(p => !p.isCustom)"
             :key="period.value"
-            @click="selectedPeriod = period.value"
+            @click="selectPeriod(period)"
             :class="[
               'px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0',
-              selectedPeriod === period.value
+              selectedPeriod === period.value && !customTimeframeActive
                 ? 'bg-neutral-800 text-white shadow-sm border border-white/10'
                 : 'text-neutral-500 hover:text-white'
             ]"
           >
             {{ period.label }}
           </button>
+          
+          <!-- Custom Date Range Picker (inside Period Tabs) -->
+          <div class="custom-date-picker-wrapper flex-shrink-0">
+            <DateRangePicker
+              v-model="customDateRange"
+              :enable-time-picker="customPrecision.enableTime"
+              :custom-timeframe-active="customTimeframeActive"
+              :custom-timeframe-label="customTimeframeLabel"
+              :custom-precision="customPrecision"
+              @update:model-value="onDateRangeChange"
+            />
+          </div>
         </div>
 
-        <div class="hidden sm:block w-px h-4 bg-white/10 mx-2"></div>
+        <div class="hidden sm:block w-px h-4 bg-white/10"></div>
 
         <!-- Metric Tabs -->
-        <div class="flex items-center bg-white/5 sm:bg-transparent rounded-lg p-1 sm:p-0 overflow-x-auto">
+        <div class="flex items-center bg-white/5 rounded-lg p-1 overflow-x-auto">
           <button
             v-for="metric in metrics"
             :key="metric.value"
@@ -847,3 +945,380 @@ const chartOptions = computed(() => ({
     </div>
   </div>
 </template>
+
+<style>
+/* Vue DatePicker Override for App Theme */
+.custom-date-picker-wrapper {
+  --dp-font-family: inherit;
+  --dp-border-radius: 8px; /* rounded-lg */
+  --dp-cell-border-radius: 6px;
+  
+  /* Dark theme overrides */
+  --dp-background-color: #171717; /* neutral-900 */
+  --dp-text-color: #e5e5e5; /* neutral-200 */
+  --dp-hover-color: rgba(255, 255, 255, 0.05);
+  --dp-hover-text-color: #ffffff;
+  --dp-hover-icon-color: #ffffff;
+  --dp-primary-color: #10b981; /* emerald-500 */
+  --dp-primary-disabled-color: #059669; /* emerald-600 */
+  --dp-primary-text-color: #ffffff;
+  --dp-secondary-color: #525252; /* neutral-600 */
+  --dp-border-color: rgba(255, 255, 255, 0.1);
+  --dp-menu-border-color: rgba(255, 255, 255, 0.1);
+  --dp-border-color-hover: rgba(255, 255, 255, 0.2);
+  --dp-disabled-color: #404040; /* neutral-700 */
+  --dp-scroll-bar-background: #262626; /* neutral-800 */
+  --dp-scroll-bar-color: #525252; /* neutral-600 */
+  --dp-success-color: #10b981; /* emerald-500 */
+  --dp-icon-color: #a3a3a3; /* neutral-400 */
+  --dp-danger-color: #ef4444; /* red-500 */
+  --dp-marker-color: #10b981; /* emerald-500 */
+  --dp-tooltip-color: #262626; /* neutral-800 */
+}
+
+/* Adjust input wrapper to match other buttons */
+.custom-date-picker-wrapper .dp__input_wrap {
+  display: flex;
+}
+
+/* Remove default border from input since we use a custom trigger */
+.custom-date-picker-wrapper .dp__main {
+  font-family: inherit;
+}
+
+/* 
+ * GLOBAL STYLES for teleported datepicker menu
+ * The menu is teleported to body, so we need global selectors
+ */
+
+/* Dark theme for all dp elements */
+.dp__theme_dark {
+  --dp-background-color: #0A0A0A !important;
+  --dp-text-color: #e5e5e5 !important;
+  --dp-hover-color: rgba(255, 255, 255, 0.08) !important;
+  --dp-hover-text-color: #ffffff !important;
+  --dp-hover-icon-color: #ffffff !important;
+  --dp-primary-color: #10b981 !important;
+  --dp-primary-disabled-color: #059669 !important;
+  --dp-primary-text-color: #ffffff !important;
+  --dp-secondary-color: #525252 !important;
+  --dp-border-color: rgba(255, 255, 255, 0.15) !important;
+  --dp-menu-border-color: rgba(255, 255, 255, 0.15) !important;
+  --dp-border-color-hover: rgba(255, 255, 255, 0.25) !important;
+  --dp-disabled-color: #404040 !important;
+  --dp-scroll-bar-background: #262626 !important;
+  --dp-scroll-bar-color: #525252 !important;
+  --dp-success-color: #10b981 !important;
+  --dp-icon-color: #a3a3a3 !important;
+  --dp-danger-color: #ef4444 !important;
+  --dp-marker-color: #10b981 !important;
+  --dp-tooltip-color: #262626 !important;
+  --dp-font-family: inherit !important;
+  --dp-border-radius: 8px !important;
+  --dp-cell-border-radius: 6px !important;
+}
+
+/* Menu container */
+.dp__menu {
+  background-color: #0A0A0A !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7) !important;
+  border-radius: 12px !important;
+  font-family: inherit !important;
+}
+
+/* Calendar cells */
+.dp__calendar_item {
+  font-size: 13px !important;
+}
+
+.dp__cell_inner {
+  border-radius: 6px !important;
+}
+
+/* Month/Year header */
+.dp__month_year_wrap {
+  gap: 8px !important;
+}
+
+.dp__month_year_select {
+  color: #e5e5e5 !important;
+  font-weight: 500 !important;
+}
+
+.dp__month_year_select:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* Navigation arrows */
+.dp__arrow_top,
+.dp__arrow_bottom {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  background-color: #0A0A0A !important;
+}
+
+.dp__inner_nav {
+  color: #a3a3a3 !important;
+}
+
+.dp__inner_nav:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* Range selection styling */
+.dp__range_start,
+.dp__range_end {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.dp__range_between {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  color: #e5e5e5 !important;
+}
+
+/* Sidebar adjustments */
+.dp__sidebar_left {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 0 !important;
+}
+
+/* =====================
+   HIDE TIME PICKER WRAPPER (above calendars)
+   ===================== */
+.dp--tp-wrap {
+  display: none !important;
+}
+
+/* =====================
+   TIME PICKER STYLES 
+   ===================== */
+
+/* Time picker container */
+.dp__time_picker_overlay_container {
+  background-color: #0A0A0A !important;
+}
+
+/* Time picker wrapper */
+.dp__overlay_container {
+  background-color: #0A0A0A !important;
+}
+
+/* Time display button in calendar header */
+.dp__time_display {
+  color: #ffffff !important;
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace !important;
+}
+
+.dp__time_display:hover {
+  background-color: rgba(16, 185, 129, 0.25) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* Time picker panel */
+.dp__time_picker_inline_container {
+  background-color: #0A0A0A !important;
+  padding: 16px !important;
+}
+
+/* Time columns container */
+.dp__time_col {
+  padding: 0 4px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.dp__time_col_reg {
+  color: #e5e5e5 !important;
+}
+
+/* Time value display */
+.dp__time_input {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px !important;
+  padding: 12px 8px !important;
+  min-width: 56px !important;
+  text-align: center !important;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace !important;
+}
+
+.dp__time_input:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Colon separator between hours and minutes */
+.dp__tp_inline_btn_bar {
+  display: none !important;
+}
+
+/* Time separator (:) */
+.dp__time_col_sec {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #525252 !important;
+  padding: 0 2px !important;
+}
+
+/* Increment button (up arrow / +) */
+.dp__inc_dec_button {
+  width: 36px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #a3a3a3 !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 6px !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.dp__inc_dec_button:hover {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #10b981 !important;
+}
+
+.dp__inc_dec_button:active {
+  background-color: rgba(16, 185, 129, 0.3) !important;
+  transform: scale(0.95) !important;
+}
+
+.dp__inc_dec_button svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Time picker overlay wrapper */
+.dp__overlay {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Time picker AM/PM (if used) */
+.dp__pm_am_button {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #e5e5e5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
+  font-weight: 500 !important;
+}
+
+.dp__pm_am_button:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* =====================
+   OFFSET DATES (Previous/Next month dates)
+   ===================== */
+
+/* Dates from previous/next month - more visible */
+.dp__cell_offset {
+  color: #525252 !important;
+}
+
+/* When offset date is selected - make it clearly visible */
+.dp__cell_offset.dp__range_start,
+.dp__cell_offset.dp__range_end,
+.dp__cell_offset.dp__active_date {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.dp__cell_offset.dp__range_between {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  color: #a3a3a3 !important;
+}
+
+/* =====================
+   ACTION ROW & BUTTONS
+   ===================== */
+.dp__action_row {
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.dp__action_buttons {
+  padding: 12px !important;
+  gap: 8px !important;
+}
+
+.dp__action_select {
+  background: linear-gradient(to right, #10b981, #14b8a6) !important;
+  border: none !important;
+  font-weight: 500 !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+}
+
+.dp__action_select:hover {
+  opacity: 0.9 !important;
+}
+
+.dp__action_cancel {
+  color: #a3a3a3 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+  background-color: transparent !important;
+}
+
+.dp__action_cancel:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* =====================
+   OVERLAY (month/year picker)
+   ===================== */
+.dp__overlay {
+  background-color: #0A0A0A !important;
+}
+
+.dp__overlay_cell {
+  color: #e5e5e5 !important;
+}
+
+.dp__overlay_cell:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dp__overlay_cell_active {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+/* =====================
+   TODAY INDICATOR
+   ===================== */
+.dp__today {
+  border-color: #10b981 !important;
+}
+
+/* =====================
+   DISABLED DATES
+   ===================== */
+.dp__cell_disabled {
+  color: #404040 !important;
+  cursor: not-allowed !important;
+}
+</style>

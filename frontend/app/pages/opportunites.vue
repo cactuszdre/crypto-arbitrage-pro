@@ -25,7 +25,8 @@ useHead({
 // Live rates (refreshed every 10s client-side)
 const { data: rawRatesData, pending: isLoadingRates, refresh: refreshRates } = await useFetch('/api/opportunites/rates', {
   key: 'arbitrage-rates',
-  default: () => []
+  default: () => [],
+  dedupe: 'cancel' // Cancel previous request if a new refresh is triggered
 })
 
 // DEX list (static, rarely changes)

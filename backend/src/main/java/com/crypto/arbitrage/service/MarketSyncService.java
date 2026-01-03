@@ -46,7 +46,6 @@ public class MarketSyncService {
         this.fetchersByName = dexFetchers.stream()
                 .collect(Collectors.toMap(DexFetcher::getDexName, Function.identity()));
         
-        log.info("MarketSyncService initialized with {} DexFetcher implementations", fetchersByName.size());
     }
 
     /**
@@ -55,7 +54,6 @@ public class MarketSyncService {
     @Scheduled(cron = "0 0 0 * * *")
     @Transactional
     public void syncAllMarkets() {
-        log.info("Starting daily market sync...");
         
         // Get all active DEXes from database
         List<Dex> activeDexes = dexRepository.findAll().stream()
@@ -70,7 +68,6 @@ public class MarketSyncService {
             }
         }
         
-        log.info("Daily market sync completed for {} DEXes", activeDexes.size());
     }
     
     /**
@@ -100,7 +97,6 @@ public class MarketSyncService {
         
         if (!symbols.isEmpty()) {
             updateMarketsForDex(dex, symbols);
-            log.info("Synced {} markets for {}", symbols.size(), dexName);
         }
     }
     
@@ -133,7 +129,6 @@ public class MarketSyncService {
                 market.setActive(true);
                 market.setUpdatedAt(LocalDateTime.now());
                 dexMarketRepository.save(market);
-                log.info("Activated new market for {}: {}", dex.getName(), symbol);
             }
         }
     }

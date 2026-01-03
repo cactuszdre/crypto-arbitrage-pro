@@ -35,12 +35,10 @@ public class CacheEvictionService {
      */
     @Scheduled(cron = "0 2 1 * * *") // Every day at 01:02
     public void evictHistoricalCaches() {
-        log.info("Evicting historical data caches at 01:02 (after daily aggregation)");
 
         evictCache("historicalArbitrage");
         evictCache("historicalRatesBySymbol");
 
-        log.info("Historical caches evicted successfully");
     }
 
     /**
@@ -50,7 +48,6 @@ public class CacheEvictionService {
      */
     @Scheduled(cron = "0 5 1 * * *") // Every day at 01:05
     public void warmUpHistoricalCaches() {
-        log.info("Warming up historical data caches at 01:05 (after cache eviction)");
 
         int[] periodsToWarm = { 1, 7, 30, 90, 180, 365 };
 
@@ -58,17 +55,14 @@ public class CacheEvictionService {
             try {
                 // Warm up historicalRatesBySymbol cache
                 historicalArbitrageService.getAllHistoricalRatesBySymbol(days);
-                log.info("Cache warmed for {} days historical rates by symbol", days);
 
                 // Also warm up historicalArbitrage cache (was missing before!)
                 historicalArbitrageService.getHistoricalOpportunities(days);
-                log.info("Cache warmed for {} days historical opportunities", days);
             } catch (Exception e) {
                 log.error("Failed to warm cache for {} days: {}", days, e.getMessage());
             }
         }
 
-        log.info("Historical cache warming completed");
     }
 
     /**
@@ -76,7 +70,6 @@ public class CacheEvictionService {
      * Useful for admin actions or when new data needs to be visible immediately.
      */
     public void refreshHistoricalCaches() {
-        log.info("Manually refreshing historical caches");
         evictHistoricalCaches();
         warmUpHistoricalCaches();
     }
@@ -85,7 +78,6 @@ public class CacheEvictionService {
         var cache = cacheManager.getCache(cacheName);
         if (cache != null) {
             cache.clear();
-            log.info("Cache '{}' cleared", cacheName);
         } else {
             log.warn("Cache '{}' not found", cacheName);
         }

@@ -52,19 +52,13 @@ public class FundingRateCleanupService {
     @Scheduled(cron = "0 0 1 * * *") // Every day at 1:00 AM
     @Transactional
     public void cleanupOldFundingRates() {
-        log.info("Starting funding rate cleanup job...");
-        
         try {
             // Calculate yesterday's date range (from 00:00 to 23:59:59)
             LocalDate yesterday = LocalDate.now().minusDays(1);
             LocalDateTime startOfYesterday = yesterday.atStartOfDay();           // 00:00:00 yesterday
             LocalDateTime endOfYesterday = yesterday.plusDays(1).atStartOfDay(); // 00:00:00 today
             
-            log.info("Aggregating data for yesterday: {} (from {} to {})", yesterday, startOfYesterday, endOfYesterday);
-            
-            // Step 1: Aggregate yesterday's rates (full day, from 00:00 to 23:59:59)
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(startOfYesterday, endOfYesterday);
-            log.info("Found {} ticker/dex combinations to aggregate", aggregatedData.size());
             
             int savedCount = 0;
             for (Object[] row : aggregatedData) {
@@ -113,14 +107,9 @@ public class FundingRateCleanupService {
                 }
             }
             
-            log.info("Saved {} daily aggregates", savedCount);
             
             // Step 2: Delete old raw data (everything before today 00:00)
             int deletedCount = fundingRateRepository.deleteByTimestampBefore(endOfYesterday);
-            log.info("Deleted {} old funding rate records", deletedCount);
-            
-            log.info("Funding rate cleanup completed successfully. Aggregated: {}, Deleted: {}", 
-                    savedCount, deletedCount);
             
         } catch (Exception e) {
             log.error("Error during funding rate cleanup: {}", e.getMessage(), e);
@@ -132,7 +121,6 @@ public class FundingRateCleanupService {
      */
     @Transactional
     public void manualCleanup() {
-        log.info("Manual cleanup triggered");
         cleanupOldFundingRates();
     }
 

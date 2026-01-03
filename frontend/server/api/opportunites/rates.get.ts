@@ -1,7 +1,7 @@
 /**
  * GET /api/opportunites/rates
  * Fetches all funding rates for arbitrage calculation
- * Cached for 30 seconds to reduce latency
+ * Cached for 8 seconds to align with 10s frontend refresh
  */
 export default defineCachedEventHandler(async (): Promise<unknown[]> => {
     const backendUrl = getBackendUrl()
@@ -14,7 +14,7 @@ export default defineCachedEventHandler(async (): Promise<unknown[]> => {
         return []
     }
 }, {
-    maxAge: 30, // Cache for 30 seconds
+    maxAge: 8, // Cache for 8 seconds (frontend refreshes every 10s)
     name: 'arbitrage-rates',
     getKey: () => 'all'
 })

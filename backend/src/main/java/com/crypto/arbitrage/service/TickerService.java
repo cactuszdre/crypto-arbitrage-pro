@@ -40,7 +40,6 @@ public class TickerService {
 
         try {
             Ticker saved = tickerRepository.save(newTicker);
-            log.info("Created new ticker: {} (base: {})", normalizedSymbol, baseSymbol);
             return saved;
         } catch (Exception e) {
             // Race condition: another thread created it, fetch again

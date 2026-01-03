@@ -17,6 +17,7 @@
     "@reown/appkit": "^1.8.15",
     "@reown/appkit-adapter-wagmi": "^1.8.15",
     "@tanstack/vue-query": "^5.92.1",
+    "@vuepic/vue-datepicker": "^12.1.0",
     "chart.js": "^4.5.1",
     "ethers": "^6.16.0",
     "nuxt": "^4.2.2",

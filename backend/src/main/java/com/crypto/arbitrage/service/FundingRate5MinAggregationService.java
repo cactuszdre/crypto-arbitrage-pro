@@ -64,7 +64,6 @@ public class FundingRate5MinAggregationService {
     @Scheduled(cron = "0 */5 * * * *") // Every 5 minutes at :00, :05, :10, etc.
     @Transactional
     public void aggregateFundingRates() {
-        log.info("Starting 5-minute funding rate aggregation...");
 
         try {
             // Calculate the bucket time window
@@ -74,7 +73,6 @@ public class FundingRate5MinAggregationService {
 
             // Get aggregated data for this bucket
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(bucketStart, bucketEnd);
-            log.info("Found {} ticker/dex combinations to aggregate for bucket {}", aggregatedData.size(), bucketEnd);
 
             int savedCount = 0;
             int updatedCount = 0;
@@ -145,7 +143,6 @@ public class FundingRate5MinAggregationService {
                 }
             }
 
-            log.info("5-minute aggregation completed. New: {}, Updated: {}", savedCount, updatedCount);
 
         } catch (Exception e) {
             log.error("Error during 5-minute aggregation: {}", e.getMessage(), e);
@@ -158,12 +155,10 @@ public class FundingRate5MinAggregationService {
     @Scheduled(cron = "0 0 2 * * *")
     @Transactional
     public void cleanupOld5MinData() {
-        log.info("Starting 5-minute data cleanup...");
 
         try {
             LocalDateTime cutoffTime = LocalDateTime.now().minusHours(RETENTION_HOURS);
             int deletedCount = fundingRate5MinRepository.deleteByBucketTimeBefore(cutoffTime);
-            log.info("Deleted {} old 5-minute records (older than {} hours)", deletedCount, RETENTION_HOURS);
         } catch (Exception e) {
             log.error("Error during 5-minute data cleanup: {}", e.getMessage(), e);
         }
@@ -202,7 +197,6 @@ public class FundingRate5MinAggregationService {
      */
     @Transactional
     public void manualAggregate() {
-        log.info("Manual 5-minute aggregation triggered");
         aggregateFundingRates();
     }
 
@@ -211,7 +205,6 @@ public class FundingRate5MinAggregationService {
      */
     @Transactional
     public void backfillBuckets(LocalDateTime startTime, LocalDateTime endTime) {
-        log.info("Backfilling 5-minute buckets from {} to {}", startTime, endTime);
 
         LocalDateTime currentBucket = calculateBucketTime(startTime);
         int bucketsCreated = 0;
@@ -271,7 +264,6 @@ public class FundingRate5MinAggregationService {
             currentBucket = currentBucket.plusMinutes(BUCKET_MINUTES);
         }
 
-        log.info("Backfill completed. Created {} buckets", bucketsCreated);
     }
 
     /**

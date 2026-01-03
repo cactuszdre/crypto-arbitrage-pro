@@ -14,6 +14,11 @@ export default defineNuxtConfig({
     minify: false, // Disable minification to reduce memory
   },
 
+  // Build configuration
+  build: {
+    transpile: ['@vuepic/vue-datepicker']
+  },
+
   // Vite build optimization for low-memory environments
   vite: {
     build: {
