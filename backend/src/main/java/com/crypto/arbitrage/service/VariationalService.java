@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -29,7 +30,6 @@ import java.util.*;
  * - No authentication required for public market data
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class VariationalService implements DexFetcher {
 
@@ -39,10 +39,47 @@ public class VariationalService implements DexFetcher {
     private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
+    private final boolean enabled;
+    private final String proxyUrl;
 
     private static final String DEX_NAME = "Variational";
     private static final String DEFAULT_BASE_URL = "https://omni.variational.io";
     private static final String SUPPORTED_ASSETS_ENDPOINT = "/api/metadata/supported_assets";
+
+    public VariationalService(
+            DexRepository dexRepository,
+            FundingRateRepository fundingRateRepository,
+            LastFundingService lastFundingService,
+            TickerService tickerService,
+            WebClient.Builder webClientBuilder,
+            ObjectMapper objectMapper,
+            @Value("${variational.enabled:true}") boolean enabled,
+            @Value("${variational.proxy.url:}") String proxyUrl) {
+        this.dexRepository = dexRepository;
+        this.fundingRateRepository = fundingRateRepository;
+        this.lastFundingService = lastFundingService;
+        this.tickerService = tickerService;
+        this.webClientBuilder = webClientBuilder;
+        this.objectMapper = objectMapper;
+        this.enabled = enabled;
+        this.proxyUrl = proxyUrl != null && !proxyUrl.isEmpty() ? proxyUrl : null;
+        
+        if (!enabled) {
+            log.info("Variational DEX is DISABLED via configuration");
+        } else if (this.proxyUrl != null) {
+            log.info("Variational DEX using Cloudflare Worker proxy: {}", this.proxyUrl);
+        }
+    }
+
+    /**
+     * Get the base URL to use - either the proxy or direct Variational URL.
+     */
+    private String getEffectiveBaseUrl() {
+        if (proxyUrl != null) {
+            return proxyUrl;
+        }
+        return DEFAULT_BASE_URL;
+    }
 
     @Override
     public String getDexName() {
@@ -55,6 +92,11 @@ public class VariationalService implements DexFetcher {
      */
     @Override
     public List<FundingRate> fetchFundingData() {
+        if (!enabled) {
+            log.debug("Variational DEX is disabled, skipping fetch");
+            return List.of();
+        }
+        
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
             log.debug("DEX Variational not found in database");
@@ -62,9 +104,8 @@ public class VariationalService implements DexFetcher {
         }
 
         Dex dex = dexOpt.get();
-        String baseUrl = dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty()
-                ? dex.getBaseUrl()
-                : DEFAULT_BASE_URL;
+        // Use proxy URL if configured, otherwise use the DEX base URL or default
+        String baseUrl = getEffectiveBaseUrl();
 
         try {
             WebClient webClient = webClientBuilder.clone()
@@ -227,15 +268,17 @@ public class VariationalService implements DexFetcher {
      * Fetches available trading symbols from Variational.
      */
     public List<String> fetchAvailableSymbols() {
+        if (!enabled) {
+            return List.of();
+        }
+        
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
             return List.of();
         }
 
         Dex dex = dexOpt.get();
-        String baseUrl = dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty()
-                ? dex.getBaseUrl()
-                : DEFAULT_BASE_URL;
+        String baseUrl = getEffectiveBaseUrl();
 
         try {
             WebClient webClient = webClientBuilder.clone()
