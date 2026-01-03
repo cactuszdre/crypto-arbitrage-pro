@@ -46,7 +46,7 @@
         <!-- Trust/Stats Row -->
         <div class="pt-8 border-t border-white/5 flex flex-wrap justify-center lg:justify-start gap-8 lg:gap-12">
             <div>
-                <div class="text-2xl font-bold text-white">4</div>
+                <div class="text-2xl font-bold text-white">6</div>
                 <div class="text-xs text-gray-500 uppercase tracking-widest mt-1">DEXs Connected</div>
             </div>
             <div>
