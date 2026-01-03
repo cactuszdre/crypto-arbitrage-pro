@@ -241,6 +241,21 @@ const availableDexes = computed(() => {
   return dexList.value.map((dex) => dex.name).sort()
 })
 
+// DEX data map for easy access to icon URLs
+const dexDataMap = computed(() => {
+  if (!dexList.value) return {}
+  const map = {}
+  for (const dex of dexList.value) {
+    map[dex.name] = dex
+  }
+  return map
+})
+
+// Get DEX icon URL by name
+const getDexIconUrl = (dexName) => {
+  return dexDataMap.value[dexName]?.iconUrl || null
+}
+
 // DEX configs computed from SSR data
 const dexConfigs = computed(() => {
   if (!dexList.value) {
@@ -749,20 +764,34 @@ onUnmounted(() => {
                   </p>
                 </div>
 
-                <div class="p-2 max-h-48 overflow-y-auto">
-                  <label
-                    v-for="dex in availableDexes"
-                    :key="dex"
-                    class="flex items-center gap-3 px-3 py-2 text-xs hover:bg-white/5 rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="isDexSelected(dex)"
-                      @change="toggleDex(dex)"
-                      class="w-4 h-4 rounded border-emerald-500/50 bg-emerald-500/10 text-emerald-500 focus:ring-emerald-500/50 accent-emerald-500 cursor-pointer"
+                <div class="p-2">
+                  <div class="flex flex-col">
+                    <label
+                      v-for="dex in availableDexes"
+                      :key="dex"
+                      class="flex items-center gap-2 px-3 py-2 text-xs hover:bg-white/5 rounded-lg cursor-pointer transition-colors"
                     >
-                    <span :class="isDexSelected(dex) ? 'text-white' : 'text-neutral-500'">{{ dex }}</span>
-                  </label>
+                      <input
+                        type="checkbox"
+                        :checked="isDexSelected(dex)"
+                        @change="toggleDex(dex)"
+                        class="w-3.5 h-3.5 rounded border-emerald-500/50 bg-emerald-500/10 text-emerald-500 focus:ring-emerald-500/50 accent-emerald-500 cursor-pointer"
+                      >
+                      <img 
+                        v-if="getDexIconUrl(dex)"
+                        :src="getDexIconUrl(dex)" 
+                        :alt="dex"
+                        class="w-4 h-4 rounded object-cover"
+                      />
+                      <div 
+                        v-else 
+                        class="w-4 h-4 rounded bg-white/10 flex items-center justify-center text-[8px] font-bold text-neutral-400"
+                      >
+                        {{ dex.charAt(0) }}
+                      </div>
+                      <span :class="isDexSelected(dex) ? 'text-white' : 'text-neutral-500'">{{ dex }}</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
