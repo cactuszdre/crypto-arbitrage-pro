@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -72,15 +71,6 @@ public class VariationalService implements DexFetcher {
                     .baseUrl(baseUrl)
                     .defaultHeader("Accept", "application/json")
                     .defaultHeader("Content-Type", "application/json")
-                    .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .defaultHeader("Accept-Language", "en-US,en;q=0.9,fr;q=0.8")
-                    .defaultHeader("Referer", "https://omni.variational.io/")
-                    .defaultHeader("sec-ch-ua", "\"Google Chrome\";v=\"120\", \"Chromium\";v=\"120\", \"Not?A_Brand\";v=\"24\"")
-                    .defaultHeader("sec-ch-ua-mobile", "?0")
-                    .defaultHeader("sec-ch-ua-platform", "\"Windows\"")
-                    .defaultHeader("sec-fetch-dest", "empty")
-                    .defaultHeader("sec-fetch-mode", "cors")
-                    .defaultHeader("sec-fetch-site", "same-origin")
                     .codecs(configurer -> configurer
                             .defaultCodecs()
                             .maxInMemorySize(16 * 1024 * 1024)) // 16MB for large response
@@ -251,15 +241,6 @@ public class VariationalService implements DexFetcher {
             WebClient webClient = webClientBuilder.clone()
                     .baseUrl(baseUrl)
                     .defaultHeader("Accept", "application/json")
-                    .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .defaultHeader("Accept-Language", "en-US,en;q=0.9,fr;q=0.8")
-                    .defaultHeader("Referer", "https://omni.variational.io/")
-                    .defaultHeader("sec-ch-ua", "\"Google Chrome\";v=\"120\", \"Chromium\";v=\"120\", \"Not?A_Brand\";v=\"24\"")
-                    .defaultHeader("sec-ch-ua-mobile", "?0")
-                    .defaultHeader("sec-ch-ua-platform", "\"Windows\"")
-                    .defaultHeader("sec-fetch-dest", "empty")
-                    .defaultHeader("sec-fetch-mode", "cors")
-                    .defaultHeader("sec-fetch-site", "same-origin")
                     .codecs(configurer -> configurer
                             .defaultCodecs()
                             .maxInMemorySize(16 * 1024 * 1024))
