@@ -101,6 +101,18 @@ const navigateToAssetDetails = (opp) => {
   })
 }
 
+// Open Asset Details in a new tab (for middle-click)
+const openAssetDetailsInNewTab = (event, opp) => {
+  // Only handle middle-click (button === 1)
+  if (event.button !== 1) return
+  
+  // Prevent auto-scroll behavior only for middle-click on table rows
+  event.preventDefault()
+  
+  const url = `/asset?symbol=${encodeURIComponent(opp.symbol)}&longDex=${encodeURIComponent(opp.longDex)}&shortDex=${encodeURIComponent(opp.shortDex)}`
+  window.open(url, '_blank')
+}
+
 // Auth store for Pro plan check
 const { state: authState } = useAuth()
 const isPro = computed(() => authState.user?.plan === 'PRO' || authState.user?.role === 'ADMIN')
@@ -901,6 +913,7 @@ onUnmounted(() => {
             v-for="opp in paginatedOpportunities"
             :key="'card-' + opp.symbol"
             @click="isPro ? selectOpportunity(opp) : null"
+            @auxclick="openAssetDetailsInNewTab($event, opp)"
             :class="[
               'group relative p-4 rounded-2xl border backdrop-blur-xl transition-all duration-300 cursor-pointer',
               'bg-gradient-to-br from-white/[0.08] to-white/[0.02]',
@@ -990,6 +1003,7 @@ onUnmounted(() => {
                 :href="getDexUrl(opp.longDex, opp.symbol)"
                 target="_blank"
                 @click.stop
+                @auxclick.stop
                 class="flex-1 flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors min-w-0"
               >
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
@@ -1011,6 +1025,7 @@ onUnmounted(() => {
                 :href="getDexUrl(opp.shortDex, opp.symbol)"
                 target="_blank"
                 @click.stop
+                @auxclick.stop
                 class="flex-1 flex items-center gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors min-w-0"
               >
                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0"></span>
@@ -1036,8 +1051,10 @@ onUnmounted(() => {
             </div>
 
             <!-- View Details Button -->
-            <button
-              @click.stop="navigateToAssetDetails(opp)"
+            <a
+              :href="`/asset?symbol=${encodeURIComponent(opp.symbol)}&longDex=${encodeURIComponent(opp.longDex)}&shortDex=${encodeURIComponent(opp.shortDex)}`"
+              @click.stop.prevent="navigateToAssetDetails(opp)"
+              @auxclick.stop
               class="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-medium hover:from-indigo-500/30 hover:to-purple-500/30 hover:text-white transition-all"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1047,7 +1064,7 @@ onUnmounted(() => {
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
               </svg>
-            </button>
+            </a>
           </div>
           </div>
 
@@ -1134,6 +1151,7 @@ onUnmounted(() => {
               v-for="opp in paginatedOpportunities"
               :key="'table-' + opp.symbol"
               @click="navigateToAssetDetails(opp)"
+              @auxclick="openAssetDetailsInNewTab($event, opp)"
               class="group/row hover:bg-white/5 transition-colors cursor-pointer"
             >
               <td class="px-4 py-3">
