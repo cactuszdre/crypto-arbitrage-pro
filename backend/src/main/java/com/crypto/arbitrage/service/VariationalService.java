@@ -6,16 +6,17 @@ import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Service for fetching funding rates from Variational using the Read-Only API.
@@ -23,7 +24,7 @@ import java.util.*;
  * Variational is a decentralized permissionless trading protocol for
  * generalized derivatives.
  * 
- * NEW READ-ONLY API (January 2026):
+ * READ-ONLY API (January 2026):
  * - Base URL: https://omni-client-api.prod.ap-northeast-1.variational.io
  * - Endpoint: GET /metadata/stats
  * - Rate Limits: 10 requests per 10 seconds (per IP), 1000 requests per minute
@@ -40,6 +41,7 @@ import java.util.*;
  *      API Docs</a>
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class VariationalService implements DexFetcher {
 
@@ -48,52 +50,10 @@ public class VariationalService implements DexFetcher {
     private final LastFundingService lastFundingService;
     private final TickerService tickerService;
     private final WebClient.Builder webClientBuilder;
-    private final ObjectMapper objectMapper;
-    private final boolean enabled;
-    private final String proxyUrl;
 
     private static final String DEX_NAME = "Variational";
-
-    // NEW Read-Only API (January 2026)
-    private static final String READ_ONLY_API_BASE_URL = "https://omni-client-api.prod.ap-northeast-1.variational.io";
+    private static final String BASE_URL = "https://omni-client-api.prod.ap-northeast-1.variational.io";
     private static final String STATS_ENDPOINT = "/metadata/stats";
-
-    public VariationalService(
-            DexRepository dexRepository,
-            FundingRateRepository fundingRateRepository,
-            LastFundingService lastFundingService,
-            TickerService tickerService,
-            WebClient.Builder webClientBuilder,
-            ObjectMapper objectMapper,
-            @Value("${variational.enabled:true}") boolean enabled,
-            @Value("${variational.proxy.url:}") String proxyUrl) {
-        this.dexRepository = dexRepository;
-        this.fundingRateRepository = fundingRateRepository;
-        this.lastFundingService = lastFundingService;
-        this.tickerService = tickerService;
-        this.webClientBuilder = webClientBuilder;
-        this.objectMapper = objectMapper;
-        this.enabled = enabled;
-        this.proxyUrl = proxyUrl != null && !proxyUrl.isEmpty() ? proxyUrl : null;
-
-        if (!enabled) {
-            log.info("Variational DEX is DISABLED via configuration");
-        } else if (this.proxyUrl != null) {
-            log.info("Variational DEX using Cloudflare Worker proxy: {}", this.proxyUrl);
-        } else {
-            log.info("Variational DEX using Read-Only API: {}", READ_ONLY_API_BASE_URL);
-        }
-    }
-
-    /**
-     * Get the base URL to use - either the proxy or the Read-Only API URL.
-     */
-    private String getEffectiveBaseUrl() {
-        if (proxyUrl != null) {
-            return proxyUrl;
-        }
-        return READ_ONLY_API_BASE_URL;
-    }
 
     @Override
     public String getDexName() {
@@ -112,11 +72,6 @@ public class VariationalService implements DexFetcher {
      */
     @Override
     public List<FundingRate> fetchFundingData() {
-        if (!enabled) {
-            log.debug("Variational DEX is disabled, skipping fetch");
-            return List.of();
-        }
-
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
             log.debug("DEX Variational not found in database");
@@ -124,34 +79,31 @@ public class VariationalService implements DexFetcher {
         }
 
         Dex dex = dexOpt.get();
-        String baseUrl = getEffectiveBaseUrl();
 
         try {
             WebClient webClient = webClientBuilder.clone()
-                    .baseUrl(baseUrl)
-                    .defaultHeader("Accept", "application/json")
-                    .defaultHeader("Content-Type", "application/json")
+                    .baseUrl(BASE_URL)
                     .codecs(configurer -> configurer
                             .defaultCodecs()
                             .maxInMemorySize(16 * 1024 * 1024)) // 16MB for large response
                     .build();
 
-            // Fetch market stats from Read-Only API
             JsonNode response = webClient.get()
                     .uri(STATS_ENDPOINT)
+                    .header("Accept", "application/json")
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
 
             if (response == null) {
-                log.warn("Empty response from Variational Read-Only API");
+                log.warn("Empty response from Variational API");
                 return List.of();
             }
 
             List<FundingRate> rates = new ArrayList<>();
             LocalDateTime now = LocalDateTime.now();
 
-            // New API structure: response has a "listings" array
+            // API structure: response has a "listings" array
             JsonNode listingsArray = response.get("listings");
             if (listingsArray == null || !listingsArray.isArray()) {
                 log.warn("No 'listings' array found in Variational API response");
@@ -278,33 +230,19 @@ public class VariationalService implements DexFetcher {
      * Our format: BTC-USD-PERP (standard across other DEXes)
      */
     private String normalizeSymbol(String symbol) {
-        // Already in standard format
         if (symbol.endsWith("-USD-PERP")) {
             return symbol;
         }
-        // Add USD-PERP suffix
         return symbol + "-USD-PERP";
     }
 
     /**
-     * Fetches available trading symbols from Variational using the Read-Only API.
+     * Fetches available trading symbols from Variational.
      */
     public List<String> fetchAvailableSymbols() {
-        if (!enabled) {
-            return List.of();
-        }
-
-        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
-        if (dexOpt.isEmpty()) {
-            return List.of();
-        }
-
-        String baseUrl = getEffectiveBaseUrl();
-
         try {
             WebClient webClient = webClientBuilder.clone()
-                    .baseUrl(baseUrl)
-                    .defaultHeader("Accept", "application/json")
+                    .baseUrl(BASE_URL)
                     .codecs(configurer -> configurer
                             .defaultCodecs()
                             .maxInMemorySize(16 * 1024 * 1024))
@@ -312,6 +250,7 @@ public class VariationalService implements DexFetcher {
 
             JsonNode response = webClient.get()
                     .uri(STATS_ENDPOINT)
+                    .header("Accept", "application/json")
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
@@ -320,7 +259,6 @@ public class VariationalService implements DexFetcher {
                 return List.of();
             }
 
-            // New API structure: response has a "listings" array
             JsonNode listingsArray = response.get("listings");
             if (listingsArray == null || !listingsArray.isArray()) {
                 return List.of();
