@@ -166,8 +166,6 @@ public class VariationalService implements DexFetcher {
                 }
             }
 
-            log.info("Fetched {} funding rates from Variational Read-Only API", rates.size());
-
             // Save all fetched rates
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
