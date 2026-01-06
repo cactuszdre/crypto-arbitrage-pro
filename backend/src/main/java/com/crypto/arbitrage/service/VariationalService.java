@@ -7,7 +7,6 @@ import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,15 +18,26 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * Service for fetching funding rates from Variational (omni.variational.io)
+ * Service for fetching funding rates from Variational using the Read-Only API.
  * 
- * Variational is a decentralized permissionless trading protocol for generalized derivatives.
- * The funding rate is returned as a percentage (e.g., 0.1095 = 0.1095% per interval).
- * Funding intervals vary per market (1h, 4h, 8h) as indicated by funding_interval_s.
+ * Variational is a decentralized permissionless trading protocol for
+ * generalized derivatives.
  * 
- * API Discovery:
- * - Instruments endpoint returns all markets with their current funding rates
- * - No authentication required for public market data
+ * NEW READ-ONLY API (January 2026):
+ * - Base URL: https://omni-client-api.prod.ap-northeast-1.variational.io
+ * - Endpoint: GET /metadata/stats
+ * - Rate Limits: 10 requests per 10 seconds (per IP), 1000 requests per minute
+ * (global)
+ * - No authentication required
+ * 
+ * The funding rate is returned as a decimal (e.g., 0.109500 = 10.95% annual
+ * rate).
+ * Funding intervals vary per market (1h, 2h, 4h, 8h) as indicated by
+ * funding_interval_s.
+ * 
+ * @see <a href=
+ *      "https://docs.variational.io/technical-documentation/api">Variational
+ *      API Docs</a>
  */
 @Service
 @Slf4j
@@ -43,8 +53,10 @@ public class VariationalService implements DexFetcher {
     private final String proxyUrl;
 
     private static final String DEX_NAME = "Variational";
-    private static final String DEFAULT_BASE_URL = "https://omni.variational.io";
-    private static final String SUPPORTED_ASSETS_ENDPOINT = "/api/metadata/supported_assets";
+
+    // NEW Read-Only API (January 2026)
+    private static final String READ_ONLY_API_BASE_URL = "https://omni-client-api.prod.ap-northeast-1.variational.io";
+    private static final String STATS_ENDPOINT = "/metadata/stats";
 
     public VariationalService(
             DexRepository dexRepository,
@@ -63,22 +75,24 @@ public class VariationalService implements DexFetcher {
         this.objectMapper = objectMapper;
         this.enabled = enabled;
         this.proxyUrl = proxyUrl != null && !proxyUrl.isEmpty() ? proxyUrl : null;
-        
+
         if (!enabled) {
             log.info("Variational DEX is DISABLED via configuration");
         } else if (this.proxyUrl != null) {
             log.info("Variational DEX using Cloudflare Worker proxy: {}", this.proxyUrl);
+        } else {
+            log.info("Variational DEX using Read-Only API: {}", READ_ONLY_API_BASE_URL);
         }
     }
 
     /**
-     * Get the base URL to use - either the proxy or direct Variational URL.
+     * Get the base URL to use - either the proxy or the Read-Only API URL.
      */
     private String getEffectiveBaseUrl() {
         if (proxyUrl != null) {
             return proxyUrl;
         }
-        return DEFAULT_BASE_URL;
+        return READ_ONLY_API_BASE_URL;
     }
 
     @Override
@@ -87,8 +101,14 @@ public class VariationalService implements DexFetcher {
     }
 
     /**
-     * Fetches funding data from Variational's instruments API.
-     * The API returns all markets with their current funding rates included.
+     * Fetches funding data from Variational's Read-Only API.
+     * 
+     * The /metadata/stats endpoint returns platform-wide and per-listing market
+     * statistics.
+     * 
+     * Rate Limits:
+     * - Per IP: 10 requests per 10 seconds
+     * - Global: 1000 requests per minute
      */
     @Override
     public List<FundingRate> fetchFundingData() {
@@ -96,7 +116,7 @@ public class VariationalService implements DexFetcher {
             log.debug("Variational DEX is disabled, skipping fetch");
             return List.of();
         }
-        
+
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
             log.debug("DEX Variational not found in database");
@@ -104,7 +124,6 @@ public class VariationalService implements DexFetcher {
         }
 
         Dex dex = dexOpt.get();
-        // Use proxy URL if configured, otherwise use the DEX base URL or default
         String baseUrl = getEffectiveBaseUrl();
 
         try {
@@ -117,39 +136,37 @@ public class VariationalService implements DexFetcher {
                             .maxInMemorySize(16 * 1024 * 1024)) // 16MB for large response
                     .build();
 
-            // Fetch all instruments with funding rates
+            // Fetch market stats from Read-Only API
             JsonNode response = webClient.get()
-                    .uri(SUPPORTED_ASSETS_ENDPOINT)
+                    .uri(STATS_ENDPOINT)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
 
             if (response == null) {
-                log.warn("Empty response from Variational instruments API");
+                log.warn("Empty response from Variational Read-Only API");
                 return List.of();
             }
 
             List<FundingRate> rates = new ArrayList<>();
             LocalDateTime now = LocalDateTime.now();
 
-            // Response is an object where keys are asset symbols
-            // Each value is an array of market info objects
-            Iterator<Map.Entry<String, JsonNode>> fields = response.fields();
-            
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> entry = fields.next();
-                String assetSymbol = entry.getKey();
-                JsonNode marketsArray = entry.getValue();
+            // New API structure: response has a "listings" array
+            JsonNode listingsArray = response.get("listings");
+            if (listingsArray == null || !listingsArray.isArray()) {
+                log.warn("No 'listings' array found in Variational API response");
+                return List.of();
+            }
 
-                if (marketsArray.isArray()) {
-                    for (JsonNode market : marketsArray) {
-                        FundingRate rate = parseMarketFundingRate(assetSymbol, market, dex, now);
-                        if (rate != null) {
-                            rates.add(rate);
-                        }
-                    }
+            // Process each listing
+            for (JsonNode listing : listingsArray) {
+                FundingRate rate = parseListingFundingRate(listing, dex, now);
+                if (rate != null) {
+                    rates.add(rate);
                 }
             }
+
+            log.info("Fetched {} funding rates from Variational Read-Only API", rates.size());
 
             // Save all fetched rates
             if (!rates.isEmpty()) {
@@ -166,54 +183,60 @@ public class VariationalService implements DexFetcher {
     }
 
     /**
-     * Parse a single market's funding rate from the supported_assets response.
+     * Parse a single listing's funding rate from the Read-Only API response.
      * 
-     * Response structure per market:
+     * Response structure per listing:
      * {
-     *   "asset": "BTC",
-     *   "funding_rate": "0.102288",          // ANNUALIZED rate as decimal (10.23% APR)
-     *   "funding_interval_s": 28800,          // Interval in seconds (8h = 28800)
-     *   "has_perp": true,
-     *   ...
+     * "ticker": "BTC",
+     * "name": "Bitcoin",
+     * "mark_price": "93787.9606019699",
+     * "volume_24h": "1058107020.462713",
+     * "funding_rate": "0.109500", // ANNUALIZED rate as decimal (10.95% APR)
+     * "funding_interval_s": 28800, // Interval in seconds (8h = 28800)
+     * ...
      * }
      * 
-     * NOTE: funding_rate from Variational is already ANNUALIZED (APR).
-     * A value of 0.102288 means 10.23% annual rate.
+     * NOTE: funding_rate is ANNUALIZED as a decimal.
+     * According to docs: "Funding rates are decimals (multiply by 100 for
+     * percentage)"
      */
-    private FundingRate parseMarketFundingRate(String assetSymbol, JsonNode market, Dex dex, LocalDateTime timestamp) {
+    private FundingRate parseListingFundingRate(JsonNode listing, Dex dex, LocalDateTime timestamp) {
         try {
-            // Only process markets with perpetual futures
-            if (!market.has("has_perp") || !market.get("has_perp").asBoolean()) {
+            // Get ticker symbol (required field)
+            if (!listing.has("ticker")) {
                 return null;
             }
+            String tickerSymbol = listing.get("ticker").asText();
 
             // Check for funding rate
-            if (!market.has("funding_rate")) {
+            if (!listing.has("funding_rate")) {
                 return null;
             }
 
-            String fundingRateStr = market.get("funding_rate").asText();
-            if (fundingRateStr == null || fundingRateStr.isEmpty() || 
-                "null".equalsIgnoreCase(fundingRateStr) || "nan".equalsIgnoreCase(fundingRateStr)) {
+            String fundingRateStr = listing.get("funding_rate").asText();
+            if (fundingRateStr == null || fundingRateStr.isEmpty() ||
+                    "null".equalsIgnoreCase(fundingRateStr) || "nan".equalsIgnoreCase(fundingRateStr)) {
                 return null;
             }
 
             // funding_rate from Variational is ANNUALIZED as a decimal
-            // e.g., 0.102288 = 10.23% APR
+            // e.g., 0.109500 = 10.95% APR, -0.213670 = -21.37% APR
             BigDecimal annualRateDecimal = new BigDecimal(fundingRateStr);
 
             // Get funding interval in seconds (default to 8 hours)
-            int fundingIntervalSeconds = market.has("funding_interval_s") 
-                    ? market.get("funding_interval_s").asInt() 
+            // Note: Variational has 1h, 2h, 4h, and 8h intervals depending on the asset
+            int fundingIntervalSeconds = listing.has("funding_interval_s")
+                    ? listing.get("funding_interval_s").asInt()
                     : 28800;
-            
+
             // Convert to hours
             int intervalHours = fundingIntervalSeconds / 3600;
-            if (intervalHours < 1) intervalHours = 1;
+            if (intervalHours < 1)
+                intervalHours = 1;
 
             // Normalize symbol to standard format (e.g., BTC -> BTC-USD-PERP)
-            String symbol = normalizeSymbol(assetSymbol);
-            
+            String symbol = normalizeSymbol(tickerSymbol);
+
             // Get or create ticker
             Ticker ticker = tickerService.getOrCreate(symbol);
 
@@ -223,7 +246,6 @@ public class VariationalService implements DexFetcher {
                     BigDecimal.valueOf(24 * 365), 18, RoundingMode.HALF_UP);
 
             // Rate 8h % = annualRateDecimal * (8 / (24 * 365)) * 100
-            // Simplified: = annualRateDecimal / 1095 * 100 = annualRateDecimal * 100 / 1095
             BigDecimal rate8h = annualRateDecimal
                     .multiply(BigDecimal.valueOf(100))
                     .multiply(BigDecimal.valueOf(8))
@@ -245,13 +267,15 @@ public class VariationalService implements DexFetcher {
                     .build();
 
         } catch (Exception e) {
-            log.debug("Error parsing funding rate for asset {}: {}", assetSymbol, e.getMessage());
+            String tickerName = listing.has("ticker") ? listing.get("ticker").asText() : "unknown";
+            log.debug("Error parsing funding rate for {}: {}", tickerName, e.getMessage());
             return null;
         }
     }
 
     /**
-     * Normalize Variational symbol format to the standard format used in this application.
+     * Normalize Variational symbol format to the standard format used in this
+     * application.
      * Variational uses: BTC, ETH, SOL, etc.
      * Our format: BTC-USD-PERP (standard across other DEXes)
      */
@@ -265,19 +289,18 @@ public class VariationalService implements DexFetcher {
     }
 
     /**
-     * Fetches available trading symbols from Variational.
+     * Fetches available trading symbols from Variational using the Read-Only API.
      */
     public List<String> fetchAvailableSymbols() {
         if (!enabled) {
             return List.of();
         }
-        
+
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
             return List.of();
         }
 
-        Dex dex = dexOpt.get();
         String baseUrl = getEffectiveBaseUrl();
 
         try {
@@ -290,7 +313,7 @@ public class VariationalService implements DexFetcher {
                     .build();
 
             JsonNode response = webClient.get()
-                    .uri(SUPPORTED_ASSETS_ENDPOINT)
+                    .uri(STATS_ENDPOINT)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
@@ -299,20 +322,17 @@ public class VariationalService implements DexFetcher {
                 return List.of();
             }
 
+            // New API structure: response has a "listings" array
+            JsonNode listingsArray = response.get("listings");
+            if (listingsArray == null || !listingsArray.isArray()) {
+                return List.of();
+            }
+
             List<String> symbols = new ArrayList<>();
-            Iterator<String> fieldNames = response.fieldNames();
-            
-            while (fieldNames.hasNext()) {
-                String assetSymbol = fieldNames.next();
-                JsonNode marketsArray = response.get(assetSymbol);
-                
-                if (marketsArray.isArray()) {
-                    for (JsonNode market : marketsArray) {
-                        if (market.has("has_perp") && market.get("has_perp").asBoolean()) {
-                            symbols.add(normalizeSymbol(assetSymbol));
-                            break; // Only add once per asset
-                        }
-                    }
+            for (JsonNode listing : listingsArray) {
+                if (listing.has("ticker")) {
+                    String ticker = listing.get("ticker").asText();
+                    symbols.add(normalizeSymbol(ticker));
                 }
             }
 
