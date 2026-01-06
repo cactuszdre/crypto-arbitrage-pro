@@ -24,12 +24,11 @@ public interface FundingRateDailyRepository extends JpaRepository<FundingRateDai
 
     @Query("SELECT f FROM FundingRateDaily f WHERE f.ticker = :ticker AND f.dex = :dex AND f.date >= :startDate ORDER BY f.date ASC")
     List<FundingRateDaily> findHistoricalData(
-        @Param("ticker") Ticker ticker, 
-        @Param("dex") Dex dex, 
-        @Param("startDate") LocalDate startDate
-    );
+            @Param("ticker") Ticker ticker,
+            @Param("dex") Dex dex,
+            @Param("startDate") LocalDate startDate);
 
-    @Query("SELECT f FROM FundingRateDaily f WHERE f.date >= :startDate ORDER BY f.date DESC")
+    @Query("SELECT f FROM FundingRateDaily f JOIN FETCH f.dex WHERE f.date >= :startDate ORDER BY f.date DESC")
     List<FundingRateDaily> findAllSince(@Param("startDate") LocalDate startDate);
 
     boolean existsByTickerAndDexAndDate(Ticker ticker, Dex dex, LocalDate date);
