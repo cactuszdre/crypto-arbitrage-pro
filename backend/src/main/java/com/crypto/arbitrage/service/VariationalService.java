@@ -52,7 +52,8 @@ public class VariationalService implements DexFetcher {
     private final WebClient.Builder webClientBuilder;
 
     private static final String DEX_NAME = "Variational";
-    private static final String BASE_URL = "https://omni-client-api.prod.ap-northeast-1.variational.io";
+    // Use Cloudflare Worker proxy to bypass IP blocking
+    private static final String BASE_URL = "https://curly-cake-7313.stevenlegeekdu22.workers.dev";
     private static final String STATS_ENDPOINT = "/metadata/stats";
 
     @Override
@@ -91,6 +92,7 @@ public class VariationalService implements DexFetcher {
             JsonNode response = webClient.get()
                     .uri(STATS_ENDPOINT)
                     .header("Accept", "application/json")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
@@ -251,6 +253,7 @@ public class VariationalService implements DexFetcher {
             JsonNode response = webClient.get()
                     .uri(STATS_ENDPOINT)
                     .header("Accept", "application/json")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();

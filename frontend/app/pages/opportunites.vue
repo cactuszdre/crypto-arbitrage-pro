@@ -101,17 +101,7 @@ const navigateToAssetDetails = (opp) => {
   })
 }
 
-// Open Asset Details in a new tab (for middle-click)
-const openAssetDetailsInNewTab = (event, opp) => {
-  // Only handle middle-click (button === 1)
-  if (event.button !== 1) return
-  
-  // Prevent auto-scroll behavior only for middle-click on table rows
-  event.preventDefault()
-  
-  const url = `/asset?symbol=${encodeURIComponent(opp.symbol)}&longDex=${encodeURIComponent(opp.longDex)}&shortDex=${encodeURIComponent(opp.shortDex)}`
-  window.open(url, '_blank')
-}
+
 
 // Auth store for Pro plan check
 const { state: authState } = useAuth()
