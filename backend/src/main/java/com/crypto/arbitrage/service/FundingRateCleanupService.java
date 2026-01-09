@@ -31,6 +31,10 @@ public class FundingRateCleanupService {
     private final FundingRateDailyRepository fundingRateDailyRepository;
     private final TickerRepository tickerRepository;
     private final DexRepository dexRepository;
+    private final LastFundingService lastFundingService;
+
+    // Stale threshold: entries not updated in this many hours will be deleted
+    private static final int STALE_THRESHOLD_HOURS = 24;
 
     /**
      * Helper method to convert numeric types from DB to BigDecimal.
@@ -110,6 +114,11 @@ public class FundingRateCleanupService {
             
             // Step 2: Delete old raw data (everything before today 00:00)
             int deletedCount = fundingRateRepository.deleteByTimestampBefore(endOfYesterday);
+            
+            // Step 3: Clean up stale LastFunding entries (delisted pairs)
+            // This removes entries that haven't been updated in STALE_THRESHOLD_HOURS,
+            // which means the DEX stopped returning that pair (likely delisted)
+            lastFundingService.deleteStaleEntries(STALE_THRESHOLD_HOURS);
             
         } catch (Exception e) {
             log.error("Error during funding rate cleanup: {}", e.getMessage(), e);

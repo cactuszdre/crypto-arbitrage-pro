@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -101,5 +102,22 @@ public class LastFundingService {
             "LastFunding stats: %d entries, %d symbols, %d DEXes",
             count, tickers.size(), dexes.size()
         );
+    }
+
+    /**
+     * Delete stale entries that haven't been updated since the given threshold.
+     * This cleans up entries for delisted pairs that are no longer returned by DEX APIs.
+     *
+     * @param hoursOld Number of hours after which an entry is considered stale
+     * @return Number of deleted entries
+     */
+    @Transactional
+    public int deleteStaleEntries(int hoursOld) {
+        LocalDateTime threshold = LocalDateTime.now().minusHours(hoursOld);
+        int deleted = lastFundingRepository.deleteByUpdatedAtBefore(threshold);
+        if (deleted > 0) {
+            log.info("Deleted {} stale LastFunding entries older than {} hours", deleted, hoursOld);
+        }
+        return deleted;
     }
 }

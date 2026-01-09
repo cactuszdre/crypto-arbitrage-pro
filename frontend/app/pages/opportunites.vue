@@ -903,7 +903,7 @@ onUnmounted(() => {
             v-for="opp in paginatedOpportunities"
             :key="'card-' + opp.symbol"
             @click="isPro ? selectOpportunity(opp) : null"
-            :class="[
+             :class="[
               'group relative p-4 rounded-2xl border backdrop-blur-xl transition-all duration-300 cursor-pointer',
               'bg-gradient-to-br from-white/[0.08] to-white/[0.02]',
               'hover:from-white/[0.12] hover:to-white/[0.05]',

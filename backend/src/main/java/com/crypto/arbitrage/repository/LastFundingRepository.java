@@ -8,11 +8,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.jpa.repository.Modifying;
+
 @Repository
 public interface LastFundingRepository extends JpaRepository<LastFunding, Long> {
+
+    /**
+     * Delete all entries that haven't been updated since the given timestamp.
+     * Used to clean up stale entries for delisted pairs.
+     */
+    @Modifying
+    @Query("DELETE FROM LastFunding lf WHERE lf.updatedAt < :threshold")
+    int deleteByUpdatedAtBefore(@Param("threshold") LocalDateTime threshold);
 
     /**
      * Find latest funding for a specific ticker and dex
