@@ -1,49 +1,49 @@
-# Phase 1 Recap: Backend Microservices Architecture
+# Récapitulatif Phase 1 : Architecture Microservices Backend
 
-## Overview
-Successfully transitioned from a monolithic Spring Boot backend to a microservices architecture involving two distinct services. This separation ensures scalability, better resource management, and cleaner code organization.
+## Vue d'ensemble
+Transition réussie d'un backend monolithique Spring Boot vers une architecture microservices comprenant deux services distincts. Cette séparation assure l'évolutivité, une meilleure gestion des ressources et une organisation du code plus propre.
 
-## Completed Objectives
+## Objectifs Atteints
 
-### 1. Service Creation & Separation
+### 1. Création et Séparation des Services
 - **Funding Service (Port 8081)**
-  - **Responsibility:** Raw data ingestion, real-time fetching, and managing the core database tables.
-  - **Scheduler:** Transferred and activated `FundingRateScheduler` to fetch data every 10 seconds.
-  - **API:** Provides raw funding rates, DEX info, and chat functionality.
+  - **Responsabilité :** Ingestion des données brutes, récupération en temps réel et gestion des tables de base de données principales.
+  - **Planificateur (Scheduler) :** Transfert et activation de `FundingRateScheduler` pour récupérer les données toutes les 10 secondes.
+  - **API :** Fournit les taux de financement bruts, les infos DEX et la fonctionnalité de chat.
   
 - **Arbitrage Service (Port 8082)**
-  - **Responsibility:** Analytics, historical data aggregation, charts, and arbitrage opportunity detection.
-  - **Database:** Connects to the same PostgreSQL instance (Shared Database Pattern) for efficient read-only analytics.
-  - **API:** Exposes optimized endpoints for charts (`/api/charts`) and opportunities (`/api/arbitrage`).
+  - **Responsabilité :** Analytique, agrégation de données historiques, graphiques et détection d'opportunités d'arbitrage.
+  - **Base de Données :** Se connecte à la même instance PostgreSQL (Pattern "Shared Database") pour une analytique efficace en lecture seule.
+  - **API :** Expose des endpoints optimisés pour les graphiques (`/api/charts`) et les opportunités (`/api/arbitrage`).
 
-### 2. Technology Migration
+### 2. Migration Technologique
 - **Spring MVC -> Jersey (JAX-RS)**
-  - Migrated all Controllers to JAX-RS Resources.
-  - Configured `JerseyConfig` for endpoint registration.
-  - Standardized error handling via JSON responses.
+  - Migration de tous les Contrôleurs vers des Ressources JAX-RS.
+  - Configuration de `JerseyConfig` pour l'enregistrement des endpoints.
+  - Standardisation de la gestion des erreurs via des réponses JSON.
 
 - **Refactoring**
-  - Renamed `service` package to `business` to avoid naming conflicts and clarify intent.
-  - Implemented **MapStruct** for efficient Entity-to-DTO mapping (`FundingRateMapper`).
-  - Removed duplicated logic: Ingestion logic remains in `funding-service`, Analytics logic moved to `arbitrage-service`.
+  - Renommage du package `service` en `business` pour éviter les conflits de nommage et clarifier l'intention.
+  - Implémentation de **MapStruct** pour un mapping efficace Entité-Vers-DTO (`FundingRateMapper`).
+  - Suppression de la logique dupliquée : L'ingestion reste dans `funding-service`, l'analytique déplacée vers `arbitrage-service`.
 
 - **Documentation**
-  - Added **SpringDoc OpenAPI** (Swagger UI) for automated API documentation.
+  - Ajout de **SpringDoc OpenAPI** (Swagger UI) pour la documentation automatisée de l'API.
 
-### 3. Frontend Integration
-- **Intelligent Routing:** Updated `backend.ts` in Nuxt to route requests based on path context:
+### 3. Intégration Frontend
+- **Routing Intelligent :** Mise à jour de `backend.ts` dans Nuxt pour diriger les requêtes selon le contexte du chemin :
   - `/api/arbitrage/*` -> Port 8082
   - `/api/charts/*` -> Port 8082
-  - Other -> Port 8081
+  - Autres -> Port 8081
 
-### 4. Stability fixes
-- **Transactional Consistency:** Added `@Transactional(readOnly = true)` to business services to prevent `LazyInitializationException` on shared entities.
-- **Microservice Configuration:** Disabled strict schema validation (`ddl-auto=none`) on `arbitrage-service` to allow shared database usage without conflicts.
+### 4. Correctifs de Stabilité
+- **Cohérence Transactionnelle :** Ajout de `@Transactional(readOnly = true)` aux services métiers pour prévenir les exceptions `LazyInitializationException` sur les entités partagées.
+- **Configuration Microservice :** Désactivation de la validation stricte du schéma (`ddl-auto=none`) sur `arbitrage-service` pour permettre l'utilisation de la base de données partagée sans conflits.
 
-## Next Steps (Phase 2)
-The foundation is solid. We are ready to proceed with **security and quality improvements**.
+## Prochaines Étapes (Phase 2)
+Les fondations sont solides. Nous sommes prêts à procéder aux **améliorations de sécurité et de qualité**.
 
-### Upcoming Tasks
-1. **Security:** Implement JWT with Role-Based Access Control (Guest/Client/Admin).
-2. **Quality:** Set up JaCoCo for code coverage and implement comprehensive unit tests.
-3. **Robustness:** Add a Global Exception Handler for Jersey to standardize error layouts.
+### Tâches à Venir
+1. **Sécurité :** Implémenter JWT avec Contrôle d'Accès Basé sur les Rôles (Invité/Client/Admin).
+2. **Qualité :** Mettre en place JaCoCo pour la couverture de code et implémenter des tests unitaires complets.
+3. **Robustesse :** Ajouter un Gestionnaire d'Exceptions Global pour Jersey afin de standardiser le format des erreurs.
