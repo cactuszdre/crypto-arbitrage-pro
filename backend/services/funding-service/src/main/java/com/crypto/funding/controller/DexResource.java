@@ -3,6 +3,7 @@ package com.crypto.funding.controller;
 import com.crypto.funding.business.DexBusiness;
 import com.crypto.funding.dto.DexCreateRequest;
 import com.crypto.funding.dto.DexDTO;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -70,28 +71,31 @@ public class DexResource {
     }
 
     /**
-     * Create a new DEX
+     * Create a new DEX (Admin only)
      */
     @POST
+    @RolesAllowed("ADMIN")
     public Response createDex(@Valid DexCreateRequest request) {
         DexDTO created = dexBusiness.createDex(request);
         return Response.status(Response.Status.CREATED).entity(created).build();
     }
 
     /**
-     * Update an existing DEX
+     * Update an existing DEX (Admin only)
      */
     @PUT
     @Path("/{id}")
+    @RolesAllowed("ADMIN")
     public DexDTO updateDex(@PathParam("id") Long id, @Valid DexCreateRequest request) {
         return dexBusiness.updateDex(id, request);
     }
 
     /**
-     * Delete a DEX
+     * Delete a DEX (Admin only)
      */
     @DELETE
     @Path("/{id}")
+    @RolesAllowed("ADMIN")
     public Response deleteDex(@PathParam("id") Long id) {
         dexBusiness.deleteDex(id);
         return Response.noContent().build();

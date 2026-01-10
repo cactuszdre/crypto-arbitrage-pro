@@ -60,6 +60,18 @@ Write-Host "PostgreSQL pret!" -ForegroundColor Green
 Write-Host ""
 Write-Host "[4/5] Demarrage des Microservices..." -ForegroundColor Yellow
 
+
+# Auth Service
+Write-Host "  Demarrage auth-service (port 8083)..." -ForegroundColor Cyan
+Start-Process powershell -ArgumentList "-NoExit", "-Command", @"
+    Set-Location '$PSScriptRoot\$servicesDir\auth-service'
+    `$Host.UI.RawUI.WindowTitle = 'AUTH-SERVICE (8083)'
+    Write-Host '========================================' -ForegroundColor Blue
+    Write-Host '   AUTH SERVICE - Port 8083' -ForegroundColor Blue
+    Write-Host '========================================' -ForegroundColor Blue
+    ..\mvnw.cmd spring-boot:run
+"@
+
 # Funding Service
 Write-Host "  Demarrage funding-service (port 8081)..." -ForegroundColor Cyan
 Start-Process powershell -ArgumentList "-NoExit", "-Command", @"
@@ -109,6 +121,7 @@ Write-Host "URLs:" -ForegroundColor Cyan
 Write-Host "  Frontend:         http://localhost:5173" -ForegroundColor White
 Write-Host "  Funding API:      http://localhost:8081/api" -ForegroundColor White
 Write-Host "  Arbitrage API:    http://localhost:8082/api" -ForegroundColor White
+Write-Host "  Auth API:         http://localhost:8083/api" -ForegroundColor White
 Write-Host ""
 Write-Host "Swagger (Design First):" -ForegroundColor Cyan
 Write-Host "  Funding:          backend/services/funding-service/src/main/resources/openapi.yaml" -ForegroundColor DarkGray

@@ -58,6 +58,26 @@ services:
       postgres:
         condition: service_healthy
 
+  auth-service:
+    build:
+      context: ./backend/services
+      dockerfile: auth-service/Dockerfile
+    container_name: auth-service
+    ports:
+      - "8083:8083"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    networks:
+      - crypto-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   arbitrage-service:
     build:
       context: ./backend/services

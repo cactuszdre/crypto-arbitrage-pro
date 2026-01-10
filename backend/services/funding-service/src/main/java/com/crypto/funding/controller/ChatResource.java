@@ -2,6 +2,7 @@ package com.crypto.funding.controller;
 
 import com.crypto.funding.dto.MessageDTO;
 import com.crypto.funding.business.MistralService;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class ChatResource {
     private final MistralService mistralService;
 
     @POST
+    @RolesAllowed({"USER", "ADMIN"})
     public Map<String, String> chat(List<MessageDTO> messages) {
         String response = mistralService.chat(messages);
         return Map.of("content", response);

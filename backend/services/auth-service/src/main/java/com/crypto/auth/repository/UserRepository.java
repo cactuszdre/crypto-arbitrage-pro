@@ -1,8 +1,8 @@
-package com.crypto.arbitrage.repository;
+package com.crypto.auth.repository;
 
-import com.crypto.arbitrage.model.Plan;
-import com.crypto.arbitrage.model.Role;
-import com.crypto.arbitrage.model.User;
+import com.crypto.auth.model.Plan;
+import com.crypto.auth.model.Role;
+import com.crypto.auth.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import java.util.List;

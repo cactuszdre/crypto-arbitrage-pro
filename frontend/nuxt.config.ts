@@ -53,6 +53,7 @@ export default defineNuxtConfig({
     backendUrl: process.env.BACKEND_URL || 'http://localhost:8080', // Legacy (deprecated)
     fundingServiceUrl: process.env.FUNDING_SERVICE_URL || 'http://localhost:8081',
     arbitrageServiceUrl: process.env.ARBITRAGE_SERVICE_URL || 'http://localhost:8082',
+    authServiceUrl: process.env.AUTH_SERVICE_URL || 'http://localhost:8083',
 
     // Public keys (exposed to client)
     public: {

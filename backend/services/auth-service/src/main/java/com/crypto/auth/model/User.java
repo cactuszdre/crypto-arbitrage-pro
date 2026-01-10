@@ -1,4 +1,4 @@
-package com.crypto.funding.model;
+package com.crypto.auth.model;
 
 import jakarta.persistence.*;
 import lombok.Data;

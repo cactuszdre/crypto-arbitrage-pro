@@ -1,4 +1,4 @@
-package com.crypto.arbitrage.model;
+package com.crypto.auth.model;
 
 public enum Plan {
     FREE,

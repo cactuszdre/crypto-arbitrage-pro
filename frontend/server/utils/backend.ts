@@ -22,6 +22,12 @@ const getServiceUrl = (endpoint: string): string => {
     // Default URLs
     const fundingUrl = config.fundingServiceUrl || 'http://localhost:8081'
     const arbitrageUrl = config.arbitrageServiceUrl || 'http://localhost:8082'
+    const authUrl = config.authServiceUrl || 'http://localhost:8083'
+
+    // Auth Service Endpoints
+    if (endpoint.includes('/api/auth') || endpoint.includes('/api/users')) {
+        return authUrl
+    }
 
     // Arbitrage Service Endpoints
     if (endpoint.includes('/api/arbitrage') ||

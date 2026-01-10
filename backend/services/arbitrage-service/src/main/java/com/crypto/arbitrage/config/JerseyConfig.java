@@ -18,6 +18,9 @@ public class JerseyConfig extends ResourceConfig {
         // Register JAX-RS resource classes
         register(ArbitrageResource.class);
         register(ChartResource.class);
+        register(com.crypto.arbitrage.exception.JerseyExceptionMapper.class);
+        register(com.crypto.arbitrage.security.AuthenticationFilter.class);
+        register(org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature.class);
         
         // Register Jackson for JSON serialization
         packages("org.glassfish.jersey.jackson");

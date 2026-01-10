@@ -7,6 +7,7 @@ const appKitInstance = ref(null)
 const isInitialized = ref(false)
 const isInitializing = ref(false)
 const accountData = ref({ isConnected: false, address: null })
+const wagmiAdapterState = ref(null) // Stores the Wagmi Adapter for signing
 
 export const useAppKit = () => {
     const config = useRuntimeConfig()
@@ -56,6 +57,9 @@ export const useAppKit = () => {
                 networks
             })
 
+            // Store wagmi adapter for signing operations
+            wagmiAdapterState.value = wagmiAdapter
+
             // Create AppKit
             const appKit = createAppKit({
                 adapters: [wagmiAdapter],
@@ -72,11 +76,13 @@ export const useAppKit = () => {
 
             // Store instance
             appKitInstance.value = appKit
-            window.__appKit = appKit
+            if (typeof window !== 'undefined') {
+                (window as any).__appKit = appKit
+            }
 
             // Subscribe to account changes
             if (appKit.subscribeAccount) {
-                appKit.subscribeAccount((account) => {
+                appKit.subscribeAccount((account: any) => {
                     accountData.value = account
                 })
             }
@@ -114,6 +120,7 @@ export const useAppKit = () => {
         isInitialized,
         isInitializing,
         accountData,
+        wagmiAdapter: wagmiAdapterState,
         initAppKit,
         openModal
     }

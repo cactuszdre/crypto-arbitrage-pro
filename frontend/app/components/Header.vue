@@ -12,7 +12,7 @@ let clockInterval = null
 const isMac = ref(false)
 
 // AppKit (wallet connection) - using composable
-const { appKit, accountData, isInitializing, openModal } = useAppKit()
+const { appKit, accountData, isInitializing, openModal, wagmiAdapter } = useAppKit()
 
 const searchShortcut = computed(() => isMac.value ? '⌘K' : 'Ctrl+K')
 
@@ -72,10 +72,29 @@ if (import.meta.client) {
         }
         
         try {
-          // Login or register user with wallet
-          const response = await $fetch(`/api/users/wallet/${cleanAddress}/login`, {
-            method: 'POST'
+          // 1. Get Nonce from backend
+          const nonceRes = await $fetch(`/api/auth/nonce/${cleanAddress}`)
+          const nonce = nonceRes.nonce
+
+          if (!nonce) throw new Error('Failed to get nonce')
+          
+          // 2. Sign Message
+          if (!wagmiAdapter.value) throw new Error('Wagmi Adapter not ready')
+          const { signMessage } = await import('@wagmi/core')
+          
+          const signature = await signMessage(wagmiAdapter.value.wagmiConfig, { 
+              message: nonce 
           })
+
+          // 3. Login with signature
+          const response = await $fetch('/api/auth/login', {
+            method: 'POST',
+            body: {
+                walletAddress: cleanAddress,
+                signature: signature
+            }
+          })
+          
           setUser(response)
           
           // If user is on admin page but not admin, redirect to home

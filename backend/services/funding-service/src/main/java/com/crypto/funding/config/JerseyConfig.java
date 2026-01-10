@@ -25,6 +25,10 @@ public class JerseyConfig extends ResourceConfig {
         // register(ChartResource.class); // Moved to arbitrage-service
         // register(ArbitrageResource.class); // Moved to arbitrage-service
         register(ChatResource.class);
+        // register(AuthResource.class); // Moved to auth-service
+        register(com.crypto.funding.exception.JerseyExceptionMapper.class);
+        register(com.crypto.funding.security.AuthenticationFilter.class);
+        register(org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature.class);
         
         // Register Jackson for JSON serialization
         packages("org.glassfish.jersey.jackson");
