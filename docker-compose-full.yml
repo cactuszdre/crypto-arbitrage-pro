@@ -1,0 +1,87 @@
+services:
+  # ==========================================
+  # Database
+  # ==========================================
+  postgres:
+    image: postgres:17-alpine
+    container_name: crypto-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - crypto-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: crypto-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    networks:
+      - crypto-network
+    depends_on:
+      - postgres
+
+  # ==========================================
+  # Microservices
+  # ==========================================
+  funding-service:
+    build:
+      context: ./backend/services
+      dockerfile: funding-service/Dockerfile
+    container_name: funding-service
+    ports:
+      - "8081:8081"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    networks:
+      - crypto-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  arbitrage-service:
+    build:
+      context: ./backend/services
+      dockerfile: arbitrage-service/Dockerfile
+    container_name: arbitrage-service
+    ports:
+      - "8082:8082"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+    networks:
+      - crypto-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      funding-service:
+        condition: service_started
+
+volumes:
+  postgres-data:
+
+networks:
+  crypto-network:
+    driver: bridge
