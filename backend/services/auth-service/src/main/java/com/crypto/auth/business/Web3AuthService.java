@@ -1,5 +1,7 @@
 package com.crypto.auth.business;
 
+import java.nio.charset.StandardCharsets;
+
 import com.crypto.auth.dto.AuthResponse;
 import com.crypto.auth.exception.BusinessException;
 import com.crypto.auth.exception.ResourceNotFoundException;
@@ -82,23 +84,48 @@ public class Web3AuthService {
     }
 
     private boolean validateSignature(String message, String signature, String walletAddress) throws SignatureException {
-        // Deconstruct signature
-        byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
-        byte v = signatureBytes[64];
-        if (v < 27) { 
-            v += 27; 
+        try {
+            // Deconstruct signature
+            byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
+            byte v = signatureBytes[64];
+            if (v < 27) { 
+                v += 27; 
+            }
+            
+            Sign.SignatureData signatureData = new Sign.SignatureData(
+                    v, 
+                    Arrays.copyOfRange(signatureBytes, 0, 32), 
+                    Arrays.copyOfRange(signatureBytes, 32, 64)
+            );
+
+            // Calculate hash of the prefixed message
+            BigInteger publicKey = Sign.signedPrefixedMessageToKey(message.getBytes(StandardCharsets.UTF_8), signatureData);
+            String recoveredAddress = "0x" + Keys.getAddress(publicKey);
+            
+            log.info("Signature Verification Debug:");
+            log.info(" - Wallet Expected: {}", walletAddress);
+            log.info(" - Wallet Recovered (Prefixed): {}", recoveredAddress);
+            log.info(" - Nonce Expected: {}", message);
+            
+            if (recoveredAddress.equalsIgnoreCase(walletAddress)) {
+                return true;
+            }
+
+            // Fallback 1: Try without prefix (Raw Message Hash)
+            // Some wallets/libraries might sign the raw message hash directly
+            BigInteger publicKeyRaw = Sign.signedMessageToKey(message.getBytes(StandardCharsets.UTF_8), signatureData);
+            String recoveredAddressRaw = "0x" + Keys.getAddress(publicKeyRaw);
+            log.info(" - Wallet Recovered (Raw): {}", recoveredAddressRaw);
+            
+            if (recoveredAddressRaw.equalsIgnoreCase(walletAddress)) {
+                log.warn("Signature valid via RAW recovery (no prefix). This is non-standard but accepted.");
+                return true;
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.error("Error during signature recovery", e);
+            throw e;
         }
-        
-        Sign.SignatureData signatureData = new Sign.SignatureData(
-                v, 
-                Arrays.copyOfRange(signatureBytes, 0, 32), 
-                Arrays.copyOfRange(signatureBytes, 32, 64)
-        );
-
-        // Calculate hash of the prefixed message
-        BigInteger publicKey = Sign.signedPrefixedMessageToKey(message.getBytes(), signatureData);
-        String recoveredAddress = "0x" + Keys.getAddress(publicKey);
-
-        return recoveredAddress.equalsIgnoreCase(walletAddress);
     }
 }

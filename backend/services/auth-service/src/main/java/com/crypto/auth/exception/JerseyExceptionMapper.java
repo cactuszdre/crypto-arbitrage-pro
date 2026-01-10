@@ -33,6 +33,10 @@ public class JerseyExceptionMapper implements ExceptionMapper<Throwable> {
             status = Response.Status.BAD_REQUEST.getStatusCode();
             errorLabel = "Bad Request";
             message = exception.getMessage();
+        } else if (exception instanceof com.crypto.auth.exception.BusinessException) {
+            status = Response.Status.BAD_REQUEST.getStatusCode();
+            errorLabel = ((com.crypto.auth.exception.BusinessException) exception).getErrorCode();
+            message = exception.getMessage();
         }
         // Add more custom exceptions here if needed
 

@@ -14,6 +14,9 @@ const isMac = ref(false)
 // AppKit (wallet connection) - using composable
 const { appKit, accountData, isInitializing, openModal, wagmiAdapter } = useAppKit()
 
+// Lock to prevent duplicate login attempts
+const isLoggingIn = ref(false)
+
 const searchShortcut = computed(() => isMac.value ? '⌘K' : 'Ctrl+K')
 
 // Search functionality - redirect to arbitrage page
@@ -62,14 +65,20 @@ const openWallet = () => {
 // Watch for wallet connection changes (client-side only)
 if (import.meta.client) {
   watch(
-    () => accountData.value,
-    async (newAccount) => {
-      if (newAccount?.isConnected && newAccount?.address) {
+    () => accountData.value?.address,
+    async (newAddress) => {
+      if (newAddress) {
         // Extract clean address (remove CAIP prefix like "eip155:1:")
-        let cleanAddress = newAccount.address
+        let cleanAddress = newAddress
         if (cleanAddress.includes(':')) {
           cleanAddress = cleanAddress.split(':').pop()
         }
+        
+        // Prevent duplicate login if already logged in as same user or currently logging in
+        if (isLoggingIn.value) return
+        if (state.user?.walletAddress?.toLowerCase() === cleanAddress.toLowerCase()) return
+        
+        isLoggingIn.value = true
         
         try {
           // 1. Get Nonce from backend
@@ -111,18 +120,22 @@ if (import.meta.client) {
           if (route.path === '/admin') {
             router.push('/')
           }
+        } finally {
+          isLoggingIn.value = false
         }
       } else {
         // Wallet disconnected
-        logout()
-        
-        // Redirect from admin page if disconnected
-        if (route.path === '/admin') {
-          router.push('/')
+        if (state.user) {
+            logout()
+            
+            // Redirect from admin page if disconnected
+            if (route.path === '/admin') {
+              router.push('/')
+            }
         }
       }
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   )
 }
 
