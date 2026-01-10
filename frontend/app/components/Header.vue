@@ -45,13 +45,17 @@ const formatTimeUTC = computed(() => {
 })
 
 const isConnected = computed(() => {
-  return Boolean(accountData.value?.isConnected)
+  // Check AppKit connection OR stored user session
+  return Boolean(accountData.value?.isConnected) || Boolean(state.user?.walletAddress)
 })
 
 const formattedAddress = computed(() => {
-  if (!accountData.value?.address) return ''
-  const addr = String(accountData.value.address)
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  // Prefer AppKit address, fallback to stored user
+  const addr = accountData.value?.address || state.user?.walletAddress
+  if (!addr) return ''
+  // Remove CAIP prefix if present
+  const cleanAddr = addr.includes(':') ? addr.split(':').pop() : addr
+  return `${cleanAddr.slice(0, 6)}...${cleanAddr.slice(-4)}`
 })
 
 // AppKit loading state (from composable)
@@ -72,6 +76,23 @@ if (import.meta.client) {
         let cleanAddress = newAddress
         if (cleanAddress.includes(':')) {
           cleanAddress = cleanAddress.split(':').pop()
+        }
+        
+        // Check if we already have this user in localStorage (page refresh scenario)
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser)
+            if (parsed.walletAddress?.toLowerCase() === cleanAddress.toLowerCase()) {
+              // User is already authenticated from previous session, just restore state
+              if (!state.user?.walletAddress) {
+                setUser(parsed)
+              }
+              return
+            }
+          } catch (e) {
+            console.error('Failed to parse stored user:', e)
+          }
         }
         
         // Prevent duplicate login if already logged in as same user or currently logging in
@@ -124,8 +145,10 @@ if (import.meta.client) {
           isLoggingIn.value = false
         }
       } else {
-        // Wallet disconnected
-        if (state.user) {
+        // Wallet address is undefined - could be temporary (modal opening) or real disconnect
+        // Only logout if there's no stored session (real disconnect)
+        const storedSession = localStorage.getItem('user')
+        if (!storedSession && state.user) {
             logout()
             
             // Redirect from admin page if disconnected
@@ -140,6 +163,19 @@ if (import.meta.client) {
 }
 
 onMounted(() => {
+  // Restore user session from localStorage immediately on mount
+  const storedUser = localStorage.getItem('user')
+  if (storedUser && !state.user?.walletAddress) {
+    try {
+      const parsed = JSON.parse(storedUser)
+      if (parsed.walletAddress) {
+        setUser(parsed)
+      }
+    } catch (e) {
+      console.error('Failed to restore user session:', e)
+    }
+  }
+
   // OS detection
   isMac.value = navigator.platform.toUpperCase().indexOf('MAC') >= 0 || 
                 navigator.userAgent.toUpperCase().indexOf('MAC') >= 0

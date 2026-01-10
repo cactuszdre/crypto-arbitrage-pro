@@ -8,22 +8,23 @@ export const useAuth = () => {
         walletAddress?: string
         role?: string
         plan?: string
-    } | null>('auth-user', () => null)
+    } | null>('auth-user', () => {
+        // Initialize from localStorage on client during state creation
+        if (import.meta.client) {
+            const storedUser = localStorage.getItem('user')
+            if (storedUser) {
+                try {
+                    return JSON.parse(storedUser)
+                } catch (e) {
+                    console.error('Failed to parse stored user:', e)
+                }
+            }
+        }
+        return null
+    })
 
     const isAuthenticated = computed(() => !!user.value?.walletAddress)
     const isLoading = ref(false)
-
-    // Initialize from localStorage on client
-    if (import.meta.client) {
-        const storedUser = localStorage.getItem('user')
-        if (storedUser) {
-            try {
-                user.value = JSON.parse(storedUser)
-            } catch (e) {
-                console.error('Failed to parse stored user:', e)
-            }
-        }
-    }
 
     /**
      * Set user data after successful authentication
