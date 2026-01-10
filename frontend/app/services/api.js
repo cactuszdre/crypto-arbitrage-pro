@@ -37,6 +37,8 @@ export const userApi = {
     getAll: () => apiFetch('/users'),
     getAdmins: () => apiFetch('/users/admins'),
     getByWallet: (address) => apiFetch(`/users/wallet/${address}`),
+    addAdmin: (walletAddress) => apiFetch('/users/admins', { method: 'POST', body: { walletAddress } }),
+    removeAdmin: (walletAddress) => apiFetch(`/users/admins/${walletAddress}`, { method: 'DELETE' }),
     updateRole: (id, role) => apiFetch(`/users/${id}/role?role=${role}`, { method: 'PATCH' }),
     updatePlan: (id, plan) => apiFetch(`/users/${id}/plan?plan=${plan}`, { method: 'PATCH' }),
     updateLastLogin: (address) => apiFetch(`/users/wallet/${address}/login`, { method: 'POST' }),

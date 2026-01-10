@@ -5,10 +5,13 @@ import java.nio.charset.StandardCharsets;
 import com.crypto.auth.dto.AuthResponse;
 import com.crypto.auth.exception.BusinessException;
 import com.crypto.auth.exception.ResourceNotFoundException;
+import com.crypto.auth.model.Plan;
+import com.crypto.auth.model.Role;
 import com.crypto.auth.model.User;
 import com.crypto.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.web3j.crypto.Keys;
@@ -28,13 +31,37 @@ public class Web3AuthService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
 
+    @Value("${app.admin.wallet}")
+    private String configuredAdminWallet;
+
     @Transactional
     public String getNonce(String walletAddress) {
         String normalizedWallet = walletAddress.toLowerCase();
         User user = userRepository.findByWalletAddressIgnoreCase(normalizedWallet)
+                .map(existingUser -> {
+                    // Auto-promote to ADMIN if matches configured wallet
+                    if (configuredAdminWallet != null && 
+                        normalizedWallet.equalsIgnoreCase(configuredAdminWallet) && 
+                        existingUser.getRole() != Role.ADMIN) {
+                        
+                        log.info("Promoting user {} to ADMIN based on configuration", normalizedWallet);
+                        existingUser.setRole(Role.ADMIN);
+                        existingUser.setPlan(Plan.PRO);
+                        return userRepository.save(existingUser);
+                    }
+                    return existingUser;
+                })
                 .orElseGet(() -> {
                     // Create new user (Auto-Signup)
                     User newUser = new User(normalizedWallet);
+                    
+                    // Auto-promote to ADMIN if matches configured wallet
+                    if (configuredAdminWallet != null && normalizedWallet.equalsIgnoreCase(configuredAdminWallet)) {
+                        log.info("Creating new Admin user {} based on configuration", normalizedWallet);
+                        newUser.setRole(Role.ADMIN);
+                        newUser.setPlan(Plan.PRO);
+                    }
+                    
                     return userRepository.save(newUser);
                 });
         
