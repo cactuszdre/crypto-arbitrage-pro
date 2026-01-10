@@ -41,15 +41,35 @@ const isToday = (date) => {
          d.getUTCDate() === now.getUTCDate()
 }
 
-// Sync times from props
+// Track if we're updating internally to prevent watch feedback loops
+const isInternalUpdate = ref(false)
+let lastFromDate = null
+let lastToDate = null
+
+// Sync times from props - only when dates change, not when times change
 watch(() => props.modelValue, (val) => {
+  if (isInternalUpdate.value) {
+    isInternalUpdate.value = false
+    return
+  }
+  
   if (val && val[0] && val[1]) {
     const from = new Date(val[0])
     const to = new Date(val[1])
-    fromHour.value = from.getUTCHours()
-    fromMinute.value = from.getUTCMinutes()
-    toHour.value = to.getUTCHours()
-    toMinute.value = to.getUTCMinutes()
+    
+    // Check if the DATE part changed (not just time)
+    const fromDateKey = `${from.getUTCFullYear()}-${from.getUTCMonth()}-${from.getUTCDate()}`
+    const toDateKey = `${to.getUTCFullYear()}-${to.getUTCMonth()}-${to.getUTCDate()}`
+    
+    // Only sync times if dates changed or this is initial load
+    if (lastFromDate !== fromDateKey || lastToDate !== toDateKey || lastFromDate === null) {
+      fromHour.value = from.getUTCHours()
+      fromMinute.value = from.getUTCMinutes()
+      toHour.value = to.getUTCHours()
+      toMinute.value = to.getUTCMinutes()
+      lastFromDate = fromDateKey
+      lastToDate = toDateKey
+    }
   }
 }, { immediate: true })
 
@@ -77,17 +97,39 @@ const onDateChange = (range) => {
   emit('update:modelValue', [from, to])
 }
 
-// Update time and re-emit
+// Update time and re-emit - only if dates are already selected
 const updateTime = () => {
-  if (props.modelValue && props.modelValue[0] && props.modelValue[1]) {
-    const from = new Date(props.modelValue[0])
-    const to = new Date(props.modelValue[1])
-    
-    from.setUTCHours(fromHour.value, fromMinute.value, 0, 0)
-    to.setUTCHours(toHour.value, toMinute.value, 0, 0)
-    
-    emit('update:modelValue', [from, to])
+  // Don't do anything if no dates are selected yet
+  if (!props.modelValue || !props.modelValue[0] || !props.modelValue[1]) {
+    return
   }
+  
+  // Preserve the original dates (year, month, day) and only change time
+  const origFrom = new Date(props.modelValue[0])
+  const origTo = new Date(props.modelValue[1])
+  
+  // Create new dates preserving the UTC date but setting new time
+  const from = new Date(Date.UTC(
+    origFrom.getUTCFullYear(),
+    origFrom.getUTCMonth(),
+    origFrom.getUTCDate(),
+    fromHour.value,
+    fromMinute.value,
+    0, 0
+  ))
+  
+  const to = new Date(Date.UTC(
+    origTo.getUTCFullYear(),
+    origTo.getUTCMonth(),
+    origTo.getUTCDate(),
+    toHour.value,
+    toMinute.value,
+    0, 0
+  ))
+  
+  // Mark as internal update to prevent watch feedback loop
+  isInternalUpdate.value = true
+  emit('update:modelValue', [from, to])
 }
 
 const formatDate = (date) => {
@@ -119,7 +161,6 @@ const setToMinute = (e) => { toMinute.value = Math.max(0, Math.min(59, Number(e.
       range
       multi-calendars
       :enable-time-picker="false"
-      :max-date="new Date()"
       :dark="true"
       :auto-apply="false"
       :close-on-scroll="false"
@@ -179,9 +220,9 @@ const setToMinute = (e) => { toMinute.value = Math.max(0, Math.min(59, Number(e.
               </div>
               <span class="colon">:</span>
               <div class="spinner-col">
-                <button class="spin-btn" @click.stop.prevent="changeFromMinute(5)">▲</button>
+                <button class="spin-btn" @click.stop.prevent="changeFromMinute(1)">▲</button>
                 <input type="number" :value="fromMinute" @input="setFromMinute" @click.stop min="0" max="59" />
-                <button class="spin-btn" @click.stop.prevent="changeFromMinute(-5)">▼</button>
+                <button class="spin-btn" @click.stop.prevent="changeFromMinute(-1)">▼</button>
               </div>
             </div>
 
@@ -197,34 +238,11 @@ const setToMinute = (e) => { toMinute.value = Math.max(0, Math.min(59, Number(e.
               </div>
               <span class="colon">:</span>
               <div class="spinner-col">
-                <button class="spin-btn" @click.stop.prevent="changeToMinute(5)">▲</button>
+                <button class="spin-btn" @click.stop.prevent="changeToMinute(1)">▲</button>
                 <input type="number" :value="toMinute" @input="setToMinute" @click.stop min="0" max="59" />
-                <button class="spin-btn" @click.stop.prevent="changeToMinute(-5)">▼</button>
+                <button class="spin-btn" @click.stop.prevent="changeToMinute(-1)">▼</button>
               </div>
             </div>
-          </div>
-        </div>
-      </template>
-      
-      <!-- Precision indicator in sidebar -->
-      <template #left-sidebar>
-        <div class="p-3 space-y-3">
-          <div class="text-xs text-neutral-400 font-medium">Data Precision</div>
-          <div 
-            class="p-2 rounded-lg text-xs"
-            :class="{
-              'bg-emerald-500/20 text-emerald-400': customPrecision.interval === '5min',
-              'bg-cyan-500/20 text-cyan-400': customPrecision.interval === 'hourly',
-              'bg-amber-500/20 text-amber-400': customPrecision.interval === 'daily',
-              'bg-neutral-500/20 text-neutral-400': !customPrecision.interval
-            }"
-          >
-            <div class="font-medium">{{ customPrecision.label }}</div>
-            <div class="text-[10px] opacity-70 mt-0.5">{{ customPrecision.description }}</div>
-          </div>
-          <div class="text-[10px] text-neutral-500 flex items-center gap-1">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            UTC timezone
           </div>
         </div>
       </template>
@@ -354,5 +372,15 @@ const setToMinute = (e) => { toMinute.value = Math.max(0, Math.min(59, Number(e.
   font-weight: 700;
   color: #404040;
   margin-bottom: 1px;
+}
+</style>
+
+<style>
+/* Global styles for VueDatePicker (cannot be scoped) */
+/* Add vertical divider between the two calendars */
+.dp__instance_calendar:first-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding-right: 8px;
+  margin-right: 8px;
 }
 </style>

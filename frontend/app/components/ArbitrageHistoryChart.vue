@@ -337,10 +337,125 @@ const fetchData = async (silent = false) => {
     const periodConfig = periods.find(p => p.value === selectedPeriod.value)
     let hours = selectedPeriod.value
     
+    // Check if this is a custom timeframe
+    const now = new Date()
+    const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
+    const isCustom = customTimeframeActive.value && customDateRange.value
+    
+    // ============================================
+    // CUSTOM RANGE: Simplified logic - just get all available data
+    // ============================================
+    if (isCustom && customDateRange.value) {
+      const customStart = new Date(customDateRange.value[0])
+      const customEnd = new Date(customDateRange.value[1])
+      const totalHours = Math.ceil((customEnd - customStart) / (1000 * 60 * 60))
+      const totalDays = Math.ceil(totalHours / 24)
+      
+      // Try to get data from all sources and combine them
+      // Priority: 5-min data (most recent) → hourly → daily
+      
+      // 1. Try 5-min API (has today's data)
+      try {
+        const hoursFromNow = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
+        const response = await chartApi.getComparisonData(props.symbol, hoursFromNow)
+        if (response.data && Object.keys(response.data).length > 0) {
+          for (const [dexName, dexData] of Object.entries(response.data)) {
+            for (const item of dexData) {
+              data.push({
+                dex: dexName,
+                timestamp: item.bucketTime,
+                rate: item.avgRate,
+                rate8h: item.avgRate8h,
+                rateAnnual: item.avgRateAnnual
+              })
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[Custom] 5-min API not available')
+      }
+      
+      // 2. Try hourly API (for historical data)
+      if (totalDays > 1) {
+        try {
+          const response = await chartApi.getHourlyComparisonData(props.symbol, Math.min(totalHours, 168))
+          if (response.data && Object.keys(response.data).length > 0) {
+            for (const [dexName, dexData] of Object.entries(response.data)) {
+              for (const item of dexData) {
+                // Only add if not already in data (avoid duplicates)
+                const exists = data.some(d => d.dex === dexName && d.timestamp === item.bucketTime)
+                if (!exists) {
+                  data.push({
+                    dex: dexName,
+                    timestamp: item.bucketTime,
+                    rate: item.avgRate,
+                    rate8h: item.avgRate8h,
+                    rateAnnual: item.avgRateAnnual
+                  })
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('[Custom] Hourly API not available')
+        }
+      }
+      
+      // 3. Try daily API (for longer historical data)
+      if (totalDays > 7) {
+        try {
+          const response = await chartApi.getDailyComparisonData(props.symbol, totalDays)
+          if (response.data && Object.keys(response.data).length > 0) {
+            for (const [dexName, dexData] of Object.entries(response.data)) {
+              for (const item of dexData) {
+                // Only add if not already in data (avoid duplicates)
+                const exists = data.some(d => d.dex === dexName && d.timestamp === item.bucketTime)
+                if (!exists) {
+                  data.push({
+                    dex: dexName,
+                    timestamp: item.bucketTime,
+                    rate: item.avgRate,
+                    rate8h: item.avgRate8h,
+                    rateAnnual: item.avgRateAnnual
+                  })
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('[Custom] Daily API not available')
+        }
+      }
+      
+      // Filter to only show data within the custom range
+      // Add 59 seconds to end time so exact minute matches are included
+      // (e.g., selecting 23:50 includes 23:50:00, but 23:48 excludes 23:50:00)
+      // Also cap at current time so future times don't affect calculations
+      let effectiveEnd = customEnd.getTime() + 59 * 1000
+      const nowTime = now.getTime()
+      if (effectiveEnd > nowTime) {
+        effectiveEnd = nowTime // Cap at current time
+      }
+      const customEndWithBuffer = new Date(effectiveEnd)
+      
+      let finalData = data.filter(d => {
+        const timestamp = parseAsUTC(d.timestamp)
+        return timestamp >= customStart && timestamp <= customEndWithBuffer
+      })
+      
+      historyData.value = finalData.sort((a, b) => parseAsUTC(a.timestamp) - parseAsUTC(b.timestamp))
+      usingPreAggregated.value = true
+      chartKey.value++
+      return // Exit early for custom ranges
+    }
+    
+    // ============================================
+    // PRESET PERIODS: Original logic
+    // ============================================
+    
     // Dynamic hours calculation for Live and 1D
     if (periodConfig?.isLive) {
       // Live: data from today UTC (since midnight UTC), no fallback
-      const now = new Date()
       const midnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
       const hoursSinceMidnightUTC = (now - midnightUTC) / (1000 * 60 * 60)
       hours = Math.max(hoursSinceMidnightUTC, 0.1) // Small minimum to avoid 0
@@ -377,9 +492,6 @@ const fetchData = async (silent = false) => {
       
       // For 1D: filter to only yesterday's data (UTC)
       if (selectedPeriod.value === 24 && data.length > 0) {
-        const now = new Date()
-        // Today midnight UTC
-        const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
         // Yesterday midnight UTC
         const yesterdayMidnightUTC = new Date(todayMidnightUTC.getTime() - 24 * 60 * 60 * 1000)
         
@@ -394,7 +506,7 @@ const fetchData = async (silent = false) => {
         data.push(...filteredData)
       }
     } else if (hours <= 168) {
-      // Use hourly aggregated API for 1D/3D/7D views
+      // Use hourly aggregated API for 3D/7D views
       try {
         const response = await chartApi.getHourlyComparisonData(props.symbol, hours)
         if (response.data && Object.keys(response.data).length > 0) {
@@ -455,37 +567,20 @@ const fetchData = async (silent = false) => {
 
     let finalData = data
     // Only aggregate if data was NOT already pre-aggregated from backend
-    // Pre-aggregated data already has correct resolution (5min for live, hourly for 1D-7D, daily for 30D+)
     if (hours <= 24 && data.length > 0 && !usedPreAggregated) {
       finalData = aggregateByInterval(data, hours)
     }
     
-    // For 1D view: aggregate 5-min data to 15-min intervals (reduce 288 bars to 96)
+    // For 1D view ONLY: aggregate 5-min data to 15-min intervals (reduce 288 bars to 96)
     if (selectedPeriod.value === 24 && finalData.length > 0) {
-      finalData = aggregateByInterval(finalData, 24) // This uses 15-min interval for hours <= 24
+      finalData = aggregateByInterval(finalData, 24)
     }
     
     // For LIVE mode: filter to only show TODAY's data (after midnight UTC)
-    // This prevents yesterday's data from appearing when fetching "last X hours"
     if (periodConfig?.isLive && finalData.length > 0) {
-      const now = new Date()
-      const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
-      
       finalData = finalData.filter(d => {
         const timestamp = parseAsUTC(d.timestamp)
         return timestamp >= todayMidnightUTC
-      })
-    }
-    
-    // For ALL historical views (non-Live): filter out today's data (UTC)
-    // This ensures chart data matches the funding_rate_daily aggregates
-    if (!periodConfig?.isLive && finalData.length > 0) {
-      const now = new Date()
-      const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0))
-      
-      finalData = finalData.filter(d => {
-        const timestamp = parseAsUTC(d.timestamp)
-        return timestamp < todayMidnightUTC
       })
     }
     
@@ -552,6 +647,27 @@ watch(() => selectedPeriod.value, async () => {
   await Promise.all([fetchData(false), fetchDailyYield()])
   isChangingPeriod.value = false
 })
+
+// Watch for custom date range changes (including time changes)
+watch(() => customDateRange.value, async (newVal, oldVal) => {
+  // Only refetch if custom timeframe is active and the value actually changed
+  if (customTimeframeActive.value && newVal && newVal[0] && newVal[1]) {
+    // Check if this is a real change (not just initialization)
+    if (oldVal && oldVal[0] && oldVal[1]) {
+      const oldStart = new Date(oldVal[0]).getTime()
+      const oldEnd = new Date(oldVal[1]).getTime()
+      const newStart = new Date(newVal[0]).getTime()
+      const newEnd = new Date(newVal[1]).getTime()
+      
+      // Only refetch if the timestamps actually changed
+      if (oldStart !== newStart || oldEnd !== newEnd) {
+        isChangingPeriod.value = true
+        await fetchData(false)
+        isChangingPeriod.value = false
+      }
+    }
+  }
+}, { deep: true })
 
 onMounted(async () => {
   await loadDexConfigs()
@@ -712,9 +828,33 @@ const unifiedChartData = computed(() => {
       actualDays = uniqueDays.size
       
       // Calculate total cumulative return for the period
-      // Total Return = (Annual Rate / 365) × Number of Days
-      if (chartAverageYield !== 0 && actualDays > 0) {
-        totalReturn = (chartAverageYield / 365) * actualDays
+      // NEW: Use actual time span covered by data, not just day count
+      // This ensures adding a positive bar always increases total return
+      if (spreadsForAverage.length > 0) {
+        // Determine interval between data points (in hours)
+        // Sort timestamps and calculate average interval
+        const sortedTimestamps = allTimestamps.map(t => parseAsUTC(t).getTime()).sort((a, b) => a - b)
+        let intervalHours = 24 // Default to daily
+        
+        if (sortedTimestamps.length >= 2) {
+          // Calculate median interval between consecutive points (more robust than average)
+          const intervals = []
+          for (let i = 1; i < sortedTimestamps.length; i++) {
+            intervals.push((sortedTimestamps[i] - sortedTimestamps[i-1]) / (1000 * 60 * 60))
+          }
+          intervals.sort((a, b) => a - b)
+          intervalHours = intervals[Math.floor(intervals.length / 2)] // Median
+          
+          // Clamp to sensible values (5min = 0.083h, max = 24h)
+          intervalHours = Math.max(0.083, Math.min(intervalHours, 24))
+        }
+        
+        // Total Return = sum of (spread × interval_hours / (24 × 365)) for each point
+        // This is equivalent to: sum of (annualized_spread × hours_covered / 8760)
+        const hoursInYear = 24 * 365 // 8760
+        totalReturn = spreadsForAverage.reduce((sum, spread) => {
+          return sum + (spread * intervalHours / hoursInYear)
+        }, 0)
       }
     }
     
