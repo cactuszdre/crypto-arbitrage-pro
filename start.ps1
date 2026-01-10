@@ -45,7 +45,7 @@ Write-Host "[2/4] Demarrage de PostgreSQL..." -ForegroundColor Yellow
 Set-Location -Path $PSScriptRoot
 docker-compose --env-file ./backend/.env up -d
 Write-Host "PostgreSQL: localhost:5432" -ForegroundColor Green
-Write-Host "pgAdmin: http://localhost:8081" -ForegroundColor Green
+Write-Host "pgAdmin: http://localhost:5050" -ForegroundColor Green
 
 # Attendre que PostgreSQL soit prêt
 Write-Host ""
@@ -70,5 +70,5 @@ Write-Host ""
 Write-Host "URLs:" -ForegroundColor Cyan
 Write-Host "  Frontend:   http://localhost:5173" -ForegroundColor White
 Write-Host "  Backend:    http://localhost:8080/api" -ForegroundColor White
-Write-Host "  pgAdmin:    http://localhost:8081" -ForegroundColor White
+Write-Host "  pgAdmin:    http://localhost:5050" -ForegroundColor White
 Write-Host ""

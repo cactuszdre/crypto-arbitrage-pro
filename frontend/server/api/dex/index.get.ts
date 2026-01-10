@@ -1,12 +1,14 @@
+import { getFundingServiceUrl } from '../../utils/backend'
+
 /**
  * GET /api/dex
- * Fetches all DEX configurations
+ * Fetches all DEX configurations from funding-service
  */
 export default defineEventHandler(async () => {
-    const backendUrl = getBackendUrl()
+    const fundingUrl = getFundingServiceUrl()
 
     try {
-        return await $fetch(`${backendUrl}/api/dex`)
+        return await $fetch(`${fundingUrl}/api/dex`)
     } catch (error: any) {
         console.error('[API] dex error:', error.message)
         // Return fallback DEX data so the app works without backend

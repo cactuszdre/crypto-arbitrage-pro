@@ -1,13 +1,16 @@
+import { getFundingServiceUrl } from '../../utils/backend'
+
 /**
  * GET /api/funding-rates
- * Fetches all funding rates
+ * Fetches all funding rates from funding-service microservice
  * Cached for 30 seconds
  */
 export default defineCachedEventHandler(async (): Promise<unknown[]> => {
-    const backendUrl = getBackendUrl()
+    const fundingUrl = getFundingServiceUrl()
 
     try {
-        return await $fetch(`${backendUrl}/api/funding-rates`)
+        // Using backwards-compatible path /api/funding-rates
+        return await $fetch(`${fundingUrl}/api/funding-rates`)
     } catch (error: unknown) {
         console.error('[API] funding-rates error:', error)
         return []
@@ -17,4 +20,3 @@ export default defineCachedEventHandler(async (): Promise<unknown[]> => {
     name: 'funding-rates',
     getKey: () => 'all'
 })
-

@@ -1,10 +1,12 @@
+import { getFundingServiceUrl } from '../../utils/backend'
+
 /**
  * GET /api/funding-rates/history
  * Fetches funding rate history with query params
  * Cached for 15 minutes
  */
 export default defineCachedEventHandler(async (event) => {
-    const backendUrl = getBackendUrl()
+    const fundingUrl = getFundingServiceUrl()
     const query = getQuery(event)
 
     const params = new URLSearchParams()
@@ -13,7 +15,7 @@ export default defineCachedEventHandler(async (event) => {
     if (query.hours) params.append('hours', String(Math.round(Number(query.hours))))
 
     try {
-        return await $fetch(`${backendUrl}/api/funding-rates/history?${params.toString()}`)
+        return await $fetch(`${fundingUrl}/api/funding-rates/history?${params.toString()}`)
     } catch (error: any) {
         console.error('[API] funding-rates/history error:', error.message)
         return []

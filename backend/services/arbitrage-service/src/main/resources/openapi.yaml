@@ -1,0 +1,174 @@
+openapi: 3.0.3
+info:
+  title: Arbitrage Service API
+  description: |
+    Microservice for arbitrage opportunity calculations.
+    Fetches data from funding-service and calculates best arbitrage routes.
+  version: 1.0.0
+  contact:
+    name: Crypto Arbitrage Team
+    
+servers:
+  - url: http://localhost:8082/api
+    description: Development server
+  - url: https://api.fundingarb.com/arbitrage/api
+    description: Production server
+
+tags:
+  - name: Arbitrage
+    description: Arbitrage opportunity operations
+
+paths:
+  /arbitrage/opportunities:
+    get:
+      tags:
+        - Arbitrage
+      summary: Get all arbitrage opportunities
+      description: |
+        Calculate and return all current arbitrage opportunities.
+        Opportunities are sorted by spread (highest first).
+      operationId: getOpportunities
+      responses:
+        '200':
+          description: List of arbitrage opportunities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArbitrageOpportunityDTO'
+
+  /arbitrage/opportunities/search:
+    get:
+      tags:
+        - Arbitrage
+      summary: Search opportunities with filters
+      operationId: searchOpportunities
+      parameters:
+        - name: symbol
+          in: query
+          schema:
+            type: string
+          description: Filter by symbol (e.g., BTC-USD-PERP)
+        - name: dex
+          in: query
+          schema:
+            type: string
+          description: Filter by DEX name
+        - name: minSpread
+          in: query
+          schema:
+            type: number
+            format: double
+          description: Minimum annual spread percentage
+      responses:
+        '200':
+          description: Filtered arbitrage opportunities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ArbitrageOpportunityDTO'
+
+  /arbitrage/rates/all:
+    get:
+      tags:
+        - Arbitrage
+      summary: Get all rates grouped by symbol
+      description: |
+        Returns all funding rates grouped by symbol for frontend-side calculation.
+        Useful when users want to apply custom DEX filters.
+      operationId: getAllRates
+      responses:
+        '200':
+          description: Rates grouped by symbol
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SymbolRatesDTO'
+
+  /arbitrage/health:
+    get:
+      tags:
+        - Arbitrage
+      summary: Health check
+      operationId: health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                  service:
+                    type: string
+                    example: arbitrage-service
+
+components:
+  schemas:
+    ArbitrageOpportunityDTO:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: BTC-USD-PERP
+        longDex:
+          type: string
+          description: DEX to go long (lowest funding rate)
+          example: Hyperliquid
+        shortDex:
+          type: string
+          description: DEX to go short (highest funding rate)
+          example: Paradex
+        longRate:
+          type: number
+          format: double
+          description: Annual funding rate on long DEX
+          example: -5.2
+        shortRate:
+          type: number
+          format: double
+          description: Annual funding rate on short DEX
+          example: 12.8
+        spread:
+          type: number
+          format: double
+          description: Annual spread (shortRate - longRate)
+          example: 18.0
+        projectedDailyReturn:
+          type: number
+          format: double
+          description: Expected daily return (spread / 365)
+          example: 0.0493
+        detectedAt:
+          type: string
+          format: date-time
+
+    SymbolRatesDTO:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: BTC-USD-PERP
+        rates:
+          type: array
+          items:
+            $ref: '#/components/schemas/DexRateDTO'
+
+    DexRateDTO:
+      type: object
+      properties:
+        dex:
+          type: string
+          example: Hyperliquid
+        rateAnnual:
+          type: number
+          format: double
+          example: 10.5

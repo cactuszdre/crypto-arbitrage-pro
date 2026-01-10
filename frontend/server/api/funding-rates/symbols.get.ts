@@ -1,12 +1,14 @@
+import { getFundingServiceUrl } from '../../utils/backend'
+
 /**
  * GET /api/funding-rates/symbols
- * Fetches all available symbols
+ * Fetches all available symbols from funding-service
  */
 export default defineEventHandler(async () => {
-    const backendUrl = getBackendUrl()
+    const fundingUrl = getFundingServiceUrl()
 
     try {
-        return await $fetch(`${backendUrl}/api/funding-rates/symbols`)
+        return await $fetch(`${fundingUrl}/api/funding-rates/symbols`)
     } catch (error: any) {
         console.error('[API] funding-rates/symbols error:', error.message)
         // Return common symbols as fallback

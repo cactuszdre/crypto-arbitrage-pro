@@ -1,3 +1,5 @@
+import { getArbitrageServiceUrl } from '../../utils/backend'
+
 /**
  * GET /api/opportunites/rates-history
  * Fetches historical rates for arbitrage
@@ -5,12 +7,12 @@
  * Cached for 1 hour
  */
 export default defineCachedEventHandler(async (event) => {
-    const backendUrl = getBackendUrl()
+    const fundingUrl = getArbitrageServiceUrl()
     const query = getQuery(event)
     const days = query.days || 7
 
     try {
-        return await $fetch(`${backendUrl}/api/arbitrage/rates/historical?days=${days}`)
+        return await $fetch(`${fundingUrl}/api/arbitrage/rates/historical?days=${days}`)
     } catch (error: any) {
         console.error('[API] arbitrage/rates-history error:', error.message)
         return { symbols: [], periodLabel: '', dataPointCount: 0 }

@@ -49,8 +49,10 @@ export default defineNuxtConfig({
 
   // Runtime Config (environment variables)
   runtimeConfig: {
-    // Private keys (server-side only)
-    backendUrl: process.env.BACKEND_URL || 'http://localhost:8080',
+    // Private keys (server-side only) - Microservices URLs
+    backendUrl: process.env.BACKEND_URL || 'http://localhost:8080', // Legacy (deprecated)
+    fundingServiceUrl: process.env.FUNDING_SERVICE_URL || 'http://localhost:8081',
+    arbitrageServiceUrl: process.env.ARBITRAGE_SERVICE_URL || 'http://localhost:8082',
 
     // Public keys (exposed to client)
     public: {

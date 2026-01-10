@@ -1,0 +1,434 @@
+openapi: 3.0.3
+info:
+  title: Funding Service API
+  description: |
+    Microservice for funding rates data collection and management.
+    Provides CRUD operations for DEXes and read operations for funding rates.
+  version: 1.0.0
+  contact:
+    name: Crypto Arbitrage Team
+    
+servers:
+  - url: http://localhost:8081/api
+    description: Development server
+  - url: https://api.fundingarb.com/funding/api
+    description: Production server
+
+tags:
+  - name: DEX
+    description: DEX (Decentralized Exchange) management
+  - name: Funding Rates
+    description: Funding rate data operations
+
+paths:
+  /dex:
+    get:
+      tags:
+        - DEX
+      summary: Get all DEXes
+      description: Retrieve a list of all registered decentralized exchanges
+      operationId: getAllDexes
+      responses:
+        '200':
+          description: List of DEXes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DexDTO'
+    post:
+      tags:
+        - DEX
+      summary: Create a new DEX
+      description: Register a new decentralized exchange
+      operationId: createDex
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DexCreateRequest'
+      responses:
+        '201':
+          description: DEX created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DexDTO'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+
+  /dex/active:
+    get:
+      tags:
+        - DEX
+      summary: Get active DEXes
+      description: Retrieve only active decentralized exchanges
+      operationId: getActiveDexes
+      responses:
+        '200':
+          description: List of active DEXes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DexDTO'
+
+  /dex/{id}:
+    get:
+      tags:
+        - DEX
+      summary: Get DEX by ID
+      operationId: getDexById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: DEX details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DexDTO'
+        '404':
+          description: DEX not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - DEX
+      summary: Update a DEX
+      operationId: updateDex
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DexCreateRequest'
+      responses:
+        '200':
+          description: DEX updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DexDTO'
+        '404':
+          description: DEX not found
+    delete:
+      tags:
+        - DEX
+      summary: Delete a DEX
+      operationId: deleteDex
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: DEX deleted successfully
+        '404':
+          description: DEX not found
+
+  /dex/search:
+    get:
+      tags:
+        - DEX
+      summary: Search DEXes
+      description: Search DEXes by name (partial match)
+      operationId: searchDexes
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DexDTO'
+
+  /funding/rates:
+    get:
+      tags:
+        - Funding Rates
+      summary: Get all latest funding rates
+      description: Retrieve the latest funding rate for each ticker/DEX combination
+      operationId: getAllLatestRates
+      responses:
+        '200':
+          description: List of latest funding rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FundingRateDTO'
+
+  /funding/rates/dex/{dexName}:
+    get:
+      tags:
+        - Funding Rates
+      summary: Get funding rates by DEX
+      operationId: getRatesByDex
+      parameters:
+        - name: dexName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Funding rates for the specified DEX
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FundingRateDTO'
+        '404':
+          description: DEX not found
+
+  /funding/rates/search:
+    get:
+      tags:
+        - Funding Rates
+      summary: Search funding rates with filters
+      operationId: searchRates
+      parameters:
+        - name: dex
+          in: query
+          schema:
+            type: string
+          description: Filter by DEX name
+        - name: symbol
+          in: query
+          schema:
+            type: string
+          description: Filter by symbol
+        - name: hours
+          in: query
+          schema:
+            type: integer
+          description: Number of hours of history
+      responses:
+        '200':
+          description: Filtered funding rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FundingRateDTO'
+
+  /funding/symbols:
+    get:
+      tags:
+        - Funding Rates
+      summary: Get all monitored symbols
+      operationId: getAllMonitoredSymbols
+      responses:
+        '200':
+          description: List of symbol names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /funding/symbols/icons:
+    get:
+      tags:
+        - Funding Rates
+      summary: Get all monitored symbols with icons
+      operationId: getAllMonitoredSymbolsWithIcons
+      responses:
+        '200':
+          description: List of symbols with icon URLs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSymbolDTO'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DexDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          example: Hyperliquid
+        baseUrl:
+          type: string
+          example: https://api.hyperliquid.xyz
+        fundingIntervalHours:
+          type: integer
+          example: 1
+        active:
+          type: boolean
+          example: true
+        color:
+          type: string
+          example: "#10B981"
+        iconUrl:
+          type: string
+          example: https://example.com/icon.png
+        tradeUrlPattern:
+          type: string
+          example: https://app.hyperliquid.xyz/trade/{symbol}
+        createdAt:
+          type: string
+          format: date-time
+
+    DexCreateRequest:
+      type: object
+      required:
+        - name
+        - fundingIntervalHours
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        baseUrl:
+          type: string
+        apiKey:
+          type: string
+        fundingIntervalHours:
+          type: integer
+          minimum: 1
+        active:
+          type: boolean
+          default: true
+        color:
+          type: string
+        iconUrl:
+          type: string
+        tradeUrlPattern:
+          type: string
+
+    FundingRateDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        dexName:
+          type: string
+          example: Hyperliquid
+        symbol:
+          type: string
+          example: BTC-USD-PERP
+        rate:
+          type: number
+          format: double
+          example: 0.0001
+        rate8h:
+          type: number
+          format: double
+          example: 0.0003
+        rateAnnual:
+          type: number
+          format: double
+          example: 10.95
+        fundingPremium:
+          type: number
+          format: double
+        intervalHours:
+          type: integer
+          example: 1
+        timestamp:
+          type: string
+          format: date-time
+        direction:
+          type: string
+          enum:
+            - LONGS_PAY
+            - SHORTS_PAY
+
+    MarketSymbolDTO:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: BTC-USD-PERP
+        iconUrl:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+        rejectedValue:
+          type: object

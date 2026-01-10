@@ -1,0 +1,298 @@
+package com.crypto.funding.business;
+
+import com.crypto.funding.model.Dex;
+import com.crypto.funding.model.FundingRate;
+import com.crypto.funding.model.Ticker;
+import com.crypto.funding.repository.DexRepository;
+import com.crypto.funding.repository.FundingRateRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ParadexService {
+
+    private final DexRepository dexRepository;
+    private final FundingRateRepository fundingRateRepository;
+    private final LastFundingService lastFundingService;
+    private final TickerService tickerService;
+    private final WebClient.Builder webClientBuilder;
+    private final EncryptionService encryptionService;
+
+    private static final String DEX_NAME = "Paradex";
+    
+    // Cache for market info (symbol -> funding_period_hours)
+    private final Map<String, Integer> marketFundingPeriodCache = new ConcurrentHashMap<>();
+
+    /**
+     * Loads market info from Paradex API and caches funding_period_hours for each symbol.
+     * This is needed because different pairs have different funding periods (e.g., BTC=8h, MOODENG=4h).
+     */
+    public void loadMarketInfo() {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isEmpty()) {
+            return;
+        }
+
+        Dex dex = dexOpt.get();
+        String baseUrl = dex.getBaseUrl();
+
+        try {
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+
+            JsonNode response = webClient.get()
+                    .uri("/markets")
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            if (response == null || !response.has("results")) {
+                return;
+            }
+
+            for (JsonNode market : response.get("results")) {
+                String assetKind = market.has("asset_kind") ? market.get("asset_kind").asText() : "";
+                if ("PERP".equals(assetKind) && market.has("symbol") && market.has("funding_period_hours")) {
+                    String symbol = market.get("symbol").asText();
+                    int fundingPeriodHours = market.get("funding_period_hours").asInt(8); // default to 8 if missing
+                    marketFundingPeriodCache.put(symbol, fundingPeriodHours);
+                }
+            }
+
+
+        } catch (Exception e) {
+            log.error("Error loading Paradex market info: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Gets the funding period hours for a symbol, loading market info if not cached.
+     */
+    private int getFundingPeriodHours(String symbol, String baseUrl) {
+        if (marketFundingPeriodCache.isEmpty()) {
+            loadMarketInfo();
+        }
+        return marketFundingPeriodCache.getOrDefault(symbol, 8); // default to 8h
+    }
+
+    /**
+     * Récupère les données de funding depuis l'API Paradex pour un symbole donné
+     */
+    public List<FundingRate> fetchFundingData(String symbol) {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isEmpty()) {
+            log.error("DEX Paradex non trouvé en base de données");
+            return List.of();
+        }
+
+        Dex dex = dexOpt.get();
+        String baseUrl = dex.getBaseUrl();
+        String apiKey = dex.getApiKey();
+        String decryptedApiKey = encryptionService.decrypt(apiKey);
+
+        // Get the funding period for this specific symbol
+        int fundingPeriodHours = getFundingPeriodHours(symbol, baseUrl);
+
+        try {
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+
+            JsonNode response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/funding/data")
+                            .queryParam("market", symbol)
+                            .build())
+                    .header("Authorization", "Bearer " + decryptedApiKey)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            if (response == null || !response.has("results")) {
+                log.warn("Réponse vide ou invalide de Paradex pour {}", symbol);
+                return List.of();
+            }
+
+            List<FundingRate> rates = new ArrayList<>();
+            JsonNode results = response.get("results");
+
+            for (JsonNode node : results) {
+                FundingRate rate = parseFundingRate(node, dex, symbol, fundingPeriodHours);
+                if (rate != null) {
+                    rates.add(rate);
+                }
+            }
+
+            return rates;
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des funding data Paradex: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Récupère le dernier funding rate et le sauvegarde en base
+     */
+    public Optional<FundingRate> fetchAndSaveLatestFundingRate(String symbol) {
+        List<FundingRate> rates = fetchFundingData(symbol);
+        if (rates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Le premier élément est le plus récent
+        FundingRate latestRate = rates.get(0);
+        
+        // Sauvegarde en base
+        FundingRate saved = fundingRateRepository.save(latestRate);
+        
+        // Update last_funding table
+        lastFundingService.upsertFromFundingRate(saved);
+        
+        return Optional.of(saved);
+    }
+
+    /**
+     * Récupère les symboles disponibles sur Paradex (marchés PERP)
+     */
+    public List<String> fetchAvailableSymbols() {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isEmpty()) {
+            return List.of();
+        }
+
+        Dex dex = dexOpt.get();
+        String baseUrl = dex.getBaseUrl();
+
+        try {
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+
+            JsonNode response = webClient.get()
+                    .uri("/markets")
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            if (response == null || !response.has("results")) {
+                return List.of();
+            }
+
+            List<String> symbols = new ArrayList<>();
+            for (JsonNode market : response.get("results")) {
+                String assetKind = market.has("asset_kind") ? market.get("asset_kind").asText() : "";
+                if ("PERP".equals(assetKind)) {
+                    symbols.add(market.get("symbol").asText());
+                }
+            }
+
+            return symbols;
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération des symboles Paradex: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Récupère le BBO (Best Bid/Offer) pour un symbole
+     */
+    public Optional<JsonNode> fetchBBO(String symbol) {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Dex dex = dexOpt.get();
+        String baseUrl = dex.getBaseUrl();
+
+        try {
+            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+
+            JsonNode response = webClient.get()
+                    .uri("/bbo/" + symbol)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            return Optional.ofNullable(response);
+
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération du BBO Paradex: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private FundingRate parseFundingRate(JsonNode node, Dex dex, String symbol, int fundingPeriodHours) {
+        try {
+            BigDecimal rate = new BigDecimal(node.get("funding_rate").asText());
+            BigDecimal fundingPremium = node.has("funding_premium") 
+                    ? new BigDecimal(node.get("funding_premium").asText()) 
+                    : null;
+            BigDecimal fundingIndex = node.has("funding_index") 
+                    ? new BigDecimal(node.get("funding_index").asText()) 
+                    : null;
+
+            long timestampMs = node.get("created_at").asLong();
+            LocalDateTime timestamp = LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(timestampMs), 
+                    ZoneId.systemDefault()
+            );
+
+            // The funding_rate from Paradex API is the rate for the funding period.
+            // Different pairs have different funding periods:
+            // - BTC/ETH: 8h (3 periods per day)
+            // - MOODENG/ASTER etc: 4h (6 periods per day)
+            
+            // Calculate hourly rate from the period rate
+            // rateHourly = rate / fundingPeriodHours
+            BigDecimal rateHourly = rate.divide(BigDecimal.valueOf(fundingPeriodHours), 12, RoundingMode.HALF_UP);
+            
+            // Rate 8h % = rateHourly * 8 * 100 (standardized to 8h for comparison)
+            BigDecimal rate8h = rateHourly.multiply(BigDecimal.valueOf(8))
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(6, RoundingMode.HALF_UP);
+            
+            // Calculate periods per day based on the actual funding period
+            int periodsPerDay = 24 / fundingPeriodHours;
+            
+            // Annualized % = rate * periodsPerDay * 365 * 100
+            BigDecimal rateAnnual = rate.multiply(BigDecimal.valueOf(periodsPerDay * 365))
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, RoundingMode.HALF_UP);
+            
+            // Get or create ticker
+            Ticker ticker = tickerService.getOrCreate(symbol);
+
+            return FundingRate.builder()
+                    .dex(dex)
+                    .ticker(ticker)
+                    .rate(rateHourly) // Store the hourly rate for consistency
+                    .rate8h(rate8h)
+                    .rateAnnual(rateAnnual)
+                    .fundingPremium(fundingPremium)
+                    .fundingIndex(fundingIndex)
+                    .intervalHours(fundingPeriodHours) // Use the actual funding period
+                    .timestamp(timestamp)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erreur lors du parsing du funding rate: {}", e.getMessage());
+            return null;
+        }
+    }
+}
