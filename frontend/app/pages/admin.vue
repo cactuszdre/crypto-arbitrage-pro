@@ -2,18 +2,50 @@
 // Nuxt auto-imports: ref, onMounted
 import { dexApi, userApi } from '~/services/api'
 
+// Remove middleware to prevent auto-redirect
+// definePageMeta({
+//   middleware: 'auth'
+// })
+
 // SEO
 useSeoMeta({
   title: 'Admin - CactusFund',
   description: 'CactusFund administration panel.',
 })
 
-const { state: authState } = useAuth()
+const router = useRouter()
+const { state: authState, isAdmin, isAuthenticated, token } = useAuth()
+const { hasValidToken } = useSecureAuth()
+
+// Auth Guard Logic
+const isCheckingAuth = ref(true)
+const isAuthorized = computed(() => {
+  // Check if we have a valid token AND the user has ADMIN role
+  return hasValidToken.value && isAdmin.value
+})
+
+// Update checking state
+watchEffect(() => {
+  // If we have determined the auth state (user is loaded or definitely not logged in)
+  if (!process.server) {
+     // validation logic... usually useAuth initializes quickly from localStorage
+     // We can consider auth check done when we've tried to load from storage
+     setTimeout(() => {
+        isCheckingAuth.value = false
+     }, 500) // Small buffer to prevent flash
+  }
+})
+
+// Error and loading states
+const authError = ref('')
+const isLoadingAdmins = ref(false)
+const isLoadingDexes = ref(false)
 
 // ===== DEX Management =====
 const dexes = ref([])
 
 const fetchDexes = async () => {
+  isLoadingDexes.value = true
   try {
     const response = await dexApi.getAll()
     dexes.value = response.data.map(d => ({
@@ -23,6 +55,8 @@ const fetchDexes = async () => {
     }))
   } catch (err) {
     console.error(err)
+  } finally {
+    isLoadingDexes.value = false
   }
 }
 
@@ -41,7 +75,7 @@ const addDex = async () => {
     newDex.value = { name: '', apiKey: '', apiEndpoint: '' }
   } catch (err) {
     console.error('Failed to create DEX', err)
-    alert('Failed to create DEX')
+    alert('Failed to create DEX. Make sure you are authenticated as an admin.')
   }
 }
 
@@ -52,11 +86,29 @@ const newAdminWallet = ref('')
 const isLoading = ref(false)
 
 const fetchAdmins = async () => {
+  // Only fetch if authenticated
+  if (!hasValidToken.value) {
+    authError.value = 'Please connect your wallet and sign to authenticate'
+    return
+  }
+
+  isLoadingAdmins.value = true
+  authError.value = ''
+  
   try {
     const response = await userApi.getAdmins()
-    admins.value = response.data
+    admins.value = response.data || []
   } catch (err) {
     console.error('Failed to fetch admins', err)
+    if (err.message?.includes('403') || err.statusCode === 403) {
+      authError.value = 'Access denied. Admin role required.'
+    } else if (err.message?.includes('Authentication required')) {
+      authError.value = 'Please connect your wallet and sign to authenticate'
+    } else {
+      authError.value = 'Failed to load admins. Please try again.'
+    }
+  } finally {
+    isLoadingAdmins.value = false
   }
 }
 
@@ -71,7 +123,7 @@ const addAdmin = async () => {
     newAdminWallet.value = ''
   } catch (err) {
     console.error('Failed to add admin', err)
-    alert('Failed to add admin')
+    alert('Failed to add admin. Make sure you have admin permissions.')
   } finally {
     isLoading.value = false
   }
@@ -96,8 +148,8 @@ const formatWallet = (addr) => {
 
 // Check if the wallet is the current connected user
 const isCurrentUser = (walletAddress) => {
-  if (!authState.user?.walletAddress || !walletAddress) return false
-  return authState.user.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+  if (!authState.user.value?.walletAddress || !walletAddress) return false
+  return authState.user.value.walletAddress.toLowerCase() === walletAddress.toLowerCase()
 }
 
 const formatDate = (dateStr) => {
@@ -111,14 +163,65 @@ const formatDate = (dateStr) => {
   })
 }
 
+// Watch for authentication changes
+watch(
+  () => hasValidToken.value,
+  (hasToken) => {
+    if (hasToken) {
+      fetchAdmins()
+    }
+  },
+  { immediate: false }
+)
+
 onMounted(() => {
   fetchDexes()
-  fetchAdmins()
+  // Only fetch admins if we have a valid token
+  if (hasValidToken.value) {
+    fetchAdmins()
+  }
 })
 </script>
 
 <template>
-  <div class="space-y-6 sm:space-y-8">
+  <!-- Auth Guard: Show loading while checking, unauthorized if not admin -->
+  <div v-if="isCheckingAuth" class="min-h-[60vh] flex items-center justify-center">
+    <div class="text-center">
+      <span class="iconify animate-spin text-indigo-400 mb-4" data-icon="lucide:loader-2" data-width="40"></span>
+      <p class="text-neutral-400 text-sm">Vérification des permissions...</p>
+    </div>
+  </div>
+
+  <!-- Unauthorized State -->
+  <div v-else-if="!isAuthorized" class="min-h-[60vh] flex items-center justify-center">
+    <div class="glass-card rounded-3xl p-8 sm:p-12 max-w-lg text-center">
+      <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-red-500/10 flex items-center justify-center">
+        <span class="iconify text-red-400" data-icon="lucide:shield-x" data-width="40"></span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-bold text-white mb-3">
+        Accès non autorisé
+      </h1>
+      <p class="text-neutral-400 text-sm sm:text-base mb-6">
+        <template v-if="!hasValidToken">
+          Vous devez vous connecter avec un wallet administrateur pour accéder à cette page.
+        </template>
+        <template v-else>
+          Votre compte n'a pas les permissions nécessaires pour accéder à cette page.
+        </template>
+      </p>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <NuxtLink 
+          to="/" 
+          class="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors"
+        >
+          Retour à l'accueil
+        </NuxtLink>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Content (only shown when authorized) -->
+  <div v-else class="space-y-6 sm:space-y-8">
     <!-- ===== ADMIN MANAGEMENT SECTION ===== -->
     <div>
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4">
@@ -201,9 +304,26 @@ onMounted(() => {
                 </div>
               </td>
             </tr>
-            <tr v-if="admins.length === 0">
+            <tr v-if="admins.length === 0 && !isLoadingAdmins && !authError">
               <td colspan="5" class="px-4 sm:px-6 py-6 sm:py-8 text-center text-neutral-500 text-xs sm:text-sm">
                 Aucun administrateur trouvé
+              </td>
+            </tr>
+            <!-- Loading state -->
+            <tr v-if="isLoadingAdmins">
+              <td colspan="5" class="px-4 sm:px-6 py-6 sm:py-8 text-center text-neutral-400 text-xs sm:text-sm">
+                <span class="iconify animate-spin inline-block mr-2" data-icon="lucide:loader-2" data-width="16"></span>
+                Chargement...
+              </td>
+            </tr>
+            <!-- Auth error state -->
+            <tr v-if="authError && !isLoadingAdmins">
+              <td colspan="5" class="px-4 sm:px-6 py-6 sm:py-8 text-center">
+                <div class="flex flex-col items-center gap-3">
+                  <span class="iconify text-amber-400" data-icon="lucide:shield-alert" data-width="32"></span>
+                  <p class="text-amber-400 text-xs sm:text-sm font-medium">{{ authError }}</p>
+                  <p class="text-neutral-500 text-xs">Connectez votre wallet et signez le message pour vous authentifier</p>
+                </div>
               </td>
             </tr>
           </tbody>

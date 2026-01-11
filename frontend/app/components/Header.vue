@@ -3,6 +3,7 @@ const router = useRouter()
 const route = useRoute()
 const searchQuery = ref('')
 const { setUser, logout, state } = useAuth()
+const { authenticate, isAuthenticating, authError, hasValidToken, logout: secureLogout } = useSecureAuth()
 
 // Real-time clock
 const currentTime = ref(new Date())
@@ -13,6 +14,9 @@ const isMac = ref(false)
 
 // AppKit (wallet connection) - using composable
 const { appKit, accountData, isInitializing, openModal } = useAppKit()
+
+// Authentication status message
+const authStatus = ref('')
 
 const searchShortcut = computed(() => isMac.value ? '⌘K' : 'Ctrl+K')
 
@@ -51,19 +55,27 @@ const formattedAddress = computed(() => {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 })
 
-// AppKit loading state (from composable)
-const isAppKitLoading = isInitializing
+// Combined loading state (wallet connecting + signature verification)
+const isLoading = computed(() => isInitializing.value || isAuthenticating.value)
+
+// Button text based on state
+const buttonText = computed(() => {
+  if (isInitializing.value) return 'Connecting...'
+  if (isAuthenticating.value) return 'Signing...'
+  if (isConnected.value) return formattedAddress.value
+  return 'Connect Wallet'
+})
 
 // Open wallet modal using composable
 const openWallet = () => {
   openModal()
 }
 
-// Watch for wallet connection changes (client-side only)
+// Watch for wallet connection changes and trigger secure auth (client-side only)
 if (import.meta.client) {
   watch(
     () => accountData.value,
-    async (newAccount) => {
+    async (newAccount, oldAccount) => {
       if (newAccount?.isConnected && newAccount?.address) {
         // Extract clean address (remove CAIP prefix like "eip155:1:")
         let cleanAddress = newAccount.address
@@ -71,31 +83,44 @@ if (import.meta.client) {
           cleanAddress = cleanAddress.split(':').pop()
         }
         
-        try {
-          // Login or register user with wallet
-          const response = await $fetch(`/api/users/wallet/${cleanAddress}/login`, {
-            method: 'POST'
-          })
-          setUser(response)
-          
-          // If user is on admin page but not admin, redirect to home
-          if (route.path === '/admin' && response.role !== 'ADMIN') {
-            console.warn('🚫 Non-admin on admin page, redirecting...')
-            router.push('/')
+        // Only authenticate if this is a new connection (not a page refresh with existing token)
+        const wasDisconnected = !oldAccount?.isConnected
+        
+        if (wasDisconnected && !hasValidToken.value) {
+          try {
+            authStatus.value = 'Requesting signature...'
+            
+            // Perform secure authentication with wallet signature
+            const success = await authenticate(cleanAddress)
+            
+            if (success) {
+              authStatus.value = ''
+              console.log('✅ Secure authentication successful')
+              
+              // If user is on admin page but not admin, redirect to home
+              if (route.path === '/admin' && state.user.value?.role !== 'ADMIN') {
+                console.warn('🚫 Non-admin on admin page, redirecting...')
+                router.push('/')
+              }
+            } else {
+              authStatus.value = authError.value || 'Authentication failed'
+              console.error('❌ Authentication failed:', authError.value)
+            }
+          } catch (error) {
+            console.error('Failed to authenticate:', error)
+            authStatus.value = 'Authentication failed'
+            // Set basic user data as fallback (read-only access)
+            setUser({ walletAddress: cleanAddress, role: 'USER', plan: 'FREE' })
           }
-        } catch (error) {
-          console.error('Failed to sync user with backend:', error)
-          // Set basic user data even if backend fails
-          setUser({ walletAddress: cleanAddress, role: 'USER', plan: 'FREE' })
-          
-          // Redirect from admin page if not admin
-          if (route.path === '/admin') {
-            router.push('/')
-          }
+        } else if (hasValidToken.value) {
+          // Already have a valid token, just restore user state
+          console.log('🔑 Existing token found, restoring session...')
         }
-      } else {
-        // Wallet disconnected
-        logout()
+      } else if (!newAccount?.isConnected && oldAccount?.isConnected) {
+        // Wallet disconnected - clear everything
+        console.log('👋 Wallet disconnected, clearing session')
+        secureLogout()
+        authStatus.value = ''
         
         // Redirect from admin page if disconnected
         if (route.path === '/admin') {

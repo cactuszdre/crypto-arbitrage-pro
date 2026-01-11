@@ -6,6 +6,7 @@ import com.crypto.arbitrage.service.FundingRate5MinAggregationService;
 import com.crypto.arbitrage.service.FundingRateHourlyAggregationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -160,6 +161,7 @@ public class ChartController {
      * Get aggregation statistics (admin endpoint)
      */
     @GetMapping("/admin/stats")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<String> getAggregationStats() {
         return ResponseEntity.ok(aggregationService.getAggregationStats());
     }
@@ -168,6 +170,7 @@ public class ChartController {
      * Trigger manual 5-minute aggregation (admin endpoint)
      */
     @PostMapping("/admin/aggregate")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<String> triggerAggregation() {
         aggregationService.manualAggregate();
         return ResponseEntity.ok("5-minute aggregation triggered");
@@ -177,6 +180,7 @@ public class ChartController {
      * Get hourly aggregation statistics (admin endpoint)
      */
     @GetMapping("/admin/stats-hourly")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<String> getHourlyAggregationStats() {
         return ResponseEntity.ok(hourlyAggregationService.getAggregationStats());
     }

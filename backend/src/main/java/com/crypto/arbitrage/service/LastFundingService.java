@@ -120,4 +120,20 @@ public class LastFundingService {
         }
         return deleted;
     }
+
+    /**
+     * Delete the LastFunding entry for a specific ticker/DEX combination.
+     * Used when a market is delisted from a DEX.
+     *
+     * @param ticker The ticker to delete
+     * @param dex The DEX to delete from
+     */
+    @Transactional
+    public void deleteByTickerAndDex(Ticker ticker, Dex dex) {
+        lastFundingRepository.findByTickerAndDex(ticker, dex).ifPresent(lf -> {
+            log.info("Deleting LastFunding entry for {} on {} (delisted)", ticker.getNormalizedSymbol(), dex.getName());
+            lastFundingRepository.delete(lf);
+        });
+    }
 }
+

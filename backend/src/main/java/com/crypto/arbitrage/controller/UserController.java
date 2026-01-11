@@ -6,15 +6,24 @@ import com.crypto.arbitrage.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * User management controller.
+ * 
+ * Security is now handled by Spring Security + JWT:
+ * - Admin endpoints require ADMIN role (enforced by @PreAuthorize)
+ * - JWT token contains verified wallet address (no spoofing possible)
+ */
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -23,27 +32,19 @@ public class UserController {
     private final UserRepository userRepository;
 
     /**
-     * Helper method to check if the caller is admin
-     * The wallet address is passed via X-Wallet-Address header
+     * Get the currently authenticated wallet address from the JWT token.
      */
-    private boolean isCallerAdmin(String walletAddress) {
-        if (walletAddress == null || walletAddress.isEmpty()) {
-            return false;
-        }
-        return userRepository.findByWalletAddressIgnoreCase(walletAddress)
-                .map(User::isAdmin)
-                .orElse(false);
+    private String getCurrentWallet() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? (String) auth.getPrincipal() : null;
     }
 
     /**
      * Get all users (admin only)
      */
     @GetMapping
-    public ResponseEntity<?> getAllUsers(@RequestHeader(value = "X-Wallet-Address", required = false) String callerWallet) {
-        if (!isCallerAdmin(callerWallet)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin access required"));
-        }
-        
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Map<String, Object>>> getAllUsers() {
         List<Map<String, Object>> users = userRepository.findAll()
                 .stream()
                 .map(this::toDto)
@@ -55,11 +56,8 @@ public class UserController {
      * Get all admins (admin only)
      */
     @GetMapping("/admins")
-    public ResponseEntity<?> getAllAdmins(@RequestHeader(value = "X-Wallet-Address", required = false) String callerWallet) {
-        if (!isCallerAdmin(callerWallet)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin access required"));
-        }
-        
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Map<String, Object>>> getAllAdmins() {
         List<Map<String, Object>> admins = userRepository.findByRole(Role.ADMIN)
                 .stream()
                 .map(this::toDto)
@@ -68,7 +66,7 @@ public class UserController {
     }
 
     /**
-     * Get user by wallet address
+     * Get user by wallet address (public for login checks)
      */
     @GetMapping("/wallet/{walletAddress}")
     public ResponseEntity<?> getUserByWallet(@PathVariable String walletAddress) {
@@ -78,8 +76,9 @@ public class UserController {
     }
 
     /**
-     * Register or login user with wallet
+     * Register or login user with wallet (public)
      * Creates new user if doesn't exist, returns existing user otherwise
+     * Note: This is a legacy endpoint. New authentication should use /api/auth/*
      */
     @PostMapping("/wallet/{walletAddress}/login")
     public ResponseEntity<?> loginWithWallet(@PathVariable String walletAddress) {
@@ -97,7 +96,7 @@ public class UserController {
     }
 
     /**
-     * Check if wallet is admin
+     * Check if wallet is admin (public)
      */
     @GetMapping("/wallet/{walletAddress}/is-admin")
     public ResponseEntity<Map<String, Boolean>> isAdmin(@PathVariable String walletAddress) {
@@ -112,16 +111,11 @@ public class UserController {
 
     /**
      * Add a new admin by wallet address (admin only)
+     * Protected by JWT + ADMIN role - no spoofing possible!
      */
     @PostMapping("/admins")
-    public ResponseEntity<?> addAdmin(
-            @RequestHeader(value = "X-Wallet-Address", required = false) String callerWallet,
-            @RequestBody Map<String, String> request) {
-        
-        if (!isCallerAdmin(callerWallet)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin access required"));
-        }
-        
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> addAdmin(@RequestBody Map<String, String> request) {
         String walletAddress = request.get("walletAddress");
         if (walletAddress == null || walletAddress.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Wallet address is required"));
@@ -146,13 +140,9 @@ public class UserController {
      * Cannot remove your own admin role
      */
     @DeleteMapping("/admins/{walletAddress}")
-    public ResponseEntity<?> removeAdmin(
-            @RequestHeader(value = "X-Wallet-Address", required = false) String callerWallet,
-            @PathVariable String walletAddress) {
-        
-        if (!isCallerAdmin(callerWallet)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin access required"));
-        }
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> removeAdmin(@PathVariable String walletAddress) {
+        String callerWallet = getCurrentWallet();
         
         // Prevent admin from removing their own permissions
         if (callerWallet != null && callerWallet.equalsIgnoreCase(walletAddress)) {
@@ -172,14 +162,8 @@ public class UserController {
      * Delete user completely (admin only)
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUser(
-            @RequestHeader(value = "X-Wallet-Address", required = false) String callerWallet,
-            @PathVariable Long id) {
-        
-        if (!isCallerAdmin(callerWallet)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Admin access required"));
-        }
-        
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         return userRepository.findById(id)
                 .map(user -> {
                     userRepository.delete(user);

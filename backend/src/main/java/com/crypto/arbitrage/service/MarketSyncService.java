@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,20 +33,22 @@ public class MarketSyncService {
     private final TickerService tickerService;
     private final ParadexService paradexService; // Special case: has fetchAvailableSymbols
     private final Map<String, DexFetcher> fetchersByName;
+    private final LastFundingService lastFundingService;
 
     public MarketSyncService(
             DexRepository dexRepository,
             DexMarketRepository dexMarketRepository,
             TickerService tickerService,
             ParadexService paradexService,
-            List<DexFetcher> dexFetchers) {
+            List<DexFetcher> dexFetchers,
+            LastFundingService lastFundingService) {
         this.dexRepository = dexRepository;
         this.dexMarketRepository = dexMarketRepository;
         this.tickerService = tickerService;
         this.paradexService = paradexService;
         this.fetchersByName = dexFetchers.stream()
                 .collect(Collectors.toMap(DexFetcher::getDexName, Function.identity()));
-        
+        this.lastFundingService = lastFundingService;
     }
 
     /**
@@ -106,13 +109,92 @@ public class MarketSyncService {
         syncAllMarkets();
     }
 
+    /**
+     * Manual trigger for market sync (useful for admin actions).
+     * This will deactivate delisted markets and remove them from LastFunding.
+     */
+    @Transactional
+    public void manualSync() {
+        log.info("Manual market sync triggered");
+        syncAllMarkets();
+        log.info("Manual market sync completed");
+    }
+
+    /**
+     * Reactivate all markets for a specific DEX.
+     * Useful for recovery after accidental mass deactivation due to API errors.
+     *
+     * @param dexName Name of the DEX
+     * @return Number of markets reactivated
+     */
+    @Transactional
+    public int reactivateAllMarkets(String dexName) {
+        Optional<Dex> dexOpt = dexRepository.findByName(dexName);
+        if (dexOpt.isEmpty()) {
+            log.warn("DEX not found: {}", dexName);
+            return 0;
+        }
+
+        Dex dex = dexOpt.get();
+        List<DexMarket> inactiveMarkets = dexMarketRepository.findByDexAndActiveFalse(dex);
+        
+        int count = 0;
+        for (DexMarket market : inactiveMarkets) {
+            market.setActive(true);
+            market.setUpdatedAt(LocalDateTime.now());
+            dexMarketRepository.save(market);
+            count++;
+        }
+
+        log.info("Reactivated {} markets for DEX: {}", count, dexName);
+        return count;
+    }
+
+
     private void updateMarketsForDex(Dex dex, List<String> fetchedSymbols) {
         List<DexMarket> existingMarkets = dexMarketRepository.findByDexAndActiveTrue(dex);
         Set<String> existingSymbols = existingMarkets.stream()
                 .map(DexMarket::getSymbol)
                 .collect(Collectors.toSet());
+        Set<String> fetchedSymbolSet = Set.copyOf(fetchedSymbols);
 
-        // Add new markets
+        // SAFETY CHECK: Don't deactivate markets if the API returned an empty or suspiciously small list
+        // This prevents accidental mass deactivation due to API errors/timeouts
+        int fetchedCount = fetchedSymbols.size();
+        int existingCount = existingMarkets.size();
+        
+        // If API returned nothing or significantly fewer symbols than we have, skip deactivation
+        // (likely an API error, not actual delistings)
+        boolean shouldDeactivate = true;
+        if (fetchedCount == 0) {
+            log.warn("API returned 0 symbols for {} - skipping deactivation to prevent data loss", dex.getName());
+            shouldDeactivate = false;
+        } else if (existingCount > 0 && fetchedCount < existingCount * 0.5) {
+            // If we got less than 50% of what we had before, something is probably wrong
+            log.warn("API returned only {} symbols for {} (had {}), skipping deactivation - possible API issue", 
+                    fetchedCount, dex.getName(), existingCount);
+            shouldDeactivate = false;
+        }
+
+        // 1. Deactivate markets that are no longer available on the DEX (e.g., delisted pairs)
+        // Only if we have a valid response from the API
+        if (shouldDeactivate) {
+            for (DexMarket market : existingMarkets) {
+                if (!fetchedSymbolSet.contains(market.getSymbol())) {
+                    log.info("Deactivating delisted market: {} on {}", market.getSymbol(), dex.getName());
+                    market.setActive(false);
+                    market.setUpdatedAt(LocalDateTime.now());
+                    dexMarketRepository.save(market);
+                    
+                    // Also remove from LastFunding table to stop it appearing in arbitrage
+                    if (market.getTicker() != null) {
+                        lastFundingService.deleteByTickerAndDex(market.getTicker(), dex);
+                    }
+                }
+            }
+        }
+
+        // 2. Add new markets (always do this, even if deactivation was skipped)
         for (String symbol : fetchedSymbols) {
             if (!existingSymbols.contains(symbol)) {
                 // Get or create ticker for this symbol
@@ -133,3 +215,4 @@ public class MarketSyncService {
         }
     }
 }
+

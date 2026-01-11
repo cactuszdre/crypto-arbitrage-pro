@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface DexMarketRepository extends JpaRepository<DexMarket, Long> {
     List<DexMarket> findByDexAndActiveTrue(Dex dex);
+    List<DexMarket> findByDexAndActiveFalse(Dex dex);
+    List<DexMarket> findByDex(Dex dex);
     Optional<DexMarket> findByDexAndSymbol(Dex dex, String symbol);
     
     @Query("SELECT DISTINCT m.symbol FROM DexMarket m WHERE m.active = true ORDER BY m.symbol")
