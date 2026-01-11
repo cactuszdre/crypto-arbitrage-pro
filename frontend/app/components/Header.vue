@@ -2,7 +2,7 @@
 const router = useRouter()
 const route = useRoute()
 const searchQuery = ref('')
-const { setUser, logout, state, user, token } = useAuth()
+const { setUser, logout, state, user, token, isAddressMatch, getStoredAddress } = useAuth()
 const { authenticate, isAuthenticating, authError, hasValidToken, logout: secureLogout } = useSecureAuth()
 
 // Real-time clock
@@ -47,13 +47,16 @@ const formatTimeUTC = computed(() => {
 })
 
 const isConnected = computed(() => {
-  return Boolean(accountData.value?.isConnected)
+  // Consider connected if either AppKit says so OR we have a valid token
+  return Boolean(accountData.value?.isConnected) || Boolean(token.value)
 })
 
 const formattedAddress = computed(() => {
-  if (!accountData.value?.address) return ''
-  const addr = String(accountData.value.address)
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  // Prefer AppKit address, fallback to stored user address
+  const addr = accountData.value?.address || user.value?.walletAddress
+  if (!addr) return ''
+  const cleanAddr = String(addr).includes(':') ? String(addr).split(':').pop() : String(addr)
+  return `${cleanAddr.slice(0, 6)}...${cleanAddr.slice(-4)}`
 })
 
 // Combined loading state (wallet connecting + signature verification)
@@ -84,6 +87,7 @@ if (import.meta.client) {
           // 0. STOPPING CONDITIONS
           // If auth is already in progress, don't trigger again
           if (isAuthenticating.value) {
+              console.log('[Header] Auth already in progress, skipping')
               return
           }
 
@@ -93,6 +97,7 @@ if (import.meta.client) {
               const isFirstRun = oldAccount === undefined
               
               if (!isFirstRun && token.value) {
+                   console.log('[Header] Wallet disconnected, clearing session')
                    secureLogout()
                    if (route.path === '/admin') router.push('/')
               }
@@ -106,46 +111,53 @@ if (import.meta.client) {
                cleanAddress = cleanAddress.split(':').pop()
             }
             
+            const normalizedCleanAddress = cleanAddress.toLowerCase()
+            console.log('[Header] Wallet connected:', normalizedCleanAddress)
+            
             // Current auth state
-            const storedUser = user.value
             const currentToken = token.value
+            const storedAddr = getStoredAddress()
             
-            // Check scenarios
-            const isNewConnection = !oldAccount?.isConnected
-            // Note: oldAccount validity inside debounce is tricky, use stored state
-            const isAddressChange = storedUser?.walletAddress?.toLowerCase() !== cleanAddress.toLowerCase()
-            const isTokenMismatch = !!currentToken && isAddressChange
-            const isMissingAuth = !currentToken
-
-            // DECISION MATRIX
-            
-            if (isAddressChange || isTokenMismatch) {
-                if (currentToken) {
-                    secureLogout() // Clear old state synchronously
-                }
+            // CASE 1: Already authenticated for the SAME address - skip
+            if (currentToken && isAddressMatch(normalizedCleanAddress)) {
+                console.log('[Header] Already authenticated for current wallet address, skipping')
+                return
             }
-
-            // Check again after logout
+            
+            // CASE 2: Token exists but for DIFFERENT address - wallet switch
+            if (currentToken && storedAddr && storedAddr !== normalizedCleanAddress) {
+                console.log('[Header] Wallet switch detected!')
+                console.log('[Header] Previous:', storedAddr, 'New:', normalizedCleanAddress)
+                secureLogout() // Clear old session
+                // Small delay to ensure state is cleared
+                await new Promise(r => setTimeout(r, 50))
+            }
+            
+            // CASE 3: No token, or token was just cleared - need fresh auth
+            // Check token again after potential logout
             if (!token.value) {
-                // Loop prevention
-                if (authError.value && !isAddressChange) {
+                // Loop prevention: If we already failed for this address, don't retry indefinitely
+                if (authError.value) {
+                    console.log('[Header] Previous auth error exists, waiting for user action')
                     return
                 }
 
                 try {
+                    console.log('[Header] Starting authentication for:', cleanAddress)
                     authStatus.value = 'Requesting signature...'
                     const success = await authenticate(cleanAddress)
                     
                     if (success) {
+                       console.log('[Header] Authentication successful!')
                        authStatus.value = ''
                     }
                 } catch (error) {
-                    console.error('Auth failed:', error)
+                    console.error('[Header] Auth failed:', error)
                     authStatus.value = 'Authentication failed'
                 }
             }
           }
-      }, 300) // 300ms debounce
+      }, 300) // 300ms debounce - quick but prevents rapid state updates
     },
     { immediate: true, deep: true }
   )

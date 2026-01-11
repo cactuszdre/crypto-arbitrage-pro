@@ -77,8 +77,18 @@ export const useAppKit = () => {
             // Subscribe to account changes
             if (appKit.subscribeAccount) {
                 appKit.subscribeAccount((account) => {
+                    console.log('[AppKit] Account update:', account)
                     accountData.value = account
                 })
+            }
+            
+            // Get initial account state immediately (for page refresh scenarios)
+            if (appKit.getAccount) {
+                const currentAccount = appKit.getAccount()
+                console.log('[AppKit] Initial account state:', currentAccount)
+                if (currentAccount) {
+                    accountData.value = currentAccount
+                }
             }
 
             isInitialized.value = true
@@ -102,10 +112,28 @@ export const useAppKit = () => {
         }
 
         if (appKit?.open) {
-            appKit.open()
+            // If already connected, open the account view instead of connect view
+            if (accountData.value?.isConnected) {
+                console.log('[AppKit] Already connected, opening account view')
+                appKit.open({ view: 'Account' })
+            } else {
+                appKit.open()
+            }
         } else {
             console.error('[AppKit] Failed to open - not initialized')
             alert('Wallet connection is not available. Please try again later.')
+        }
+    }
+
+    // Force refresh account state (useful after page reload)
+    const refreshAccountState = async () => {
+        const appKit = appKitInstance.value
+        if (appKit?.getAccount) {
+            const currentAccount = appKit.getAccount()
+            if (currentAccount) {
+                accountData.value = currentAccount
+                console.log('[AppKit] Refreshed account state:', currentAccount)
+            }
         }
     }
 
@@ -115,6 +143,7 @@ export const useAppKit = () => {
         isInitializing,
         accountData,
         initAppKit,
-        openModal
+        openModal,
+        refreshAccountState
     }
 }

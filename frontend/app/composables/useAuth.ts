@@ -5,6 +5,7 @@
 
 const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
+const ADDRESS_KEY = 'auth_address'
 
 // Global state (shared across components)
 const user = ref<{
@@ -14,6 +15,7 @@ const user = ref<{
 } | null>(null)
 
 const token = ref<string | null>(null)
+const storedAddress = ref<string | null>(null)
 const isLoading = ref(false)
 
 export const useAuth = () => {
@@ -25,6 +27,7 @@ export const useAuth = () => {
     if (import.meta.client && user.value === null) {
         const storedUser = localStorage.getItem(USER_KEY)
         const storedToken = localStorage.getItem(TOKEN_KEY)
+        const savedAddress = localStorage.getItem(ADDRESS_KEY)
 
         if (storedUser) {
             try {
@@ -37,6 +40,10 @@ export const useAuth = () => {
         if (storedToken) {
             token.value = storedToken
         }
+
+        if (savedAddress) {
+            storedAddress.value = savedAddress.toLowerCase()
+        }
     }
 
     /**
@@ -48,8 +55,16 @@ export const useAuth = () => {
         if (import.meta.client) {
             if (userData) {
                 localStorage.setItem(USER_KEY, JSON.stringify(userData))
+                // Also store the address separately for quick comparison
+                if (userData.walletAddress) {
+                    const normalizedAddress = userData.walletAddress.toLowerCase()
+                    storedAddress.value = normalizedAddress
+                    localStorage.setItem(ADDRESS_KEY, normalizedAddress)
+                }
             } else {
                 localStorage.removeItem(USER_KEY)
+                localStorage.removeItem(ADDRESS_KEY)
+                storedAddress.value = null
             }
 
             if (authToken) {
@@ -82,11 +97,41 @@ export const useAuth = () => {
     function logout() {
         user.value = null
         token.value = null
+        storedAddress.value = null
 
         if (import.meta.client) {
             localStorage.removeItem(USER_KEY)
             localStorage.removeItem(TOKEN_KEY)
+            localStorage.removeItem(ADDRESS_KEY)
         }
+    }
+
+    /**
+     * Get the stored authenticated address
+     */
+    function getStoredAddress(): string | null {
+        return storedAddress.value
+    }
+
+    /**
+     * Check if a given address matches the stored authenticated address
+     */
+    function isAddressMatch(address: string): boolean {
+        if (!storedAddress.value || !address) return false
+        return storedAddress.value.toLowerCase() === address.toLowerCase()
+    }
+
+    /**
+     * Clear auth if address doesn't match (for wallet switch detection)
+     */
+    function clearIfAddressMismatch(currentAddress: string): boolean {
+        if (storedAddress.value && !isAddressMatch(currentAddress)) {
+            console.log('[Auth] Address mismatch detected, clearing auth state')
+            console.log('[Auth] Stored:', storedAddress.value, 'Current:', currentAddress.toLowerCase())
+            logout()
+            return true // Indicates auth was cleared
+        }
+        return false
     }
 
     /**
@@ -110,6 +155,7 @@ export const useAuth = () => {
         state: readonly({ user, isAuthenticated, isLoading, isAdmin, isPro }),
         user: readonly(user),
         token: readonly(token),
+        storedAddress: readonly(storedAddress),
         isAuthenticated,
         isAdmin,
         isPro,
@@ -118,6 +164,9 @@ export const useAuth = () => {
         setUser,
         setToken,
         getToken,
+        getStoredAddress,
+        isAddressMatch,
+        clearIfAddressMismatch,
         logout,
         getShortWallet,
         hasRole

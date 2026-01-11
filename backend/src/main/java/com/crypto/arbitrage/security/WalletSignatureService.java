@@ -36,8 +36,30 @@ public class WalletSignatureService {
      * @return The nonce to be signed
      */
     public String generateNonce(String walletAddress) {
+        String normalizedAddress = walletAddress.toLowerCase();
+        NonceEntry existingEntry = nonceStore.get(normalizedAddress);
+        
+        // If a valid (non-expired) nonce already exists, return it instead of generating a new one
+        // This prevents race conditions when multiple nonce requests are made
+        if (existingEntry != null) {
+            long age = System.currentTimeMillis() - existingEntry.createdAt();
+            // If nonce is less than 30 seconds old, reuse it
+            if (age < 30_000) {
+                log.info("[NONCE] Reusing existing nonce for wallet: {}. Nonce: {}..., Age: {}ms", 
+                    normalizedAddress, 
+                    existingEntry.nonce().substring(0, Math.min(10, existingEntry.nonce().length())),
+                    age);
+                return existingEntry.nonce();
+            } else {
+                log.info("[NONCE] Existing nonce too old ({}ms), generating new one for wallet: {}", 
+                    age, normalizedAddress);
+            }
+        }
+        
         String nonce = generateRandomNonce();
-        nonceStore.put(walletAddress.toLowerCase(), new NonceEntry(nonce, System.currentTimeMillis()));
+        log.info("[NONCE] Generating new nonce for wallet: {}. Nonce: {}...", 
+            normalizedAddress, nonce.substring(0, Math.min(10, nonce.length())));
+        nonceStore.put(normalizedAddress, new NonceEntry(nonce, System.currentTimeMillis()));
         return nonce;
     }
 
@@ -51,29 +73,45 @@ public class WalletSignatureService {
      */
     public boolean verifySignature(String walletAddress, String signature, String nonce) {
         try {
+            String normalizedAddress = walletAddress.toLowerCase();
+            log.info("[VERIFY] Starting verification for wallet: {}. Received nonce: {}...", 
+                normalizedAddress, nonce.substring(0, Math.min(10, nonce.length())));
+            
             // Check if nonce exists and hasn't expired
-            NonceEntry entry = nonceStore.get(walletAddress.toLowerCase());
+            NonceEntry entry = nonceStore.get(normalizedAddress);
             if (entry == null) {
-                log.warn("No nonce found for wallet: {}", walletAddress);
+                log.warn("[VERIFY] No nonce found for wallet: {}. Store size: {}", normalizedAddress, nonceStore.size());
                 return false;
             }
             
+            log.info("[VERIFY] Found stored nonce: {}... for wallet: {}", 
+                entry.nonce().substring(0, Math.min(10, entry.nonce().length())), normalizedAddress);
+            
             if (System.currentTimeMillis() - entry.createdAt() > NONCE_EXPIRY_MS) {
-                log.warn("Nonce expired for wallet: {}", walletAddress);
-                nonceStore.remove(walletAddress.toLowerCase());
+                log.warn("[VERIFY] Nonce expired for wallet: {}. Age: {}ms", normalizedAddress, 
+                    System.currentTimeMillis() - entry.createdAt());
+                nonceStore.remove(normalizedAddress);
                 return false;
             }
             
             if (!entry.nonce().equals(nonce)) {
-                log.warn("Nonce mismatch for wallet: {}", walletAddress);
+                log.warn("[VERIFY] Nonce mismatch for wallet: {}. Expected: {}..., Got: {}...", 
+                    normalizedAddress,
+                    entry.nonce().substring(0, Math.min(10, entry.nonce().length())),
+                    nonce.substring(0, Math.min(10, nonce.length())));
                 return false;
             }
+            
+            log.info("[VERIFY] Nonce matched for wallet: {}", normalizedAddress);
 
             // Create the message that was signed (EIP-191 personal_sign format)
             String message = createSignMessage(nonce);
+            log.info("[VERIFY] Reconstructed message for signing (first 50 chars): {}", 
+                message.substring(0, Math.min(50, message.length())));
             
             // Recover the address from the signature
             String recoveredAddress = recoverAddress(message, signature);
+            log.info("[VERIFY] Recovered address from signature: {}", recoveredAddress);
             
             if (recoveredAddress == null) {
                 log.warn("Could not recover address from signature");
@@ -126,36 +164,48 @@ public class WalletSignatureService {
             byte[] r = Arrays.copyOfRange(sigBytes, 0, 32);
             byte[] s = Arrays.copyOfRange(sigBytes, 32, 64);
             byte v = sigBytes[64];
-
-            // Normalize v (some wallets use 0/1, others use 27/28)
-            if (v < 27) {
-                v += 27;
-            }
+            
+            log.info("[VERIFY] Signature v value (raw): {}", v);
 
             // Create personal sign prefix (EIP-191)
             String prefix = "\u0019Ethereum Signed Message:\n" + message.length();
-            byte[] msgHash = Hash.sha3((prefix + message).getBytes());
-
-            // Recover public key
-            Sign.SignatureData sigData = new Sign.SignatureData(v, r, s);
+            String fullMessage = prefix + message;
+            log.info("[VERIFY] Message length for prefix: {}", message.length());
             
-            BigInteger pubKey = null;
-            for (int i = 0; i < 4; i++) {
-                byte recoveryId = (byte) (27 + (i % 2));
-                try {
-                    sigData = new Sign.SignatureData(recoveryId, r, s);
-                    pubKey = Sign.signedMessageHashToKey(msgHash, sigData);
-                    String recovered = "0x" + Keys.getAddress(pubKey);
-                    if (recovered != null) {
-                        return recovered;
-                    }
-                } catch (Exception ignored) {}
+            // Use UTF-8 encoding explicitly
+            byte[] msgHash = Hash.sha3(fullMessage.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            log.info("[VERIFY] Message hash: {}", Numeric.toHexString(msgHash));
+
+            // Normalize v if needed
+            byte normalizedV = v;
+            if (v < 27) {
+                normalizedV = (byte)(v + 27);
             }
             
-            // Standard recovery
-            sigData = new Sign.SignatureData(v, r, s);
-            pubKey = Sign.signedMessageHashToKey(msgHash, sigData);
-            return "0x" + Keys.getAddress(pubKey);
+            // Try with normalized v first
+            try {
+                Sign.SignatureData sigData = new Sign.SignatureData(normalizedV, r, s);
+                BigInteger pubKey = Sign.signedMessageHashToKey(msgHash, sigData);
+                String recovered = "0x" + Keys.getAddress(pubKey);
+                log.info("[VERIFY] Recovered with v={}: {}", normalizedV, recovered);
+                return recovered;
+            } catch (Exception e) {
+                log.warn("[VERIFY] Recovery with v={} failed, trying alternative", normalizedV);
+            }
+            
+            // Try with alternative v
+            byte altV = (byte)(normalizedV == 27 ? 28 : 27);
+            try {
+                Sign.SignatureData sigData = new Sign.SignatureData(altV, r, s);
+                BigInteger pubKey = Sign.signedMessageHashToKey(msgHash, sigData);
+                String recovered = "0x" + Keys.getAddress(pubKey);
+                log.info("[VERIFY] Recovered with alt v={}: {}", altV, recovered);
+                return recovered;
+            } catch (Exception e) {
+                log.error("[VERIFY] All recovery attempts failed");
+            }
+            
+            return null;
 
         } catch (Exception e) {
             log.error("Error recovering address: {}", e.getMessage(), e);
