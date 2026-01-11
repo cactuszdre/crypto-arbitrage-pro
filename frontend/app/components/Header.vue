@@ -145,11 +145,12 @@ if (import.meta.client) {
           isLoggingIn.value = false
         }
       } else {
-        // Wallet address is undefined - could be temporary (modal opening) or real disconnect
-        // Only logout if there's no stored session (real disconnect)
-        const storedSession = localStorage.getItem('user')
-        if (!storedSession && state.user) {
+        // Wallet disconnected via AppKit modal
+        // Check if AppKit explicitly says disconnected (not just address temporarily null)
+        if (accountData.value?.isConnected === false) {
+            console.log('[Header] Wallet disconnected, clearing session')
             logout()
+            localStorage.removeItem('user') // Ensure localStorage is also cleared
             
             // Redirect from admin page if disconnected
             if (route.path === '/admin') {
@@ -159,6 +160,23 @@ if (import.meta.client) {
       }
     },
     { immediate: true }
+  )
+  
+  // Also watch isConnected explicitly for disconnect events
+  watch(
+    () => accountData.value?.isConnected,
+    (isConnected, wasConnected) => {
+      // Only trigger on explicit disconnect (was true, now false)
+      if (wasConnected === true && isConnected === false) {
+        console.log('[Header] AppKit isConnected changed to false, logging out')
+        logout()
+        localStorage.removeItem('user')
+        
+        if (route.path === '/admin') {
+          router.push('/')
+        }
+      }
+    }
   )
 }
 

@@ -1,15 +1,28 @@
 package com.crypto.auth.business;
 
+import com.crypto.auth.model.Role;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class JwtServiceTest {
 
-    private final JwtService jwtService = new JwtService();
+    private JwtService jwtService;
+
+    @BeforeEach
+    void setUp() {
+        jwtService = new JwtService();
+        // Inject the secret key since @Value won't work in unit tests
+        ReflectionTestUtils.setField(jwtService, "secretKey", "TestSecretKeyForJwtServiceTests123");
+        // Manually call init since @PostConstruct won't run in unit tests
+        jwtService.init();
+    }
 
     @Test
     void testGenerateToken() {
-        String token = jwtService.generateToken("0x123456", "USER");
+        String token = jwtService.generateToken("0x123456", Role.USER);
         
         assertNotNull(token);
         assertFalse(token.isEmpty());
@@ -18,27 +31,27 @@ class JwtServiceTest {
 
     @Test
     void testValidateToken() {
-        String token = jwtService.generateToken("0xabc123", "ADMIN");
+        String token = jwtService.generateToken("0xabc123", Role.ADMIN);
         
         boolean isValid = jwtService.validateToken(token);
         assertTrue(isValid);
     }
 
     @Test
-    void testExtractWallet() {
+    void testExtractWalletAddress() {
         String wallet = "0xTestWallet";
-        String token = jwtService.generateToken(wallet, "USER");
+        String token = jwtService.generateToken(wallet, Role.USER);
         
-        String extracted = jwtService.extractWallet(token);
+        String extracted = jwtService.extractWalletAddress(token);
         assertEquals(wallet, extracted);
     }
 
     @Test
     void testExtractRole() {
-        String token = jwtService.generateToken("0x123", "ADMIN");
+        String token = jwtService.generateToken("0x123", Role.ADMIN);
         
-        String role = jwtService.extractRole(token);
-        assertEquals("ADMIN", role);
+        Role role = jwtService.extractRole(token);
+        assertEquals(Role.ADMIN, role);
     }
 
     @Test

@@ -83,8 +83,22 @@ export const useAppKit = () => {
             // Subscribe to account changes
             if (appKit.subscribeAccount) {
                 appKit.subscribeAccount((account: any) => {
+                    console.log('[AppKit] Account update:', account)
                     accountData.value = account
                 })
+            }
+            
+            // Get initial account state (for page refresh scenarios)
+            try {
+                if (appKit.getAccount) {
+                    const currentAccount = appKit.getAccount()
+                    console.log('[AppKit] Initial account state:', currentAccount)
+                    if (currentAccount) {
+                        accountData.value = currentAccount
+                    }
+                }
+            } catch (e) {
+                console.log('[AppKit] Could not get initial account state')
             }
 
             isInitialized.value = true
@@ -108,10 +122,26 @@ export const useAppKit = () => {
         }
 
         if (appKit?.open) {
-            appKit.open()
+            // If already connected, open Account view instead of Connect view
+            if (accountData.value?.isConnected) {
+                console.log('[AppKit] Already connected, opening Account view')
+                appKit.open({ view: 'Account' })
+            } else {
+                appKit.open()
+            }
         } else {
             console.error('[AppKit] Failed to open - not initialized')
             alert('Wallet connection is not available. Please try again later.')
+        }
+    }
+    
+    // Disconnect wallet
+    const disconnect = async () => {
+        const appKit = appKitInstance.value
+        if (appKit?.disconnect) {
+            await appKit.disconnect()
+            accountData.value = { isConnected: false, address: null }
+            console.log('[AppKit] Disconnected')
         }
     }
 
@@ -122,6 +152,7 @@ export const useAppKit = () => {
         accountData,
         wagmiAdapter: wagmiAdapterState,
         initAppKit,
-        openModal
+        openModal,
+        disconnect
     }
 }

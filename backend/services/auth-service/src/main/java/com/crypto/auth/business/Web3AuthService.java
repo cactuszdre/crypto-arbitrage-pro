@@ -114,41 +114,53 @@ public class Web3AuthService {
         try {
             // Deconstruct signature
             byte[] signatureBytes = Numeric.hexStringToByteArray(signature);
-            byte v = signatureBytes[64];
-            if (v < 27) { 
-                v += 27; 
-            }
+            byte originalV = signatureBytes[64];
+            byte[] r = Arrays.copyOfRange(signatureBytes, 0, 32);
+            byte[] s = Arrays.copyOfRange(signatureBytes, 32, 64);
             
-            Sign.SignatureData signatureData = new Sign.SignatureData(
-                    v, 
-                    Arrays.copyOfRange(signatureBytes, 0, 32), 
-                    Arrays.copyOfRange(signatureBytes, 32, 64)
-            );
-
-            // Calculate hash of the prefixed message
-            BigInteger publicKey = Sign.signedPrefixedMessageToKey(message.getBytes(StandardCharsets.UTF_8), signatureData);
-            String recoveredAddress = "0x" + Keys.getAddress(publicKey);
+            // Try different v values (27, 28, or raw 0, 1)
+            byte[] vValuesToTry = originalV < 27 
+                ? new byte[]{(byte)(originalV + 27), (byte)(27), (byte)(28)} 
+                : new byte[]{originalV, (byte)(27), (byte)(28)};
             
             log.info("Signature Verification Debug:");
             log.info(" - Wallet Expected: {}", walletAddress);
-            log.info(" - Wallet Recovered (Prefixed): {}", recoveredAddress);
-            log.info(" - Nonce Expected: {}", message);
+            log.info(" - Nonce/Message: {}", message);
+            log.info(" - Original v value: {}", originalV);
             
-            if (recoveredAddress.equalsIgnoreCase(walletAddress)) {
-                return true;
+            for (byte v : vValuesToTry) {
+                Sign.SignatureData signatureData = new Sign.SignatureData(v, r, s);
+                
+                // Try with Ethereum prefix (EIP-191 personal_sign)
+                try {
+                    BigInteger publicKey = Sign.signedPrefixedMessageToKey(message.getBytes(StandardCharsets.UTF_8), signatureData);
+                    String recoveredAddress = "0x" + Keys.getAddress(publicKey);
+                    log.debug(" - Wallet Recovered (v={}, Prefixed): {}", v, recoveredAddress);
+                    
+                    if (recoveredAddress.equalsIgnoreCase(walletAddress)) {
+                        log.info(" - ✅ Match found with v={} (prefixed)", v);
+                        return true;
+                    }
+                } catch (Exception e) {
+                    log.debug("Recovery failed with v={} (prefixed): {}", v, e.getMessage());
+                }
+                
+                // Try without prefix (Raw Message Hash) - some wallets do this
+                try {
+                    BigInteger publicKeyRaw = Sign.signedMessageToKey(message.getBytes(StandardCharsets.UTF_8), signatureData);
+                    String recoveredAddressRaw = "0x" + Keys.getAddress(publicKeyRaw);
+                    log.debug(" - Wallet Recovered (v={}, Raw): {}", v, recoveredAddressRaw);
+                    
+                    if (recoveredAddressRaw.equalsIgnoreCase(walletAddress)) {
+                        log.warn(" - ✅ Match found with v={} (raw, non-standard)", v);
+                        return true;
+                    }
+                } catch (Exception e) {
+                    log.debug("Raw recovery failed with v={}: {}", v, e.getMessage());
+                }
             }
-
-            // Fallback 1: Try without prefix (Raw Message Hash)
-            // Some wallets/libraries might sign the raw message hash directly
-            BigInteger publicKeyRaw = Sign.signedMessageToKey(message.getBytes(StandardCharsets.UTF_8), signatureData);
-            String recoveredAddressRaw = "0x" + Keys.getAddress(publicKeyRaw);
-            log.info(" - Wallet Recovered (Raw): {}", recoveredAddressRaw);
             
-            if (recoveredAddressRaw.equalsIgnoreCase(walletAddress)) {
-                log.warn("Signature valid via RAW recovery (no prefix). This is non-standard but accepted.");
-                return true;
-            }
-            
+            log.warn(" - ❌ No matching address found after trying all v values");
             return false;
         } catch (Exception e) {
             log.error("Error during signature recovery", e);
