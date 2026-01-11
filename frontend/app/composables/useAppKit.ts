@@ -8,6 +8,7 @@ const isInitialized = ref(false)
 const isInitializing = ref(false)
 const accountData = ref({ isConnected: false, address: null })
 const wagmiAdapterState = ref(null) // Stores the Wagmi Adapter for signing
+const hasEverConnected = ref(false) // Track if user has ever connected in this session (to prevent logout on refresh)
 
 export const useAppKit = () => {
     const config = useRuntimeConfig()
@@ -85,6 +86,10 @@ export const useAppKit = () => {
                 appKit.subscribeAccount((account: any) => {
                     console.log('[AppKit] Account update:', account)
                     accountData.value = account
+                    // Track if user has ever connected (to differentiate from initial state)
+                    if (account?.isConnected) {
+                        hasEverConnected.value = true
+                    }
                 })
             }
             
@@ -95,6 +100,9 @@ export const useAppKit = () => {
                     console.log('[AppKit] Initial account state:', currentAccount)
                     if (currentAccount) {
                         accountData.value = currentAccount
+                        if (currentAccount.isConnected) {
+                            hasEverConnected.value = true
+                        }
                     }
                 }
             } catch (e) {
@@ -122,11 +130,15 @@ export const useAppKit = () => {
         }
 
         if (appKit?.open) {
-            // If already connected, open Account view instead of Connect view
-            if (accountData.value?.isConnected) {
-                console.log('[AppKit] Already connected, opening Account view')
+            // Check if user is connected via AppKit OR has a stored session
+            const hasStoredSession = typeof window !== 'undefined' && localStorage.getItem('user')
+            const isUserConnected = accountData.value?.isConnected || hasStoredSession
+            
+            if (isUserConnected) {
+                console.log('[AppKit] User connected (AppKit:', accountData.value?.isConnected, ', StoredSession:', !!hasStoredSession, '), opening Account view')
                 appKit.open({ view: 'Account' })
             } else {
+                console.log('[AppKit] User not connected, opening Connect view')
                 appKit.open()
             }
         } else {
@@ -151,6 +163,7 @@ export const useAppKit = () => {
         isInitializing,
         accountData,
         wagmiAdapter: wagmiAdapterState,
+        hasEverConnected,
         initAppKit,
         openModal,
         disconnect

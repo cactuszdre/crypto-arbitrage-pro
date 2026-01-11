@@ -12,7 +12,7 @@ let clockInterval = null
 const isMac = ref(false)
 
 // AppKit (wallet connection) - using composable
-const { appKit, accountData, isInitializing, openModal, wagmiAdapter } = useAppKit()
+const { appKit, accountData, isInitializing, isInitialized, openModal, wagmiAdapter, hasEverConnected } = useAppKit()
 
 // Lock to prevent duplicate login attempts
 const isLoggingIn = ref(false)
@@ -70,7 +70,7 @@ const openWallet = () => {
 if (import.meta.client) {
   watch(
     () => accountData.value?.address,
-    async (newAddress) => {
+    async (newAddress, oldAddress) => {
       if (newAddress) {
         // Extract clean address (remove CAIP prefix like "eip155:1:")
         let cleanAddress = newAddress
@@ -89,15 +89,34 @@ if (import.meta.client) {
                 setUser(parsed)
               }
               return
+            } else {
+              // WALLET SWITCH DETECTED: Different address than stored user
+              // Immediately logout to revoke access (especially admin rights)
+              console.log('[Header] Wallet switch detected! Logging out previous user:', parsed.walletAddress, '-> New:', cleanAddress)
+              logout()
+              localStorage.removeItem('user')
+              
+              // Redirect from admin page immediately
+              if (route.path === '/admin') {
+                router.push('/')
+              }
             }
           } catch (e) {
             console.error('Failed to parse stored user:', e)
           }
         }
         
-        // Prevent duplicate login if already logged in as same user or currently logging in
+        // Also check current state (in case localStorage was already cleared)
+        if (state.user?.walletAddress && state.user.walletAddress.toLowerCase() !== cleanAddress.toLowerCase()) {
+          console.log('[Header] Wallet switch detected (state)! Logging out:', state.user.walletAddress, '-> New:', cleanAddress)
+          logout()
+          if (route.path === '/admin') {
+            router.push('/')
+          }
+        }
+        
+        // Prevent duplicate login if currently logging in
         if (isLoggingIn.value) return
-        if (state.user?.walletAddress?.toLowerCase() === cleanAddress.toLowerCase()) return
         
         isLoggingIn.value = true
         
@@ -146,11 +165,15 @@ if (import.meta.client) {
         }
       } else {
         // Wallet disconnected via AppKit modal
-        // Check if AppKit explicitly says disconnected (not just address temporarily null)
-        if (accountData.value?.isConnected === false) {
-            console.log('[Header] Wallet disconnected, clearing session')
+        // IMPORTANT: Only logout if:
+        // 1. AppKit has finished initializing (isInitialized)
+        // 2. User had actually connected before (hasEverConnected)
+        // 3. AppKit explicitly says disconnected
+        // This prevents false logout on page refresh before AppKit restores session
+        if (isInitialized.value && hasEverConnected.value && accountData.value?.isConnected === false) {
+            console.log('[Header] Wallet disconnected (after being connected), clearing session')
             logout()
-            localStorage.removeItem('user') // Ensure localStorage is also cleared
+            localStorage.removeItem('user')
             
             // Redirect from admin page if disconnected
             if (route.path === '/admin') {
@@ -167,7 +190,8 @@ if (import.meta.client) {
     () => accountData.value?.isConnected,
     (isConnected, wasConnected) => {
       // Only trigger on explicit disconnect (was true, now false)
-      if (wasConnected === true && isConnected === false) {
+      // Also check hasEverConnected to avoid false triggers on initialization
+      if (wasConnected === true && isConnected === false && hasEverConnected.value) {
         console.log('[Header] AppKit isConnected changed to false, logging out')
         logout()
         localStorage.removeItem('user')
