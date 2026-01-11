@@ -44,7 +44,6 @@ export const useSecureAuth = () => {
 
         // Priority 2: Fallback to window.ethereum
         if (!provider) {
-            console.warn('[SecureAuth] Provider not found in AppKit, checking window.ethereum')
             provider = (window as any).ethereum
         }
 
@@ -53,7 +52,6 @@ export const useSecureAuth = () => {
         }
 
         try {
-            console.log('[SecureAuth] Requesting signature via provider:', provider)
             // Use personal_sign (EIP-191)
             // Note: params order can vary, but [message, address] is standard for personal_sign
             const signature = await provider.request({
@@ -100,20 +98,14 @@ export const useSecureAuth = () => {
         authError.value = null
 
         try {
-            console.log('[SecureAuth] Starting authentication for:', walletAddress)
-
             // Step 1: Request nonce
-            console.log('[SecureAuth] Requesting nonce...')
             const { nonce, message } = await requestNonce(walletAddress)
-            console.log('[SecureAuth] Got nonce, requesting signature...')
 
             // Step 2: Sign the message
             const signature = await signMessage(message, walletAddress)
-            console.log('[SecureAuth] Got signature, verifying...')
 
             // Step 3: Verify with backend
             const { token, role, isAdmin, plan } = await verifyAndGetToken(walletAddress, signature, nonce)
-            console.log('[SecureAuth] Authentication successful! Role:', role)
 
             // Step 4: Store token and user
             setUser({
@@ -124,7 +116,7 @@ export const useSecureAuth = () => {
 
             return true
         } catch (error: any) {
-            console.error('[SecureAuth] Authentication failed:', error)
+            console.error('Authentication failed:', error)
             authError.value = error.message || 'Authentication failed'
 
             // Clear any existing auth
