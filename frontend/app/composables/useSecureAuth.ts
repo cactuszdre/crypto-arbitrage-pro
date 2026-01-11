@@ -16,7 +16,7 @@ const authError = ref<string | null>(null)
 
 export const useSecureAuth = () => {
     const { setUser, setToken, getToken, logout: clearAuth, user, token } = useAuth()
-    const { accountData } = useAppKit()
+    const { accountData, appKit } = useAppKit()
 
     /**
      * Check if we have a valid token
@@ -38,15 +38,25 @@ export const useSecureAuth = () => {
      * Uses window.ethereum directly (works with MetaMask, WalletConnect, etc.)
      */
     const signMessage = async (message: string, walletAddress: string): Promise<string> => {
-        // Use window.ethereum for signing (works with MetaMask, WalletConnect, etc.)
-        const ethereum = (window as any).ethereum
-        if (!ethereum) {
-            throw new Error('No Ethereum provider found. Please install MetaMask or connect via WalletConnect.')
+        // Priority 1: Get provider directly from AppKit (most reliable for current connection)
+        // @ts-ignore - getProvider exists on AppKit instance
+        let provider = accountData.value?.connector?.provider || appKit.value?.getProvider?.()
+
+        // Priority 2: Fallback to window.ethereum
+        if (!provider) {
+            console.warn('[SecureAuth] Provider not found in AppKit, checking window.ethereum')
+            provider = (window as any).ethereum
+        }
+
+        if (!provider) {
+            throw new Error('No Ethereum provider found. Please install a wallet.')
         }
 
         try {
+            console.log('[SecureAuth] Requesting signature via provider:', provider)
             // Use personal_sign (EIP-191)
-            const signature = await ethereum.request({
+            // Note: params order can vary, but [message, address] is standard for personal_sign
+            const signature = await provider.request({
                 method: 'personal_sign',
                 params: [message, walletAddress]
             })

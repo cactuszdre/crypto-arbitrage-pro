@@ -2,12 +2,13 @@
 const router = useRouter()
 const route = useRoute()
 const searchQuery = ref('')
-const { setUser, logout, state } = useAuth()
+const { setUser, logout, state, user, token } = useAuth()
 const { authenticate, isAuthenticating, authError, hasValidToken, logout: secureLogout } = useSecureAuth()
 
 // Real-time clock
 const currentTime = ref(new Date())
 let clockInterval = null
+let authDebounceTimer = null // Debounce timer for auth watcher
 
 // OS Detection for keyboard shortcut
 const isMac = ref(false)
@@ -76,57 +77,75 @@ if (import.meta.client) {
   watch(
     () => accountData.value,
     async (newAccount, oldAccount) => {
-      if (newAccount?.isConnected && newAccount?.address) {
-        // Extract clean address (remove CAIP prefix like "eip155:1:")
-        let cleanAddress = newAccount.address
-        if (cleanAddress.includes(':')) {
-          cleanAddress = cleanAddress.split(':').pop()
-        }
-        
-        // Only authenticate if this is a new connection (not a page refresh with existing token)
-        const wasDisconnected = !oldAccount?.isConnected
-        
-        if (wasDisconnected && !hasValidToken.value) {
-          try {
-            authStatus.value = 'Requesting signature...'
-            
-            // Perform secure authentication with wallet signature
-            const success = await authenticate(cleanAddress)
-            
-            if (success) {
-              authStatus.value = ''
-              console.log('✅ Secure authentication successful')
-              
-              // If user is on admin page but not admin, redirect to home
-              if (route.path === '/admin' && state.user.value?.role !== 'ADMIN') {
-                console.warn('🚫 Non-admin on admin page, redirecting...')
-                router.push('/')
-              }
-            } else {
-              authStatus.value = authError.value || 'Authentication failed'
-              console.error('❌ Authentication failed:', authError.value)
-            }
-          } catch (error) {
-            console.error('Failed to authenticate:', error)
-            authStatus.value = 'Authentication failed'
-            // Set basic user data as fallback (read-only access)
-            setUser({ walletAddress: cleanAddress, role: 'USER', plan: 'FREE' })
+      // Debounce to handle rapid state updates from AppKit
+      if (authDebounceTimer) clearTimeout(authDebounceTimer)
+      
+      authDebounceTimer = setTimeout(async () => {
+          // 0. STOPPING CONDITIONS
+          // If auth is already in progress, don't trigger again
+          if (isAuthenticating.value) {
+              return
           }
-        } else if (hasValidToken.value) {
-          // Already have a valid token, just restore user state
-          console.log('🔑 Existing token found, restoring session...')
-        }
-      } else if (!newAccount?.isConnected && oldAccount?.isConnected) {
-        // Wallet disconnected - clear everything
-        console.log('👋 Wallet disconnected, clearing session')
-        secureLogout()
-        authStatus.value = ''
-        
-        // Redirect from admin page if disconnected
-        if (route.path === '/admin') {
-          router.push('/')
-        }
-      }
+
+          // STRICT CLEANUP: If wallet is not connected, we should not have a session
+          if (!newAccount?.isConnected) {
+              // Protect hydration: Don't logout on very first run (when oldAccount is undefined)
+              const isFirstRun = oldAccount === undefined
+              
+              if (!isFirstRun && token.value) {
+                   secureLogout()
+                   if (route.path === '/admin') router.push('/')
+              }
+              return
+          }
+
+          if (newAccount?.isConnected && newAccount?.address) {
+            // Extract clean address from wallet connect format
+            let cleanAddress = newAccount.address
+            if (cleanAddress.includes(':')) {
+               cleanAddress = cleanAddress.split(':').pop()
+            }
+            
+            // Current auth state
+            const storedUser = user.value
+            const currentToken = token.value
+            
+            // Check scenarios
+            const isNewConnection = !oldAccount?.isConnected
+            // Note: oldAccount validity inside debounce is tricky, use stored state
+            const isAddressChange = storedUser?.walletAddress?.toLowerCase() !== cleanAddress.toLowerCase()
+            const isTokenMismatch = !!currentToken && isAddressChange
+            const isMissingAuth = !currentToken
+
+            // DECISION MATRIX
+            
+            if (isAddressChange || isTokenMismatch) {
+                if (currentToken) {
+                    secureLogout() // Clear old state synchronously
+                }
+            }
+
+            // Check again after logout
+            if (!token.value) {
+                // Loop prevention
+                if (authError.value && !isAddressChange) {
+                    return
+                }
+
+                try {
+                    authStatus.value = 'Requesting signature...'
+                    const success = await authenticate(cleanAddress)
+                    
+                    if (success) {
+                       authStatus.value = ''
+                    }
+                } catch (error) {
+                    console.error('Auth failed:', error)
+                    authStatus.value = 'Authentication failed'
+                }
+            }
+          }
+      }, 300) // 300ms debounce
     },
     { immediate: true, deep: true }
   )
