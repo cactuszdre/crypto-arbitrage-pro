@@ -130,6 +130,11 @@ const addAdmin = async () => {
 }
 
 const removeAdmin = async (walletAddress) => {
+  if (isCurrentUser(walletAddress)) {
+    alert("Vous ne pouvez pas retirer vos propres droits d'administrateur.")
+    return
+  }
+
   if (!confirm(`Voulez-vous vraiment retirer les droits admin de ${walletAddress.slice(0, 10)}...?`)) return
 
   try {
@@ -137,7 +142,9 @@ const removeAdmin = async (walletAddress) => {
     await fetchAdmins()
   } catch (err) {
     console.error('Failed to remove admin', err)
-    alert('Failed to remove admin')
+    // Extract error message if available
+    const errorMsg = err.data?.error || err.message || 'Failed to remove admin'
+    alert(`Erreur: ${errorMsg}`)
   }
 }
 
@@ -148,8 +155,9 @@ const formatWallet = (addr) => {
 
 // Check if the wallet is the current connected user
 const isCurrentUser = (walletAddress) => {
-  if (!authState.user.value?.walletAddress || !walletAddress) return false
-  return authState.user.value.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+  const currentUserWallet = authState.user?.walletAddress || authState.user?.value?.walletAddress
+  if (!currentUserWallet || !walletAddress) return false
+  return currentUserWallet.toLowerCase() === walletAddress.toLowerCase()
 }
 
 const formatDate = (dateStr) => {
