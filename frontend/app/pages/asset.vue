@@ -9,10 +9,33 @@ useSeoMeta({
   ogTitle: 'Crypto Asset Funding Rate Analysis - CactusFund',
   ogDescription: 'Analyze funding rates across exchanges. Historical charts and arbitrage strategy builder.',
   ogUrl: 'https://cactusfund.app/asset',
+  robots: 'index, follow',
 })
 
 useHead({
-  link: [{ rel: 'canonical', href: 'https://cactusfund.app/asset' }]
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/asset' }],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Asset Details - CactusFund",
+        "description": "Analyze funding rates across exchanges for any crypto asset. Historical charts, spread calculations, and arbitrage strategy builder.",
+        "url": "https://cactusfund.app/asset",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "CactusFund",
+          "url": "https://cactusfund.app"
+        },
+        "about": {
+          "@type": "FinancialProduct",
+          "name": "Crypto Funding Rate Arbitrage",
+          "description": "Compare funding rates across decentralized exchanges and find arbitrage opportunities."
+        }
+      })
+    }
+  ]
 })
 
 // SSR Data fetching

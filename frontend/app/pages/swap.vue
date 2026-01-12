@@ -8,10 +8,33 @@ useSeoMeta({
   ogTitle: 'ETH/WETH Swap - CactusFund',
   ogDescription: 'Wrap or unwrap ETH instantly on Ethereum. No protocol fees.',
   ogUrl: 'https://cactusfund.app/swap',
+  robots: 'index, follow',
 })
 
 useHead({
-  link: [{ rel: 'canonical', href: 'https://cactusfund.app/swap' }]
+  link: [{ rel: 'canonical', href: 'https://cactusfund.app/swap' }],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "ETH/WETH Swap - CactusFund",
+        "description": "Wrap ETH to WETH or unwrap WETH to ETH instantly on Ethereum. No protocol fees, only gas costs.",
+        "url": "https://cactusfund.app/swap",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "CactusFund",
+          "url": "https://cactusfund.app"
+        },
+        "about": {
+          "@type": "FinancialProduct",
+          "name": "ETH WETH Swap",
+          "description": "Instant ETH to WETH wrapping and unwrapping service on Ethereum."
+        }
+      })
+    }
+  ]
 })
 
 // AppKit (wallet connection) - using composable
