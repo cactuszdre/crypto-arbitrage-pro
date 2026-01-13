@@ -90,20 +90,6 @@ erDiagram
     TICKER ||--o{ DEX_MARKET : "traded"
 
     %% Données temps réel
-    FUNDING_RATE {
-        bigserial id PK
-        bigint dex_id FK
-        int ticker_id FK
-        decimal rate "20,12"
-        decimal rate_8h "20,12"
-        decimal rate_annual "20,4"
-        decimal funding_premium "20,8"
-        decimal funding_index "30,12"
-        int interval_hours
-        timestamp timestamp
-        timestamp created_at
-    }
-
     LAST_FUNDING {
         bigserial id PK
         int ticker_id FK
@@ -118,44 +104,10 @@ erDiagram
         timestamp updated_at
     }
 
-    DEX ||--o{ FUNDING_RATE : "publishes"
     DEX ||--o{ LAST_FUNDING : "current"
-    TICKER ||--o{ FUNDING_RATE : "rates"
     TICKER ||--o{ LAST_FUNDING : "latest"
 
-    %% Agrégations - regroupées
-    FUNDING_RATE_5MIN {
-        bigserial id PK
-        int ticker_id FK
-        bigint dex_id FK
-        timestamp bucket_time
-        decimal avg_rate "20,12"
-        decimal min_rate "20,12"
-        decimal max_rate "20,12"
-        decimal avg_rate_8h "20,12"
-        decimal avg_rate_annual "20,4"
-        decimal open_rate "20,12"
-        decimal close_rate "20,12"
-        int sample_count
-        timestamp created_at
-    }
-
-    FUNDING_RATE_HOURLY {
-        bigserial id PK
-        int ticker_id FK
-        bigint dex_id FK
-        timestamp bucket_time
-        decimal avg_rate "20,12"
-        decimal min_rate "20,12"
-        decimal max_rate "20,12"
-        decimal avg_rate_8h "20,12"
-        decimal avg_rate_annual "20,4"
-        decimal open_rate "20,12"
-        decimal close_rate "20,12"
-        int sample_count
-        timestamp created_at
-    }
-
+    %% Agrégation journalière
     FUNDING_RATE_DAILY {
         bigserial id PK
         int ticker_id FK
@@ -170,11 +122,7 @@ erDiagram
         timestamp created_at
     }
 
-    DEX ||--o{ FUNDING_RATE_5MIN : "5min"
-    DEX ||--o{ FUNDING_RATE_HOURLY : "hourly"
     DEX ||--o{ FUNDING_RATE_DAILY : "daily"
-    TICKER ||--o{ FUNDING_RATE_5MIN : "5min"
-    TICKER ||--o{ FUNDING_RATE_HOURLY : "hourly"
     TICKER ||--o{ FUNDING_RATE_DAILY : "daily"
 
     %% Table indépendante
@@ -198,9 +146,6 @@ erDiagram
 | `ticker` | Référentiel des crypto-actifs normalisés (BTC, ETH...) | Permanent |
 | `dex` | Configuration des exchanges décentralisés | Permanent |
 | `dex_market` | Mapping des symboles par DEX | Permanent |
-| `funding_rate` | Données brutes des taux de financement | ~24h |
 | `last_funding` | Dernier taux par ticker/DEX (cache) | Temps réel |
-| `funding_rate_5min` | Agrégation 5 minutes pour charts intraday | 24h |
-| `funding_rate_hourly` | Agrégation horaire pour charts 1D-7D | 7 jours |
 | `funding_rate_daily` | Agrégation journalière pour historique | Permanent |
 
