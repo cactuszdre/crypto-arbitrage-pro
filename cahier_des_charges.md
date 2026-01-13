@@ -1,9 +1,9 @@
 # Cahier des Charges - Projet Crypto Arbitrage
 
 ## 1. Membres d'équipe
-- **Steven T.**
-- **Baptiste D.**
-
+- **Steven Talbourdet**
+- **Baptiste Delaville De La Parra**
+- **Jerome Bos**
 *(Note : Projet réalisé en binôme)*
 
 ## 2. Présentation du sujet
