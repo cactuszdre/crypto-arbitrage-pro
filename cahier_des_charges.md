@@ -172,35 +172,6 @@ erDiagram
         timestamp created_at
     }
 
-    %% ========== ARBITRAGE & POSITIONS ==========
-    ARBITRAGE_OPPORTUNITY {
-        bigserial id PK
-        bigint dex1_id FK
-        bigint dex2_id FK
-        int ticker_id FK
-        decimal dex1_rate "20,12"
-        decimal dex2_rate "20,12"
-        decimal spread "20,12"
-        decimal projected_daily_return "20,8"
-        varchar recommended_long_dex "50 chars"
-        varchar recommended_short_dex "50 chars"
-        timestamp detected_at
-        varchar status "ACTIVE | ..."
-    }
-
-    POSITION {
-        bigserial id PK
-        bigint dex_id FK
-        int ticker_id FK
-        varchar side "LONG | SHORT"
-        decimal size "18,8"
-        decimal entry_price "18,8"
-        timestamp opened_at
-        timestamp closed_at
-        decimal pnl "18,8"
-        varchar status "OPEN | CLOSED"
-    }
-
     %% ========== RELATIONS ==========
     DEX ||--o{ DEX_MARKET : "has markets"
     DEX ||--o{ FUNDING_RATE : "publishes"
@@ -208,9 +179,6 @@ erDiagram
     DEX ||--o{ FUNDING_RATE_5MIN : "aggregates"
     DEX ||--o{ FUNDING_RATE_HOURLY : "aggregates"
     DEX ||--o{ FUNDING_RATE_DAILY : "aggregates"
-    DEX ||--o{ POSITION : "trades on"
-    DEX ||--o{ ARBITRAGE_OPPORTUNITY : "dex1"
-    DEX ||--o{ ARBITRAGE_OPPORTUNITY : "dex2"
 
     TICKER ||--o{ DEX_MARKET : "traded as"
     TICKER ||--o{ FUNDING_RATE : "has rates"
@@ -218,8 +186,6 @@ erDiagram
     TICKER ||--o{ FUNDING_RATE_5MIN : "aggregated"
     TICKER ||--o{ FUNDING_RATE_HOURLY : "aggregated"
     TICKER ||--o{ FUNDING_RATE_DAILY : "aggregated"
-    TICKER ||--o{ ARBITRAGE_OPPORTUNITY : "opportunity for"
-    TICKER ||--o{ POSITION : "position on"
 ```
 
 ### Description des tables
@@ -235,5 +201,4 @@ erDiagram
 | `funding_rate_5min` | Agrégation 5 minutes pour charts intraday | 24h |
 | `funding_rate_hourly` | Agrégation horaire pour charts 1D-7D | 7 jours |
 | `funding_rate_daily` | Agrégation journalière pour historique | Permanent |
-| `arbitrage_opportunity` | Opportunités d'arbitrage détectées | Variable |
-| `position` | Positions de trading ouvertes/fermées | Permanent |
+
