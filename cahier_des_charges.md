@@ -52,27 +52,7 @@ Le schéma relationnel s'articule autour des entités clés identifiées dans le
 
 ```mermaid
 erDiagram
-    %% ========== UTILISATEURS ==========
-    USERS {
-        bigserial id PK
-        varchar wallet_address UK "42 chars"
-        varchar role "USER | ADMIN"
-        varchar plan "FREE | PRO"
-        timestamp plan_expires_at
-        timestamp created_at
-        timestamp last_login_at
-        varchar nonce
-    }
-
-    %% ========== RÉFÉRENTIELS ==========
-    TICKER {
-        serial id PK
-        varchar base_symbol "20 chars"
-        varchar normalized_symbol UK "50 chars"
-        varchar icon_url
-        timestamp created_at
-    }
-
+    %% Tables parentes en premier pour un meilleur layout
     DEX {
         bigserial id PK
         varchar name UK "50 chars"
@@ -86,6 +66,15 @@ erDiagram
         timestamp created_at
     }
 
+    TICKER {
+        serial id PK
+        varchar base_symbol "20 chars"
+        varchar normalized_symbol UK "50 chars"
+        varchar icon_url
+        timestamp created_at
+    }
+
+    %% Table de mapping
     DEX_MARKET {
         bigserial id PK
         bigint dex_id FK
@@ -96,7 +85,11 @@ erDiagram
         timestamp updated_at
     }
 
-    %% ========== DONNÉES TEMPS RÉEL ==========
+    %% Relations du mapping (définies tôt pour meilleur rendu)
+    DEX ||--o{ DEX_MARKET : "markets"
+    TICKER ||--o{ DEX_MARKET : "traded"
+
+    %% Données temps réel
     FUNDING_RATE {
         bigserial id PK
         bigint dex_id FK
@@ -125,7 +118,12 @@ erDiagram
         timestamp updated_at
     }
 
-    %% ========== AGRÉGATIONS TEMPORELLES ==========
+    DEX ||--o{ FUNDING_RATE : "publishes"
+    DEX ||--o{ LAST_FUNDING : "current"
+    TICKER ||--o{ FUNDING_RATE : "rates"
+    TICKER ||--o{ LAST_FUNDING : "latest"
+
+    %% Agrégations - regroupées
     FUNDING_RATE_5MIN {
         bigserial id PK
         int ticker_id FK
@@ -172,20 +170,24 @@ erDiagram
         timestamp created_at
     }
 
-    %% ========== RELATIONS ==========
-    DEX ||--o{ DEX_MARKET : "has markets"
-    DEX ||--o{ FUNDING_RATE : "publishes"
-    DEX ||--o{ LAST_FUNDING : "current rate"
-    DEX ||--o{ FUNDING_RATE_5MIN : "aggregates"
-    DEX ||--o{ FUNDING_RATE_HOURLY : "aggregates"
-    DEX ||--o{ FUNDING_RATE_DAILY : "aggregates"
+    DEX ||--o{ FUNDING_RATE_5MIN : "5min"
+    DEX ||--o{ FUNDING_RATE_HOURLY : "hourly"
+    DEX ||--o{ FUNDING_RATE_DAILY : "daily"
+    TICKER ||--o{ FUNDING_RATE_5MIN : "5min"
+    TICKER ||--o{ FUNDING_RATE_HOURLY : "hourly"
+    TICKER ||--o{ FUNDING_RATE_DAILY : "daily"
 
-    TICKER ||--o{ DEX_MARKET : "traded as"
-    TICKER ||--o{ FUNDING_RATE : "has rates"
-    TICKER ||--o{ LAST_FUNDING : "latest"
-    TICKER ||--o{ FUNDING_RATE_5MIN : "aggregated"
-    TICKER ||--o{ FUNDING_RATE_HOURLY : "aggregated"
-    TICKER ||--o{ FUNDING_RATE_DAILY : "aggregated"
+    %% Table indépendante
+    USERS {
+        bigserial id PK
+        varchar wallet_address UK "42 chars"
+        varchar role "USER | ADMIN"
+        varchar plan "FREE | PRO"
+        timestamp plan_expires_at
+        timestamp created_at
+        timestamp last_login_at
+        varchar nonce
+    }
 ```
 
 ### Description des tables
