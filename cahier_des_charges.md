@@ -4,7 +4,6 @@
 - **Steven Talbourdet**
 - **Baptiste Delaville De La Parra**
 - **Jerome Bos**
-*(Note : Projet réalisé en binôme)*
 
 ## 2. Présentation du sujet
 Le projet porte sur la réalisation d'une plateforme de **Crypto Funding Arbitrage**.
