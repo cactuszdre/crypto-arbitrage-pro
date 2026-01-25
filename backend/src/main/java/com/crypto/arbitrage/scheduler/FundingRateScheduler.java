@@ -92,13 +92,27 @@ public class FundingRateScheduler {
             }
         }, executorService);
 
-        // Wait for all fetchers to complete
+        // Wait for all fetchers to complete with a timeout
         CompletableFuture<Void> allGlobal = CompletableFuture.allOf(
                 globalFetchers.toArray(new CompletableFuture[0]));
-        CompletableFuture.allOf(allGlobal, paradexFuture).join();
+        
+        try {
+            CompletableFuture.allOf(allGlobal, paradexFuture).get(45, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.warn("Funding rate fetch cycle timed out after 45s. Some fetches may be incomplete.");
+            // We don't cancel explicitly here because we want them to finish if they can, 
+            // but we unblock the scheduler thread.
+            // Ideally, we should cancel them if they are genuinely stuck.
+            allGlobal.cancel(true);
+            paradexFuture.cancel(true);
+        } catch (Exception e) {
+            log.error("Error in funding rate fetch loop", e);
+        }
 
         long duration = System.currentTimeMillis() - startTime;
-
+        if (duration > 5000) {
+             log.info("Funding rate fetch took {} ms", duration);
+        }
     }
 
     @Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE)

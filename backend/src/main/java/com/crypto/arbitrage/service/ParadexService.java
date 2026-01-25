@@ -121,6 +121,7 @@ public class ParadexService {
                     .header("Authorization", "Bearer " + decryptedApiKey)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
+                    .timeout(java.time.Duration.ofSeconds(10)) // Fail fast if API hangs
                     .block();
 
             if (response == null || !response.has("results")) {
@@ -140,6 +141,16 @@ public class ParadexService {
 
             return rates;
 
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            if (e.getStatusCode().value() == 503) {
+                log.warn("Paradex 503 Service Unavailable for {}: {}", symbol, e.getStatusCode());
+            } else {
+                log.error("Erreur WebClient Paradex pour {}: {} - {}", symbol, e.getStatusCode(), e.getMessage());
+            }
+            return List.of();
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.warn("Timeout lors de la récupération Paradex pour {}", symbol);
+            return List.of();
         } catch (Exception e) {
             log.error("Erreur lors de la récupération des funding data Paradex: {}", e.getMessage());
             return List.of();
