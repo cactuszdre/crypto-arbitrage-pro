@@ -148,10 +148,12 @@ public class ParadexService {
                 log.error("Erreur WebClient Paradex pour {}: {} - {}", symbol, e.getStatusCode(), e.getMessage());
             }
             return List.of();
-        } catch (java.util.concurrent.TimeoutException e) {
-            log.warn("Timeout lors de la récupération Paradex pour {}", symbol);
-            return List.of();
         } catch (Exception e) {
+            // Check if it is a timeout wrapped in RuntimeException
+            if (e.getCause() instanceof java.util.concurrent.TimeoutException) {
+                log.warn("Timeout lors de la récupération Paradex pour {}", symbol);
+                return List.of();
+            }
             log.error("Erreur lors de la récupération des funding data Paradex: {}", e.getMessage());
             return List.of();
         }
