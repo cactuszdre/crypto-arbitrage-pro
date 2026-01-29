@@ -40,10 +40,15 @@ public class ParadexService {
     
     // Cache for market info (symbol -> funding_period_hours)
     private final Map<String, Integer> marketFundingPeriodCache = new ConcurrentHashMap<>();
+    
+    // Track when market info was last loaded (for periodic refresh)
+    private volatile long lastMarketInfoLoadTime = 0;
+    private static final long MARKET_INFO_REFRESH_INTERVAL_MS = 3600_000; // Refresh every hour
 
     /**
      * Loads market info from Paradex API and caches funding_period_hours for each symbol.
-     * This is needed because different pairs have different funding periods (e.g., BTC=8h, MOODENG=4h).
+     * This is needed because different pairs have different funding periods.
+     * Now all Paradex markets use 8h funding periods.
      */
     public void loadMarketInfo() {
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
@@ -75,7 +80,10 @@ public class ParadexService {
                     marketFundingPeriodCache.put(symbol, fundingPeriodHours);
                 }
             }
-
+            
+            // Update last load time on success
+            lastMarketInfoLoadTime = System.currentTimeMillis();
+            log.debug("Loaded {} Paradex market funding periods", marketFundingPeriodCache.size());
 
         } catch (Exception e) {
             log.error("Error loading Paradex market info: {}", e.getMessage());
@@ -83,10 +91,14 @@ public class ParadexService {
     }
 
     /**
-     * Gets the funding period hours for a symbol, loading market info if not cached.
+     * Gets the funding period hours for a symbol, loading market info if not cached or stale.
+     * Cache is refreshed every hour to pick up any changes from Paradex.
      */
     private int getFundingPeriodHours(String symbol, String baseUrl) {
-        if (marketFundingPeriodCache.isEmpty()) {
+        long now = System.currentTimeMillis();
+        boolean cacheExpired = (now - lastMarketInfoLoadTime) > MARKET_INFO_REFRESH_INTERVAL_MS;
+        
+        if (marketFundingPeriodCache.isEmpty() || cacheExpired) {
             loadMarketInfo();
         }
         return marketFundingPeriodCache.getOrDefault(symbol, 8); // default to 8h
