@@ -343,17 +343,19 @@ const fetchData = async (silent = false) => {
     const isCustom = customTimeframeActive.value && customDateRange.value
     
     // ============================================
-    // CUSTOM RANGE: Use SINGLE data source based on range duration
+    // CUSTOM RANGE: Use SINGLE data source based on how far back the start is
     // Same logic as preset periods to avoid mixing granularities
     // ============================================
     if (isCustom && customDateRange.value) {
       const customStart = new Date(customDateRange.value[0])
       const customEnd = new Date(customDateRange.value[1])
-      const totalHours = Math.ceil((customEnd - customStart) / (1000 * 60 * 60))
-      const totalDays = Math.ceil(totalHours / 24)
       
-      // Select a SINGLE data source based on range duration
-      // This mirrors the preset period logic and prevents mixed granularities
+      // How far back is the START date from now? This determines which API to use
+      // (backend APIs return data from "now minus N days/hours")
+      const daysAgoStart = (now - customStart) / (1000 * 60 * 60 * 24)
+      const hoursAgoStart = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
+      
+      // Select a SINGLE data source based on how far back we need to go
       const pushResponseData = (response) => {
         if (response.data && Object.keys(response.data).length > 0) {
           for (const [dexName, dexData] of Object.entries(response.data)) {
@@ -371,39 +373,47 @@ const fetchData = async (silent = false) => {
       }
       
       try {
-        if (totalDays <= 1) {
-          // ≤ 1 day: use 5-min API (same as Live/1D presets)
-          const hoursFromNow = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
-          const response = await chartApi.getComparisonData(props.symbol, hoursFromNow)
+        if (daysAgoStart <= 1) {
+          // Start is within last 24h: use 5-min API
+          const response = await chartApi.getComparisonData(props.symbol, hoursAgoStart)
           pushResponseData(response)
-        } else if (totalDays <= 7) {
-          // 1-7 days: use hourly API only (same as 3D/7D presets)
-          const hoursFromNow = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
-          const response = await chartApi.getHourlyComparisonData(props.symbol, hoursFromNow)
+        } else if (daysAgoStart <= 7) {
+          // Start is within last 7 days: use hourly API only
+          const response = await chartApi.getHourlyComparisonData(props.symbol, hoursAgoStart)
           pushResponseData(response)
         } else {
-          // > 7 days: use daily API ONLY (same as 30D/3M/6M presets)
-          const response = await chartApi.getDailyComparisonData(props.symbol, totalDays)
+          // Start is more than 7 days ago: use daily API ONLY
+          const daysAgo = Math.ceil(daysAgoStart) + 1
+          const response = await chartApi.getDailyComparisonData(props.symbol, daysAgo)
           pushResponseData(response)
         }
       } catch (e) {
-        console.log('[Custom] API not available for range:', totalDays, 'days', e)
+        console.log('[Custom] API error:', e)
       }
       
       // Filter to only show data within the custom range
-      // Add 59 seconds to end time so exact minute matches are included
-      // (e.g., selecting 23:50 includes 23:50:00, but 23:48 excludes 23:50:00)
-      // Also cap at current time so future times don't affect calculations
-      let effectiveEnd = customEnd.getTime() + 59 * 1000
-      const nowTime = now.getTime()
-      if (effectiveEnd > nowTime) {
-        effectiveEnd = nowTime // Cap at current time
+      // Convert custom dates to UTC for comparison with backend timestamps
+      // (backend returns timestamps without Z suffix, parseAsUTC appends Z)
+      const customStartUTC = Date.UTC(customStart.getFullYear(), customStart.getMonth(), customStart.getDate())
+      
+      // For daily data (>7 days), end should include the entire last day
+      // For sub-daily data, use the actual end time with a small buffer
+      let customEndUTC
+      if (daysAgoStart > 7) {
+        // Daily precision: include the full end date (end of day)
+        customEndUTC = Date.UTC(customEnd.getFullYear(), customEnd.getMonth(), customEnd.getDate(), 23, 59, 59, 999)
+      } else {
+        // Hourly/5-min precision: use actual end time + 59s buffer
+        customEndUTC = customEnd.getTime() + 59 * 1000
+        // Cap at current time
+        if (customEndUTC > now.getTime()) {
+          customEndUTC = now.getTime()
+        }
       }
-      const customEndWithBuffer = new Date(effectiveEnd)
       
       let finalData = data.filter(d => {
-        const timestamp = parseAsUTC(d.timestamp)
-        return timestamp >= customStart && timestamp <= customEndWithBuffer
+        const timestamp = parseAsUTC(d.timestamp).getTime()
+        return timestamp >= customStartUTC && timestamp <= customEndUTC
       })
       
       historyData.value = finalData.sort((a, b) => parseAsUTC(a.timestamp) - parseAsUTC(b.timestamp))
