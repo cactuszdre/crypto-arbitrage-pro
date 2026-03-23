@@ -343,7 +343,8 @@ const fetchData = async (silent = false) => {
     const isCustom = customTimeframeActive.value && customDateRange.value
     
     // ============================================
-    // CUSTOM RANGE: Simplified logic - just get all available data
+    // CUSTOM RANGE: Use SINGLE data source based on range duration
+    // Same logic as preset periods to avoid mixing granularities
     // ============================================
     if (isCustom && customDateRange.value) {
       const customStart = new Date(customDateRange.value[0])
@@ -351,13 +352,9 @@ const fetchData = async (silent = false) => {
       const totalHours = Math.ceil((customEnd - customStart) / (1000 * 60 * 60))
       const totalDays = Math.ceil(totalHours / 24)
       
-      // Try to get data from all sources and combine them
-      // Priority: 5-min data (most recent) → hourly → daily
-      
-      // 1. Try 5-min API (has today's data)
-      try {
-        const hoursFromNow = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
-        const response = await chartApi.getComparisonData(props.symbol, hoursFromNow)
+      // Select a SINGLE data source based on range duration
+      // This mirrors the preset period logic and prevents mixed granularities
+      const pushResponseData = (response) => {
         if (response.data && Object.keys(response.data).length > 0) {
           for (const [dexName, dexData] of Object.entries(response.data)) {
             for (const item of dexData) {
@@ -371,60 +368,26 @@ const fetchData = async (silent = false) => {
             }
           }
         }
-      } catch (e) {
-        console.log('[Custom] 5-min API not available')
       }
       
-      // 2. Try hourly API (for historical data)
-      if (totalDays > 1) {
-        try {
-          const response = await chartApi.getHourlyComparisonData(props.symbol, Math.min(totalHours, 168))
-          if (response.data && Object.keys(response.data).length > 0) {
-            for (const [dexName, dexData] of Object.entries(response.data)) {
-              for (const item of dexData) {
-                // Only add if not already in data (avoid duplicates)
-                const exists = data.some(d => d.dex === dexName && d.timestamp === item.bucketTime)
-                if (!exists) {
-                  data.push({
-                    dex: dexName,
-                    timestamp: item.bucketTime,
-                    rate: item.avgRate,
-                    rate8h: item.avgRate8h,
-                    rateAnnual: item.avgRateAnnual
-                  })
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.log('[Custom] Hourly API not available')
-        }
-      }
-      
-      // 3. Try daily API (for longer historical data)
-      if (totalDays > 7) {
-        try {
+      try {
+        if (totalDays <= 1) {
+          // ≤ 1 day: use 5-min API (same as Live/1D presets)
+          const hoursFromNow = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
+          const response = await chartApi.getComparisonData(props.symbol, hoursFromNow)
+          pushResponseData(response)
+        } else if (totalDays <= 7) {
+          // 1-7 days: use hourly API only (same as 3D/7D presets)
+          const hoursFromNow = Math.ceil((now - customStart) / (1000 * 60 * 60)) + 1
+          const response = await chartApi.getHourlyComparisonData(props.symbol, hoursFromNow)
+          pushResponseData(response)
+        } else {
+          // > 7 days: use daily API ONLY (same as 30D/3M/6M presets)
           const response = await chartApi.getDailyComparisonData(props.symbol, totalDays)
-          if (response.data && Object.keys(response.data).length > 0) {
-            for (const [dexName, dexData] of Object.entries(response.data)) {
-              for (const item of dexData) {
-                // Only add if not already in data (avoid duplicates)
-                const exists = data.some(d => d.dex === dexName && d.timestamp === item.bucketTime)
-                if (!exists) {
-                  data.push({
-                    dex: dexName,
-                    timestamp: item.bucketTime,
-                    rate: item.avgRate,
-                    rate8h: item.avgRate8h,
-                    rateAnnual: item.avgRateAnnual
-                  })
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.log('[Custom] Daily API not available')
+          pushResponseData(response)
         }
+      } catch (e) {
+        console.log('[Custom] API not available for range:', totalDays, 'days', e)
       }
       
       // Filter to only show data within the custom range
