@@ -76,7 +76,7 @@ services:
     container_name: crypto-frontend
     restart: unless-stopped
     environment:
-      BACKEND_URL: http://backend:8080
+      NUXT_BACKEND_URL: http://backend:8080
       NUXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NUXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
       NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-/api}
       NODE_ENV: production

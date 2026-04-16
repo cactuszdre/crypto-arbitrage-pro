@@ -12,12 +12,12 @@ COPY . .
 
 # Build with aggressive memory optimization
 # Disable parallelism and reduce memory usage
-ENV NODE_OPTIONS="--max-old-space-size=460"
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 ENV NUXT_TELEMETRY_DISABLED=1
 
 # Build Nuxt - single threaded to reduce memory
 RUN npm run build || (echo "Build failed, retrying with less memory..." && \
-    NODE_OPTIONS="--max-old-space-size=400" npm run build)
+    NODE_OPTIONS="--max-old-space-size=1280" npm run build)
 
 # Production stage - minimal image
 FROM node:20-alpine AS runner
