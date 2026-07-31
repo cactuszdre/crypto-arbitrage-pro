@@ -264,9 +264,9 @@ const selectedMasterDex = ref('None') // 'None' or specific DEX name (Master DEX
 const showDexFilter = ref(false)
 const isDexInitialized = ref(false)
 
-// Available DEXes from SSR fetch
+// Available DEXes from API (keep empty while loading to avoid flashing the 3-DEX fallback)
 const availableDexes = computed(() => {
-  if (!dexList.value) return ['Hyperliquid', 'Paradex', 'Lighter']
+  if (!dexList.value || dexList.value.length === 0) return []
   return dexList.value.map((dex) => dex.name).sort()
 })
 
