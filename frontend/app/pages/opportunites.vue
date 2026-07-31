@@ -235,7 +235,9 @@ const historicalDataCache = new Map()
 
 // DEX filter - persistent in localStorage
 const DEX_STORAGE_KEY = 'cactusfund_selected_dexes'
+const MASTER_DEX_STORAGE_KEY = 'cactusfund_selected_master_dex'
 const selectedDexes = ref([]) // Initialized with saved DEXes or all DEXes on mount
+const selectedMasterDex = ref('None') // 'None' or specific DEX name (Master DEX)
 const showDexFilter = ref(false)
 const isDexInitialized = ref(false)
 
@@ -307,6 +309,30 @@ const saveSelectedDexes = (dexes) => {
   }
 }
 
+// Load saved Master DEX from localStorage if available
+const loadSavedMasterDex = (validDexes) => {
+  if (!process.client) return 'None'
+  try {
+    const saved = localStorage.getItem(MASTER_DEX_STORAGE_KEY)
+    if (saved && (saved === 'None' || validDexes.includes(saved))) {
+      return saved
+    }
+  } catch (e) {
+    console.error('Failed to load saved Master DEX:', e)
+  }
+  return 'None'
+}
+
+// Save Master DEX selection to localStorage
+const saveSelectedMasterDex = (masterDex) => {
+  if (!process.client) return
+  try {
+    localStorage.setItem(MASTER_DEX_STORAGE_KEY, masterDex)
+  } catch (e) {
+    console.error('Failed to save Master DEX:', e)
+  }
+}
+
 const initializeDexSelection = (dexes) => {
   if (!dexes || dexes.length === 0) return
   const saved = loadSavedDexes(dexes)
@@ -315,6 +341,13 @@ const initializeDexSelection = (dexes) => {
   } else if (selectedDexes.value.length === 0) {
     selectedDexes.value = [...dexes]
   }
+
+  const savedMaster = loadSavedMasterDex(dexes)
+  selectedMasterDex.value = savedMaster
+  if (savedMaster !== 'None' && !selectedDexes.value.includes(savedMaster)) {
+    selectedDexes.value.push(savedMaster)
+  }
+
   if (process.client) {
     isDexInitialized.value = true
   }
@@ -334,6 +367,21 @@ watch(selectedDexes, (newVal) => {
   }
 }, { deep: true })
 
+// Watch for changes to selectedMasterDex and persist to localStorage
+watch(selectedMasterDex, (newVal) => {
+  if (isDexInitialized.value) {
+    saveSelectedMasterDex(newVal)
+  }
+})
+
+// Change Master DEX
+const handleMasterDexChange = (newMaster) => {
+  selectedMasterDex.value = newMaster
+  if (newMaster !== 'None' && !selectedDexes.value.includes(newMaster)) {
+    selectedDexes.value.push(newMaster)
+  }
+}
+
 // Toggle DEX selection - simple add/remove
 const toggleDex = (dex) => {
   const index = selectedDexes.value.indexOf(dex)
@@ -341,6 +389,9 @@ const toggleDex = (dex) => {
     selectedDexes.value.push(dex)
   } else {
     selectedDexes.value.splice(index, 1)
+    if (selectedMasterDex.value === dex) {
+      selectedMasterDex.value = 'None'
+    }
   }
 }
 
@@ -362,6 +413,7 @@ const selectAllDexes = () => {
 // Deselect all DEXes
 const deselectAllDexes = () => {
   selectedDexes.value = []
+  selectedMasterDex.value = 'None'
 }
 
 // Toggle sort on column click
@@ -382,44 +434,96 @@ const getSortState = (column) => {
   return sortDirection.value
 }
 
-// Calculate best arbitrage routes from raw rates based on selected DEXes
+// Calculate best arbitrage routes from raw rates based on selected DEXes & master DEX
 // When includeNegativeSpreads is true (historical mode), we include all spreads to show true averages
-const calculateOpportunitiesFromRates = (rates, selectedDexList, includeNegativeSpreads = false) => {
+const calculateOpportunitiesFromRates = (rates, selectedDexList, includeNegativeSpreads = false, masterDex = 'None') => {
   if (!rates || rates.length === 0 || selectedDexList.length < 2) return []
   
+  const isMasterActive = masterDex && masterDex !== 'None' && masterDex !== 'All'
+
   return rates.map(item => {
     // Filter to only selected DEXes
     const filteredRates = item.rates.filter(r => selectedDexList.includes(r.dex))
     
     if (filteredRates.length < 2) return null
     
-    // Find best long (lowest rate) and best short (highest rate)
-    const bestLong = filteredRates.reduce((a, b) => 
-      parseFloat(a.rateAnnual) < parseFloat(b.rateAnnual) ? a : b
-    )
-    const bestShort = filteredRates.reduce((a, b) => 
-      parseFloat(a.rateAnnual) > parseFloat(b.rateAnnual) ? a : b
-    )
-    
-    // Skip if same DEX
-    if (bestLong.dex === bestShort.dex) return null
-    
-    const longRate = parseFloat(bestLong.rateAnnual)
-    const shortRate = parseFloat(bestShort.rateAnnual)
-    const spread = shortRate - longRate
-    
-    // For live data: only show positive spreads (exploitable opportunities)
-    // For historical data: include all spreads to show true average performance
-    if (!includeNegativeSpreads && spread <= 0) return null
-    
-    return {
-      symbol: item.symbol,
-      longDex: bestLong.dex,
-      shortDex: bestShort.dex,
-      longRate: longRate,
-      shortRate: shortRate,
-      spread: spread,
-      projectedDailyReturn: spread / 365
+    if (!isMasterActive) {
+      // Standard mode: find best long (lowest rate) and best short (highest rate)
+      const bestLong = filteredRates.reduce((a, b) => 
+        parseFloat(a.rateAnnual) < parseFloat(b.rateAnnual) ? a : b
+      )
+      const bestShort = filteredRates.reduce((a, b) => 
+        parseFloat(a.rateAnnual) > parseFloat(b.rateAnnual) ? a : b
+      )
+      
+      // Skip if same DEX
+      if (bestLong.dex === bestShort.dex) return null
+      
+      const longRate = parseFloat(bestLong.rateAnnual)
+      const shortRate = parseFloat(bestShort.rateAnnual)
+      const spread = shortRate - longRate
+      
+      if (!includeNegativeSpreads && spread <= 0) return null
+      
+      return {
+        symbol: item.symbol,
+        longDex: bestLong.dex,
+        shortDex: bestShort.dex,
+        longRate: longRate,
+        shortRate: shortRate,
+        spread: spread,
+        projectedDailyReturn: spread / 365
+      }
+    } else {
+      // Master DEX active: masterDex MUST be one side of the arbitrage (long or short)
+      const masterRateObj = filteredRates.find(r => r.dex === masterDex)
+      if (!masterRateObj) return null // Master DEX rates not present for this symbol
+
+      const masterRate = parseFloat(masterRateObj.rateAnnual)
+      const otherRates = filteredRates.filter(r => r.dex !== masterDex)
+      if (otherRates.length === 0) return null
+
+      let bestOpp = null
+
+      for (const other of otherRates) {
+        const otherRate = parseFloat(other.rateAnnual)
+
+        // Case A: masterDex is Long, other is Short
+        const spreadMasterLong = otherRate - masterRate
+        // Case B: masterDex is Short, other is Long
+        const spreadMasterShort = masterRate - otherRate
+
+        let bestSpreadForOther, longDex, shortDex, longRate, shortRate
+        if (spreadMasterLong >= spreadMasterShort) {
+          bestSpreadForOther = spreadMasterLong
+          longDex = masterDex
+          shortDex = other.dex
+          longRate = masterRate
+          shortRate = otherRate
+        } else {
+          bestSpreadForOther = spreadMasterShort
+          longDex = other.dex
+          shortDex = masterDex
+          longRate = otherRate
+          shortRate = masterRate
+        }
+
+        if (!includeNegativeSpreads && bestSpreadForOther <= 0) continue
+
+        if (!bestOpp || bestSpreadForOther > bestOpp.spread) {
+          bestOpp = {
+            symbol: item.symbol,
+            longDex: longDex,
+            shortDex: shortDex,
+            longRate: longRate,
+            shortRate: shortRate,
+            spread: bestSpreadForOther,
+            projectedDailyReturn: bestSpreadForOther / 365
+          }
+        }
+      }
+
+      return bestOpp
     }
   }).filter(Boolean)
 }
@@ -433,7 +537,7 @@ const computedOpportunities = computed(() => {
   }
   // Include negative spreads when viewing historical data
   const isHistoricalMode = historicalRatesOverride.value !== null
-  return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value, isHistoricalMode)
+  return calculateOpportunitiesFromRates(rawRates.value, selectedDexes.value, isHistoricalMode, selectedMasterDex.value)
 })
 
 // Filter opportunities based on search query
@@ -769,15 +873,20 @@ onUnmounted(() => {
                   'flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-md sm:rounded-lg border transition-all',
                   !hasEnoughDexes
                     ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                    : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
+                    : selectedMasterDex !== 'None'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white'
                 ]"
               >
                 <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                 </svg>
                 <span class="hidden sm:inline">DEX Filter</span>
+                <span v-if="selectedMasterDex !== 'None'" class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center gap-1">
+                  <span>★</span> {{ selectedMasterDex }}
+                </span>
                 <span
-                  v-if="selectedDexes.length !== availableDexes.length"
+                  v-else-if="selectedDexes.length !== availableDexes.length"
                   :class="[
                     'text-[10px] px-1.5 py-0.5 rounded-full',
                     hasEnoughDexes ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
@@ -793,18 +902,46 @@ onUnmounted(() => {
               <!-- Dropdown Panel -->
               <div
                 v-if="showDexFilter"
-                class="absolute right-0 top-full mt-2 w-56 bg-neutral-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden"
+                class="absolute right-0 top-full mt-2 w-60 bg-neutral-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
               >
+                <!-- Master DEX Selector Section -->
+                <div class="p-3 border-b border-white/10 bg-white/[0.02]">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-[11px] font-semibold text-neutral-300 flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                      </svg>
+                      DEX Maître (Obligatoire)
+                    </label>
+                    <span v-if="selectedMasterDex !== 'None'" class="text-[9px] text-amber-400 font-medium bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+                      Actif
+                    </span>
+                  </div>
+                  <select
+                    :value="selectedMasterDex"
+                    @change="handleMasterDexChange($event.target.value)"
+                    class="w-full px-2.5 py-1.5 bg-neutral-950 border border-white/15 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500/50 cursor-pointer"
+                  >
+                    <option value="None" class="bg-neutral-900 text-neutral-300">Aucun (Tous les DEX)</option>
+                    <option v-for="dex in availableDexes" :key="'master-' + dex" :value="dex" class="bg-neutral-900 text-white">
+                      ★ {{ dex }}
+                    </option>
+                  </select>
+                  <p class="text-[10px] text-neutral-500 mt-1 leading-tight">
+                    Chaque opportunité inclura obligatoirement ce DEX.
+                  </p>
+                </div>
+
                 <div class="p-2 border-b border-white/5 flex gap-2">
                   <button
                     @click="selectAllDexes"
-                    class="flex-1 px-3 py-2 text-xs text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    class="flex-1 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                   >
                     Select All
                   </button>
                   <button
                     @click="deselectAllDexes"
-                    class="flex-1 px-3 py-2 text-xs text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    class="flex-1 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                   >
                     Deselect All
                   </button>
@@ -943,7 +1080,7 @@ onUnmounted(() => {
           <p class="text-neutral-500 text-xs sm:text-sm">No results found</p>
           <p class="text-neutral-600 text-[10px] sm:text-xs mt-1">Try another ticker or adjust DEX filters</p>
           <button
-            @click="searchQuery = ''; selectAllDexes(); handleSearch()"
+            @click="searchQuery = ''; selectedMasterDex = 'None'; selectAllDexes(); handleSearch()"
             class="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-emerald-400 border border-emerald-500/30 rounded-md sm:rounded-lg hover:bg-emerald-500/10 transition-colors"
           >
             Reset Filters
