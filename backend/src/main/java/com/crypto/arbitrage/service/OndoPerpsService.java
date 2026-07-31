@@ -42,8 +42,9 @@ public class OndoPerpsService {
     private final WebClient.Builder webClientBuilder;
 
     private static final String DEX_NAME = "Ondo Perps";
-    private static final int FUNDING_INTERVAL_HOURS = 3;
-    private static final int PERIODS_PER_DAY = 8; // 24 / 3
+    /** Ondo settles funding every hour (history timestamps are hourly). */
+    private static final int FUNDING_INTERVAL_HOURS = 1;
+    private static final int PERIODS_PER_DAY = 24;
 
     /**
      * Fetches the current funding rate for a normalized symbol and saves it.
@@ -203,21 +204,19 @@ public class OndoPerpsService {
 
     private FundingRate parseFundingRate(JsonNode result, Dex dex, String normalizedSymbol) {
         try {
-            // rate from API = funding rate for the 3h interval
-            BigDecimal rateApi = new BigDecimal(result.get("rate").asText());
+            // API `rate` is the hourly funding rate as a decimal
+            // (matches UI: 0.0000063 → 0.00063%/h → 5.5188% annual).
+            // History confirms settlements every hour, not every 3h.
+            BigDecimal rateHourly = new BigDecimal(result.get("rate").asText());
 
-            // Hourly rate = rate_api / 3
-            BigDecimal rateHourly = rateApi.divide(BigDecimal.valueOf(FUNDING_INTERVAL_HOURS), 12, RoundingMode.HALF_UP);
-
-            // Rate 8h % = rate_api * (8/3) * 100
-            BigDecimal rate8h = rateApi
+            // Rate 8h % = hourly * 8 * 100
+            BigDecimal rate8h = rateHourly
                     .multiply(BigDecimal.valueOf(8))
-                    .divide(BigDecimal.valueOf(FUNDING_INTERVAL_HOURS), 12, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(6, RoundingMode.HALF_UP);
 
-            // Annualized % = rate_api * 8 * 365 * 100
-            BigDecimal rateAnnual = rateApi
+            // Annualized % = hourly * 24 * 365 * 100
+            BigDecimal rateAnnual = rateHourly
                     .multiply(BigDecimal.valueOf(PERIODS_PER_DAY * 365L))
                     .multiply(BigDecimal.valueOf(100))
                     .setScale(2, RoundingMode.HALF_UP);
@@ -228,7 +227,6 @@ public class OndoPerpsService {
             if (result.has("intervalEnds") && !result.get("intervalEnds").isNull()) {
                 try {
                     Instant ends = Instant.parse(result.get("intervalEnds").asText());
-                    // Use interval start ≈ intervalEnds - 3h as the funding period timestamp
                     timestamp = LocalDateTime.ofInstant(
                             ends.minusSeconds(FUNDING_INTERVAL_HOURS * 3600L),
                             ZoneId.systemDefault());

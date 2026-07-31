@@ -9,7 +9,7 @@ INSERT INTO dex (name, base_url, funding_interval_hours, active, color, trade_ur
 SELECT
     'Ondo Perps',
     'https://api.ondoperps.xyz',
-    3,  -- 8 funding intervals per day = every 3 hours
+    1,  -- Funding settles hourly (API rate is per hour)
     true,
     '#0052FF',  -- Ondo brand blue
     'https://app.ondoperps.xyz/trade/perps/{BASE}-USD.P',
