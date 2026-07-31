@@ -8,11 +8,12 @@ on:
       - 'backend/**'
       - 'docker-compose.prod.yml'
       - 'nginx/**'
+      - 'scripts/deploy-prod.sh'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
-# Prevent parallel deploys from racing on the same droplet
-# (compose rename leftovers → container name conflicts → SSH step failure).
+# Queue deploys so only one Actions job targets the droplet at a time.
+# Pair with scripts/deploy-prod.sh flock for races with manual SSH deploys.
 concurrency:
   group: deploy-droplet
   cancel-in-progress: false
@@ -27,9 +28,10 @@ jobs:
           host: ${{ secrets.DROPLET_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 25m
+          # Cold Nuxt+Maven builds on the 1-vCPU droplet routinely exceed 20–25m.
+          command_timeout: 45m
           script: |
-            set -e
+            set -euo pipefail
             cd /root/crypto-arbitrage
             echo "=== git remote / HEAD before pull ==="
             git remote -v | sed -E 's#https://[^@]+@#https://***@#g'
@@ -39,31 +41,5 @@ jobs:
             echo "=== HEAD after sync ==="
             git rev-parse HEAD
             git log -1 --oneline
-
-            # Keep production HTTPS config in sync with the tracked template.
-            if [ -f nginx/conf.d/default.conf.template ]; then
-              cp nginx/conf.d/default.conf.template nginx/conf.d/default.conf
-            fi
-            # SSL bootstrap file must not load alongside default.conf (port 80 clash).
-            rm -f nginx/conf.d/init.conf
-
-            compose() {
-              docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"
-            }
-
-            if ! compose up -d --build --remove-orphans; then
-              echo "=== compose failed — cleaning rename leftovers and retrying ==="
-              docker ps -a --format '{{.Names}}' | grep -E '^[a-f0-9]+_crypto-' | xargs -r docker rm -f
-              compose up -d --build --remove-orphans
-            fi
-
-            # Reload nginx so conf + upstream DNS refresh after recreates.
-            if ! docker exec crypto-nginx nginx -t || ! docker exec crypto-nginx nginx -s reload; then
-              echo "=== nginx reload failed — force recreating nginx ==="
-              compose up -d --force-recreate nginx
-            fi
-
-            docker image prune -f
-            echo "=== containers ==="
-            compose ps
-            echo "✅ Déploiement terminé !"
+            chmod +x scripts/deploy-prod.sh
+            ./scripts/deploy-prod.sh
