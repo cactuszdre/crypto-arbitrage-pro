@@ -1,4 +1,3 @@
-# Trigger CI deployment test - SSH key updated
 name: Deploy to Droplet
 
 on:
@@ -12,6 +11,12 @@ on:
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
+# Prevent parallel deploys from racing on the same droplet
+# (compose rename leftovers → container name conflicts → SSH step failure).
+concurrency:
+  group: deploy-droplet
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -22,20 +27,43 @@ jobs:
           host: ${{ secrets.DROPLET_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 20m
+          command_timeout: 25m
           script: |
             set -e
             cd /root/crypto-arbitrage
             echo "=== git remote / HEAD before pull ==="
-            git remote -v
+            git remote -v | sed -E 's#https://[^@]+@#https://***@#g'
             git rev-parse HEAD || true
             git fetch origin main
             git reset --hard origin/main
             echo "=== HEAD after sync ==="
             git rev-parse HEAD
             git log -1 --oneline
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+
+            # Keep production HTTPS config in sync with the tracked template.
+            if [ -f nginx/conf.d/default.conf.template ]; then
+              cp nginx/conf.d/default.conf.template nginx/conf.d/default.conf
+            fi
+            # SSL bootstrap file must not load alongside default.conf (port 80 clash).
+            rm -f nginx/conf.d/init.conf
+
+            compose() {
+              docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"
+            }
+
+            if ! compose up -d --build --remove-orphans; then
+              echo "=== compose failed — cleaning rename leftovers and retrying ==="
+              docker ps -a --format '{{.Names}}' | grep -E '^[a-f0-9]+_crypto-' | xargs -r docker rm -f
+              compose up -d --build --remove-orphans
+            fi
+
+            # Reload nginx so conf + upstream DNS refresh after recreates.
+            if ! docker exec crypto-nginx nginx -t || ! docker exec crypto-nginx nginx -s reload; then
+              echo "=== nginx reload failed — force recreating nginx ==="
+              compose up -d --force-recreate nginx
+            fi
+
             docker image prune -f
             echo "=== containers ==="
-            docker compose -f docker-compose.prod.yml ps
+            compose ps
             echo "✅ Déploiement terminé !"

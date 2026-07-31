@@ -28,14 +28,47 @@ useHead({
 // Live rates + DEX list load client-side only to avoid nginx/gateway SSR timeouts
 // when the backend is slow or restarting after deploy.
 
-const { data: rawRatesData, pending: isLoadingRates, refresh: refreshRates } = useFetch('/api/opportunites/rates', {
+// Keep last successful rates so a failed refresh (502 / timeout) does not wipe the UI.
+const lastGoodRates = ref([])
+const ratesRefreshError = ref(null)
+
+const { data: rawRatesData, pending: isLoadingRates, error: ratesFetchError, refresh: refreshRates } = useFetch('/api/opportunites/rates', {
   key: 'arbitrage-rates',
   lazy: true,
   server: false,
   default: () => [],
-  dedupe: 'cancel', // Cancel previous request if a new refresh is triggered
-  timeout: 15000
+  dedupe: 'defer', // Don't cancel in-flight refreshes — avoids racing away good data
+  timeout: 15000,
+  // Preserve previous data when the request fails (Nuxt clears data on error by default)
+  onResponse({ response }) {
+    const body = response._data
+    if (response.ok && Array.isArray(body) && body.length > 0) {
+      lastGoodRates.value = body
+      ratesRefreshError.value = null
+    }
+  },
+  onResponseError({ response }) {
+    ratesRefreshError.value = response?.status
+      ? `Rates refresh failed (${response.status})`
+      : 'Rates refresh failed'
+  },
+  onRequestError() {
+    ratesRefreshError.value = 'Rates refresh failed (network)'
+  }
 })
+
+watch(ratesFetchError, (err) => {
+  if (err) {
+    ratesRefreshError.value = err.message || 'Rates refresh failed'
+  }
+})
+
+watch(rawRatesData, (val) => {
+  if (Array.isArray(val) && val.length > 0) {
+    lastGoodRates.value = val
+    ratesRefreshError.value = null
+  }
+}, { immediate: true })
 
 // DEX list (static, rarely changes)
 const { data: dexList } = useFetch('/api/dex', {
@@ -113,15 +146,26 @@ const route = useRoute()
 const router = useRouter()
 
 // Navigate to Asset Details page with crypto and DEX info
+const assetDetailsPath = (opp) => ({
+  path: '/asset',
+  query: {
+    symbol: opp.symbol,
+    longDex: opp.longDex,
+    shortDex: opp.shortDex
+  }
+})
+
 const navigateToAssetDetails = (opp) => {
-  router.push({
-    path: '/asset',
-    query: {
-      symbol: opp.symbol,
-      longDex: opp.longDex,
-      shortDex: opp.shortDex
-    }
-  })
+  router.push(assetDetailsPath(opp))
+}
+
+// Middle-click / auxclick → open asset details in a new tab
+const openAssetDetailsInNewTab = (event, opp) => {
+  // Only handle middle button (button === 1); ignore right-click
+  if (event?.button != null && event.button !== 1) return
+  event?.preventDefault?.()
+  const resolved = router.resolve(assetDetailsPath(opp))
+  window.open(resolved.href, '_blank', 'noopener,noreferrer')
 }
 
 
@@ -133,12 +177,20 @@ const isPro = computed(() => authState.user?.plan === 'PRO' || authState.user?.r
 // Historical data override (when viewing historical periods)
 const historicalRatesOverride = ref(null) // null = use SSR data, array = use historical
 
-// Combine SSR data with historical override
+// Combine live/historical data; on refresh failure prefer last good rates over empty
 const rawRates = computed(() => {
   if (historicalRatesOverride.value !== null) {
     return historicalRatesOverride.value
   }
-  return rawRatesData.value || []
+  const current = rawRatesData.value
+  if (Array.isArray(current) && current.length > 0) {
+    return current
+  }
+  // Failed refresh or empty 200: keep showing last successful payload
+  if (lastGoodRates.value.length > 0) {
+    return lastGoodRates.value
+  }
+  return current || []
 })
 
 const opportunities = ref([]) // Legacy fallback
@@ -699,11 +751,18 @@ const formatRate = (rate) => {
   return { value: formatted, class: 'text-neutral-400' }
 }
 
-// Refresh opportunities using Nuxt's useFetch refresh
+// Refresh opportunities using Nuxt's useFetch refresh.
+// On failure, lastGoodRates keeps the table populated (see rawRates computed).
 const fetchOpportunities = async (silent = false) => {
-  // With useFetch, we just call refresh() to update the data
-  // The rawRates computed property will automatically update
-  await refreshRates()
+  try {
+    await refreshRates()
+  } catch (e) {
+    // useFetch may throw on hard failures; keep previous data and surface soft error
+    if (!silent) {
+      console.warn('[Opportunities] refresh failed, keeping previous rates', e)
+    }
+    ratesRefreshError.value = e?.message || 'Rates refresh failed'
+  }
 }
 
 // Apply historical data from SSR preload
@@ -1009,6 +1068,24 @@ onUnmounted(() => {
                     </label>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Soft refresh error: keep showing last good data -->
+          <div
+            v-if="ratesRefreshError && selectedPeriod === 'current' && lastGoodRates.length > 0"
+            class="mt-3 sm:mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20"
+          >
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs text-amber-400">
+                  Live refresh temporarily unavailable — showing last known rates
+                </p>
+                <p class="text-[10px] text-neutral-500 truncate">{{ ratesRefreshError }}</p>
               </div>
             </div>
           </div>

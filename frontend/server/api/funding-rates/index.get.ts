@@ -7,10 +7,24 @@ export default defineCachedEventHandler(async (): Promise<unknown[]> => {
     const backendUrl = getBackendUrl()
 
     try {
-        return await $fetch(`${backendUrl}/api/funding-rates`)
+        const data = await $fetch<unknown[]>(`${backendUrl}/api/funding-rates`)
+        if (!Array.isArray(data)) {
+            throw createError({
+                statusCode: 502,
+                statusMessage: 'Invalid funding-rates payload from backend'
+            })
+        }
+        return data
     } catch (error: unknown) {
         console.error('[API] funding-rates error:', error)
-        return []
+        const err = error as { statusCode?: number; statusMessage?: string; message?: string }
+        if (err?.statusCode && err.statusCode >= 400) {
+            throw error
+        }
+        throw createError({
+            statusCode: 502,
+            statusMessage: err?.statusMessage || err?.message || 'Failed to fetch funding rates from backend'
+        })
     }
 }, {
     maxAge: 30,

@@ -38,11 +38,21 @@ useHead({
   ]
 })
 
-// SSR Data fetching
+// Keep last good rates across failed refreshes (same endpoint can 502 during deploys)
+const lastGoodRates = ref([])
 const { data: rawRatesData, refresh: refreshRates } = await useFetch('/api/opportunites/rates', {
   key: 'overview-rates',
-  default: () => []
+  default: () => [],
+  onResponse({ response }) {
+    const body = response._data
+    if (response.ok && Array.isArray(body) && body.length > 0) {
+      lastGoodRates.value = body
+    }
+  }
 })
+watch(rawRatesData, (val) => {
+  if (Array.isArray(val) && val.length > 0) lastGoodRates.value = val
+}, { immediate: true })
 
 const { data: symbolsData } = await useFetch('/api/funding-rates/symbols', {
   key: 'overview-symbols',
@@ -64,8 +74,13 @@ const props = defineProps({
 const route = useRoute()
 const router = useRouter()
 
-// Computed data from SSR fetch
-const rawRates = computed(() => rawRatesData.value || [])
+// Computed data from SSR fetch — prefer last good rates if refresh returns empty/fails
+const rawRates = computed(() => {
+  const current = rawRatesData.value
+  if (Array.isArray(current) && current.length > 0) return current
+  if (lastGoodRates.value.length > 0) return lastGoodRates.value
+  return current || []
+})
 const symbols = computed(() => symbolsData.value || [])
 const availableDexes = computed(() => {
   if (!dexListData.value) return []
