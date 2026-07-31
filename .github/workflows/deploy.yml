@@ -1,4 +1,4 @@
-# Trigger CI test deployment
+# Trigger CI deployment test - SSH key updated
 name: Deploy to Droplet
 
 on:
