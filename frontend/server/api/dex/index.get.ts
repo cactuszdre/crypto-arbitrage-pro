@@ -6,7 +6,7 @@ export default defineEventHandler(async () => {
     const backendUrl = getBackendUrl()
 
     try {
-        return await $fetch(`${backendUrl}/api/dex`)
+        return await $fetch(`${backendUrl}/api/dex`, { timeout: 10000 })
     } catch (error: any) {
         console.error('[API] dex error:', error.message)
         // Return fallback DEX data so the app works without backend

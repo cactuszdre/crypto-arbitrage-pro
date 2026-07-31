@@ -7,7 +7,9 @@ export default defineCachedEventHandler(async (): Promise<unknown[]> => {
     const backendUrl = getBackendUrl()
 
     try {
-        return await $fetch(`${backendUrl}/api/arbitrage/rates/all`)
+        return await $fetch(`${backendUrl}/api/arbitrage/rates/all`, {
+            timeout: 12000
+        })
     } catch (error: unknown) {
         console.error('[API] arbitrage/rates error:', error)
         // Return empty array so the app doesn't crash

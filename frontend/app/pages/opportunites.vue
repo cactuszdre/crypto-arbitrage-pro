@@ -19,20 +19,26 @@ useHead({
   link: [{ rel: 'canonical', href: 'https://cactusfund.app/opportunites' }]
 })
 
-// ===== SSR DATA FETCHING =====
-// All data is preloaded server-side for instant display
+// ===== DATA FETCHING =====
+// Live rates + DEX list load client-side only to avoid nginx/gateway SSR timeouts
+// when the backend is slow or restarting after deploy.
 
-// Live rates (refreshed every 10s client-side)
-const { data: rawRatesData, pending: isLoadingRates, refresh: refreshRates } = await useFetch('/api/opportunites/rates', {
+const { data: rawRatesData, pending: isLoadingRates, refresh: refreshRates } = useFetch('/api/opportunites/rates', {
   key: 'arbitrage-rates',
+  lazy: true,
+  server: false,
   default: () => [],
-  dedupe: 'cancel' // Cancel previous request if a new refresh is triggered
+  dedupe: 'cancel', // Cancel previous request if a new refresh is triggered
+  timeout: 15000
 })
 
 // DEX list (static, rarely changes)
-const { data: dexList } = await useFetch('/api/dex', {
+const { data: dexList } = useFetch('/api/dex', {
   key: 'dex-list',
-  default: () => []
+  lazy: true,
+  server: false,
+  default: () => [],
+  timeout: 10000
 })
 
 // Historical data - loaded lazily (non-blocking SSR) to prevent gateway timeouts
