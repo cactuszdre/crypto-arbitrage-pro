@@ -233,9 +233,11 @@ const historicalMeta = ref(null) // { periodLabel, actualStartDate, actualEndDat
 // Cache for preloaded historical data (keyed by days)
 const historicalDataCache = new Map()
 
-// DEX filter - all DEXes selected by default
-const selectedDexes = ref([]) // Will be initialized with all DEXes on mount
+// DEX filter - persistent in localStorage
+const DEX_STORAGE_KEY = 'cactusfund_selected_dexes'
+const selectedDexes = ref([]) // Initialized with saved DEXes or all DEXes on mount
 const showDexFilter = ref(false)
+const isDexInitialized = ref(false)
 
 // Available DEXes from SSR fetch
 const availableDexes = computed(() => {
@@ -278,12 +280,59 @@ const dexConfigs = computed(() => {
   return configs
 })
 
+// Load saved DEXes from localStorage if available
+const loadSavedDexes = (validDexes) => {
+  if (!process.client) return null
+  try {
+    const saved = localStorage.getItem(DEX_STORAGE_KEY)
+    if (saved !== null) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((d) => validDexes.includes(d))
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load saved DEX selections:', e)
+  }
+  return null
+}
+
+// Save DEX selections to localStorage
+const saveSelectedDexes = (dexes) => {
+  if (!process.client) return
+  try {
+    localStorage.setItem(DEX_STORAGE_KEY, JSON.stringify(dexes))
+  } catch (e) {
+    console.error('Failed to save DEX selections:', e)
+  }
+}
+
+const initializeDexSelection = (dexes) => {
+  if (!dexes || dexes.length === 0) return
+  const saved = loadSavedDexes(dexes)
+  if (saved !== null) {
+    selectedDexes.value = saved
+  } else if (selectedDexes.value.length === 0) {
+    selectedDexes.value = [...dexes]
+  }
+  if (process.client) {
+    isDexInitialized.value = true
+  }
+}
+
 // Initialize selected DEXes when availableDexes loads
 watch(availableDexes, (newDexes) => {
-  if (selectedDexes.value.length === 0 && newDexes.length > 0) {
-    selectedDexes.value = [...newDexes]
+  if (newDexes.length > 0 && !isDexInitialized.value) {
+    initializeDexSelection(newDexes)
   }
 }, { immediate: true })
+
+// Watch for changes to selectedDexes and persist to localStorage
+watch(selectedDexes, (newVal) => {
+  if (isDexInitialized.value) {
+    saveSelectedDexes(newVal)
+  }
+}, { deep: true })
 
 // Toggle DEX selection - simple add/remove
 const toggleDex = (dex) => {
@@ -606,6 +655,11 @@ const stopAutoRefresh = () => {
 }
 
 onMounted(async () => {
+  // Restore saved DEX selection on client mount
+  if (availableDexes.value.length > 0) {
+    initializeDexSelection(availableDexes.value)
+  }
+  
   // DEX list is now loaded via SSR useFetch
   // Initialize search from URL query param
   if (route.query.search) {
