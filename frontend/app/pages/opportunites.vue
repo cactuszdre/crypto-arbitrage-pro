@@ -35,42 +35,54 @@ const { data: dexList } = await useFetch('/api/dex', {
   default: () => []
 })
 
-// Historical data - preloaded for all periods (changes only once per day)
+// Historical data - loaded lazily (non-blocking SSR) to prevent gateway timeouts
 // Using getCachedData to avoid refetching on client hydration
 const historicalPeriods = [1, 7, 30, 90, 180, 365]
 
-const { data: historical1d } = await useFetch('/api/opportunites/rates-history?days=1', {
+const { data: historical1d } = useFetch('/api/opportunites/rates-history?days=1', {
   key: 'historical-1d',
+  lazy: true,
+  server: false,
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical7d } = await useFetch('/api/opportunites/rates-history?days=7', {
+const { data: historical7d } = useFetch('/api/opportunites/rates-history?days=7', {
   key: 'historical-7d',
+  lazy: true,
+  server: false,
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical30d } = await useFetch('/api/opportunites/rates-history?days=30', {
+const { data: historical30d } = useFetch('/api/opportunites/rates-history?days=30', {
   key: 'historical-30d',
+  lazy: true,
+  server: false,
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical90d } = await useFetch('/api/opportunites/rates-history?days=90', {
+const { data: historical90d } = useFetch('/api/opportunites/rates-history?days=90', {
   key: 'historical-90d',
+  lazy: true,
+  server: false,
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical180d } = await useFetch('/api/opportunites/rates-history?days=180', {
+const { data: historical180d } = useFetch('/api/opportunites/rates-history?days=180', {
   key: 'historical-180d',
+  lazy: true,
+  server: false,
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
 
-const { data: historical365d } = await useFetch('/api/opportunites/rates-history?days=365', {
+const { data: historical365d } = useFetch('/api/opportunites/rates-history?days=365', {
   key: 'historical-365d',
+  lazy: true,
+  server: false,
   default: () => ({ symbols: [] }),
   getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
 })
