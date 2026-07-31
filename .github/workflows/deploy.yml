@@ -10,6 +10,7 @@ on:
       - 'docker-compose.prod.yml'
       - 'nginx/**'
       - '.github/workflows/deploy.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -23,8 +24,18 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 20m
           script: |
+            set -e
             cd /root/crypto-arbitrage
-            git pull origin main
+            echo "=== git remote / HEAD before pull ==="
+            git remote -v
+            git rev-parse HEAD || true
+            git fetch origin main
+            git reset --hard origin/main
+            echo "=== HEAD after sync ==="
+            git rev-parse HEAD
+            git log -1 --oneline
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
             docker image prune -f
+            echo "=== containers ==="
+            docker compose -f docker-compose.prod.yml ps
             echo "✅ Déploiement terminé !"

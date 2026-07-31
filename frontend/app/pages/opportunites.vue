@@ -6,6 +6,11 @@
 // import { executeParadexOrder } from '~/services/paradex'
 // import { executeLighterOrder } from '~/services/lighter'
 
+// Client-only: avoids nginx 504 when Nuxt SSR blocks on backend/data fetches
+definePageMeta({
+  ssr: false
+})
+
 // SEO
 useSeoMeta({
   title: 'Opportunities - CactusFund',
