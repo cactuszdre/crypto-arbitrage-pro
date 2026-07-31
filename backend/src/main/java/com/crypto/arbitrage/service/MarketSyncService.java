@@ -32,6 +32,7 @@ public class MarketSyncService {
     private final DexMarketRepository dexMarketRepository;
     private final TickerService tickerService;
     private final ParadexService paradexService; // Special case: has fetchAvailableSymbols
+    private final OndoPerpsService ondoPerpsService; // Special case: has fetchAvailableSymbols
     private final Map<String, DexFetcher> fetchersByName;
     private final LastFundingService lastFundingService;
 
@@ -40,12 +41,14 @@ public class MarketSyncService {
             DexMarketRepository dexMarketRepository,
             TickerService tickerService,
             ParadexService paradexService,
+            OndoPerpsService ondoPerpsService,
             List<DexFetcher> dexFetchers,
             LastFundingService lastFundingService) {
         this.dexRepository = dexRepository;
         this.dexMarketRepository = dexMarketRepository;
         this.tickerService = tickerService;
         this.paradexService = paradexService;
+        this.ondoPerpsService = ondoPerpsService;
         this.fetchersByName = dexFetchers.stream()
                 .collect(Collectors.toMap(DexFetcher::getDexName, Function.identity()));
         this.lastFundingService = lastFundingService;
@@ -80,9 +83,11 @@ public class MarketSyncService {
         String dexName = dex.getName();
         List<String> symbols;
         
-        // Special case: Paradex has explicit symbol list endpoint
+        // Special cases: per-market DEXes expose an explicit symbol list endpoint
         if ("Paradex".equals(dexName)) {
             symbols = paradexService.fetchAvailableSymbols();
+        } else if ("Ondo Perps".equals(dexName)) {
+            symbols = ondoPerpsService.fetchAvailableSymbols();
         } else {
             // For other DEXes, infer symbols from funding data
             DexFetcher fetcher = fetchersByName.get(dexName);
