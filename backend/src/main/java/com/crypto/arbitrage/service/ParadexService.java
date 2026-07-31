@@ -45,6 +45,15 @@ public class ParadexService {
     private volatile long lastMarketInfoLoadTime = 0;
     private static final long MARKET_INFO_REFRESH_INTERVAL_MS = 3600_000; // Refresh every hour
 
+    private WebClient paradexClient(String baseUrl) {
+        return webClientBuilder.clone()
+                .baseUrl(baseUrl)
+                .codecs(configurer -> configurer
+                        .defaultCodecs()
+                        .maxInMemorySize(16 * 1024 * 1024))
+                .build();
+    }
+
     /**
      * Loads market info from Paradex API and caches funding_period_hours for each symbol.
      * This is needed because different pairs have different funding periods.
@@ -60,7 +69,7 @@ public class ParadexService {
         String baseUrl = dex.getBaseUrl();
 
         try {
-            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+            WebClient webClient = paradexClient(baseUrl);
 
             JsonNode response = webClient.get()
                     .uri("/markets")
@@ -69,6 +78,8 @@ public class ParadexService {
                     .block();
 
             if (response == null || !response.has("results")) {
+                // Avoid retry storm when response is empty/invalid
+                lastMarketInfoLoadTime = System.currentTimeMillis();
                 return;
             }
 
@@ -86,6 +97,8 @@ public class ParadexService {
             log.debug("Loaded {} Paradex market funding periods", marketFundingPeriodCache.size());
 
         } catch (Exception e) {
+            // Prevent per-symbol retry storms when /markets exceeds buffer or fails
+            lastMarketInfoLoadTime = System.currentTimeMillis();
             log.error("Error loading Paradex market info: {}", e.getMessage());
         }
     }
@@ -123,7 +136,7 @@ public class ParadexService {
         int fundingPeriodHours = getFundingPeriodHours(symbol, baseUrl);
 
         try {
-            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+            WebClient webClient = paradexClient(baseUrl);
 
             JsonNode response = webClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -205,7 +218,7 @@ public class ParadexService {
         String baseUrl = dex.getBaseUrl();
 
         try {
-            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+            WebClient webClient = paradexClient(baseUrl);
 
             JsonNode response = webClient.get()
                     .uri("/markets")
@@ -246,7 +259,7 @@ public class ParadexService {
         String baseUrl = dex.getBaseUrl();
 
         try {
-            WebClient webClient = webClientBuilder.clone().baseUrl(baseUrl).build();
+            WebClient webClient = paradexClient(baseUrl);
 
             JsonNode response = webClient.get()
                     .uri("/bbo/" + symbol)

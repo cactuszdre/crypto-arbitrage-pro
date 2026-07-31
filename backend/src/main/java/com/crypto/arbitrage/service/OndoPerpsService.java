@@ -126,7 +126,12 @@ public class OndoPerpsService {
         Dex dex = dexOpt.get();
 
         try {
-            WebClient webClient = webClientBuilder.clone().baseUrl(dex.getBaseUrl()).build();
+            WebClient webClient = webClientBuilder.clone()
+                    .baseUrl(dex.getBaseUrl())
+                    .codecs(configurer -> configurer
+                            .defaultCodecs()
+                            .maxInMemorySize(16 * 1024 * 1024))
+                    .build();
 
             JsonNode response = webClient.get()
                     .uri("/v1/markets")
