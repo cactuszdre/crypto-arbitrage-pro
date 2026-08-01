@@ -1,7 +1,14 @@
 package com.crypto.arbitrage.service;
 
+import com.crypto.arbitrage.funding.FundingModel;
+import com.crypto.arbitrage.funding.FundingRateNormalizer;
+import com.crypto.arbitrage.funding.FundingRateUnit;
+import com.crypto.arbitrage.funding.MarketScheduleSnapshot;
+import com.crypto.arbitrage.funding.NormalizedFundingRate;
+import com.crypto.arbitrage.funding.SettledFundingProvider;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.FundingSettlement;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
@@ -12,23 +19,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Service for fetching funding rates from Extended.exchange (X10)
- * API Documentation: https://docs.extended.exchange/
- * 
- * Extended uses the /api/v1/info/markets endpoint which contains
- * funding rates in marketStats.fundingRate for each market.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ExtendedService implements DexFetcher {
+public class ExtendedService implements DexFetcher, SettledFundingProvider {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
@@ -45,6 +46,11 @@ public class ExtendedService implements DexFetcher {
     }
 
     @Override
+    public FundingModel getFundingModel() {
+        return FundingModel.DISCRETE_TWAP;
+    }
+
+    @Override
     public List<FundingRate> fetchFundingData() {
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
@@ -53,120 +59,177 @@ public class ExtendedService implements DexFetcher {
         }
 
         Dex dex = dexOpt.get();
-        String baseUrl = dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty()
-                ? dex.getBaseUrl()
-                : DEFAULT_BASE_URL;
+        String baseUrl = resolveBaseUrl(dex);
 
         try {
-            // Configure WebClient with larger buffer for Extended's large response
             WebClient webClient = webClientBuilder.clone()
                     .baseUrl(baseUrl)
-                    .codecs(configurer -> configurer
-                            .defaultCodecs()
-                            .maxInMemorySize(16 * 1024 * 1024)) // 16MB buffer
+                    .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
                     .build();
 
-            // Extended uses /api/v1/info/markets which returns all markets with funding
-            // info
             JsonNode response = webClient.get()
                     .uri("/api/v1/info/markets")
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
 
-            if (response == null || !response.has("data")) {
+            if (response == null || !response.has("data") || !response.get("data").isArray()) {
                 log.warn("Empty or invalid response from Extended");
-                return List.of();
-            }
-
-            JsonNode marketsNode = response.get("data");
-            if (!marketsNode.isArray()) {
-                log.warn("Invalid response format from Extended (expected data array)");
                 return List.of();
             }
 
             List<FundingRate> rates = new ArrayList<>();
             LocalDateTime now = LocalDateTime.now();
 
-            for (JsonNode market : marketsNode) {
+            for (JsonNode market : response.get("data")) {
                 FundingRate rate = parseMarketFundingRate(market, dex, now);
                 if (rate != null) {
                     rates.add(rate);
                 }
             }
 
-            // Save all fetched rates
             if (!rates.isEmpty()) {
                 fundingRateRepository.saveAll(rates);
                 lastFundingService.upsertAll(rates);
             }
-
             return rates;
-
         } catch (Exception e) {
             log.error("Error fetching funding data from Extended: {}", e.getMessage());
             return List.of();
         }
     }
 
+    @Override
+    public List<FundingSettlement> fetchSettledHistory(String normalizedSymbol, Instant from, Instant to) {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isEmpty()) {
+            return List.of();
+        }
+        Dex dex = dexOpt.get();
+        String market = toApiMarket(normalizedSymbol);
+        Instant end = to != null ? to : Instant.now();
+
+        try {
+            WebClient webClient = webClientBuilder.clone()
+                    .baseUrl(resolveBaseUrl(dex))
+                    .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+                    .build();
+
+            JsonNode response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/v1/info/" + market + "/funding")
+                            .queryParam("startTime", from.toEpochMilli())
+                            .queryParam("endTime", end.toEpochMilli())
+                            .queryParam("limit", 1000)
+                            .build())
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            if (response == null || !response.has("data") || !response.get("data").isArray()) {
+                return List.of();
+            }
+
+            Ticker ticker = tickerService.getOrCreate(normalizedSymbol);
+            List<FundingSettlement> out = new ArrayList<>();
+
+            for (JsonNode node : response.get("data")) {
+                if (!node.has("f") || !node.has("T")) {
+                    continue;
+                }
+                long timeMs = node.get("T").asLong();
+                Instant paidAt = Instant.ofEpochMilli(timeMs);
+                if (paidAt.isBefore(from) || !paidAt.isBefore(end)) {
+                    continue;
+                }
+                BigDecimal hourly = new BigDecimal(node.get("f").asText());
+                LocalDateTime settlementTime = LocalDateTime.ofInstant(paidAt, ZoneOffset.UTC)
+                        .withMinute(0).withSecond(0).withNano(0);
+
+                out.add(FundingSettlementService.buildFromHourly(
+                        dex, ticker, settlementTime, 1, hourly,
+                        "extended_funding_history", null, null));
+            }
+            return out;
+        } catch (Exception e) {
+            log.error("Extended funding history failed for {}: {}", normalizedSymbol, e.getMessage());
+            return List.of();
+        }
+    }
+
+    @Override
+    public Optional<MarketScheduleSnapshot> fetchSchedule(String normalizedSymbol) {
+        return Optional.of(MarketScheduleSnapshot.builder()
+                .intervalHours(1)
+                .nextFundingTime(FundingSettlementService.nextHourUtc(
+                        LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC)))
+                .continuous(false)
+                .build());
+    }
+
     private FundingRate parseMarketFundingRate(JsonNode market, Dex dex, LocalDateTime timestamp) {
         try {
-            // Market structure:
-            // { "name": "BTC-USD", "marketStats": { "fundingRate": "-0.000018", ... }, ...
-            // }
-
             if (!market.has("name") || !market.has("marketStats")) {
                 return null;
             }
-
-            String marketName = market.get("name").asText(); // e.g., "BTC-USD"
+            String marketName = market.get("name").asText();
             JsonNode stats = market.get("marketStats");
-
             if (!stats.has("fundingRate")) {
                 return null;
             }
 
             String fundingRateStr = stats.get("fundingRate").asText();
-
-            // Skip invalid rates
-            if (fundingRateStr == null || fundingRateStr.isEmpty() ||
-                    "nan".equalsIgnoreCase(fundingRateStr) || "null".equalsIgnoreCase(fundingRateStr)) {
+            if (fundingRateStr == null || fundingRateStr.isEmpty()
+                    || "nan".equalsIgnoreCase(fundingRateStr) || "null".equalsIgnoreCase(fundingRateStr)) {
                 return null;
             }
 
-            // Normalize symbol to standard format (e.g., BTC-USD-PERP)
             String symbol = marketName.endsWith("-PERP") ? marketName : marketName + "-PERP";
-
-            // Get or create ticker
             Ticker ticker = tickerService.getOrCreate(symbol);
+            NormalizedFundingRate n = FundingRateNormalizer.normalize(
+                    new BigDecimal(fundingRateStr), FundingRateUnit.HOURLY, 1);
 
-            // Parse funding rate (Extended returns hourly rate as decimal)
-            BigDecimal rate = new BigDecimal(fundingRateStr);
-
-            // Extended funding is hourly, so:
-            // Rate 8h % = rate * 8 * 100
-            BigDecimal rate8h = rate.multiply(BigDecimal.valueOf(8))
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(6, RoundingMode.HALF_UP);
-
-            // Annual Rate % = rate * 24 * 365 * 100
-            BigDecimal rateAnnual = rate.multiply(BigDecimal.valueOf(24 * 365))
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(2, RoundingMode.HALF_UP);
+            LocalDateTime nextFunding = null;
+            if (stats.has("nextFundingRate") && !stats.get("nextFundingRate").isNull()) {
+                try {
+                    long ms = stats.get("nextFundingRate").asLong();
+                    nextFunding = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneOffset.UTC);
+                } catch (Exception ignored) {
+                    // fall through
+                }
+            }
+            if (nextFunding == null) {
+                nextFunding = FundingSettlementService.nextHourUtc(
+                        LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC));
+            }
 
             return FundingRate.builder()
                     .dex(dex)
                     .ticker(ticker)
-                    .rate(rate)
-                    .rate8h(rate8h)
-                    .rateAnnual(rateAnnual)
-                    .intervalHours(1) // Extended has hourly funding
+                    .rate(n.getHourly())
+                    .rate8h(n.getRate8hPercent())
+                    .rateAnnual(n.getRateAnnualPercent())
+                    .intervalHours(1)
+                    .nextFundingTime(nextFunding)
                     .timestamp(timestamp)
                     .build();
-
         } catch (Exception e) {
             log.debug("Error parsing Extended market: {}", e.getMessage());
             return null;
         }
+    }
+
+    private String resolveBaseUrl(Dex dex) {
+        return dex.getBaseUrl() != null && !dex.getBaseUrl().isEmpty() ? dex.getBaseUrl() : DEFAULT_BASE_URL;
+    }
+
+    static String toApiMarket(String normalizedSymbol) {
+        if (normalizedSymbol == null) {
+            return null;
+        }
+        if (normalizedSymbol.endsWith("-PERP")) {
+            return normalizedSymbol.substring(0, normalizedSymbol.length() - 5);
+        }
+        return normalizedSymbol;
     }
 }

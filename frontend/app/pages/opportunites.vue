@@ -547,7 +547,10 @@ const calculateOpportunitiesFromRates = (rates, selectedDexList, includeNegative
         longRate: longRate,
         shortRate: shortRate,
         spread: spread,
-        projectedDailyReturn: spread / 365
+        projectedDailyReturn: spread / 365,
+        rateKind: 'PREDICTED',
+        longNextFundingTime: bestLong.nextFundingTime || null,
+        shortNextFundingTime: bestShort.nextFundingTime || null
       }
     } else {
       // Master DEX active: masterDex MUST be one side of the arbitrage (long or short)
@@ -1316,6 +1319,10 @@ onUnmounted(() => {
 
             <!-- Rates -->
             <div class="relative grid grid-cols-2 gap-2">
+              <div class="col-span-2 flex items-center gap-2 mb-0.5">
+                <span class="text-[9px] uppercase tracking-wider text-amber-400/90 bg-amber-500/10 ring-1 ring-amber-500/20 px-1.5 py-0.5 rounded">est.</span>
+                <span class="text-[9px] text-neutral-500">Upcoming funding (not settled print)</span>
+              </div>
               <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
                 <p class="text-[9px] text-neutral-500 uppercase tracking-wider mb-1">Long Rate</p>
                 <p :class="['text-sm font-semibold', formatRate(opp.longRate).class]">

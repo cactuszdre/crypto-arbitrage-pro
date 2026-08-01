@@ -16,4 +16,10 @@ public class ArbitrageOpportunityDTO {
     private BigDecimal spread;
     private BigDecimal projectedDailyReturn;
     private LocalDateTime detectedAt;
+    /** Predicted track — next funding on the long leg. */
+    private LocalDateTime longNextFundingTime;
+    /** Predicted track — next funding on the short leg. */
+    private LocalDateTime shortNextFundingTime;
+    /** Always PREDICTED for live opportunities. */
+    private String rateKind;
 }

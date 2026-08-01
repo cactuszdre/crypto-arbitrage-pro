@@ -50,6 +50,10 @@ public class FundingRate {
     @Column(name = "interval_hours", nullable = false)
     private Integer intervalHours;
 
+    /** Not persisted — carried for last_funding upsert only. */
+    @Transient
+    private LocalDateTime nextFundingTime;
+
     @Column(nullable = false)
     private LocalDateTime timestamp;
 

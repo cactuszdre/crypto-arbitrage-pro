@@ -1,7 +1,15 @@
 package com.crypto.arbitrage.service;
 
+import com.crypto.arbitrage.funding.FundingModel;
+import com.crypto.arbitrage.funding.FundingRateNormalizer;
+import com.crypto.arbitrage.funding.FundingRateUnit;
+import com.crypto.arbitrage.funding.MarketScheduleSnapshot;
+import com.crypto.arbitrage.funding.NormalizedFundingRate;
+import com.crypto.arbitrage.funding.SettledFundingProvider;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.FundingSettlement;
+import com.crypto.arbitrage.model.LastFunding;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
@@ -12,8 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -43,7 +52,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class VariationalService implements DexFetcher {
+public class VariationalService implements DexFetcher, SettledFundingProvider {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
@@ -55,10 +64,39 @@ public class VariationalService implements DexFetcher {
     // Use Cloudflare Worker proxy to bypass IP blocking
     private static final String BASE_URL = "https://curly-cake-7313.stevenlegeekdu22.workers.dev";
     private static final String STATS_ENDPOINT = "/metadata/stats";
+    private static final int DEFAULT_INTERVAL_HOURS = 8;
 
     @Override
     public String getDexName() {
         return DEX_NAME;
+    }
+
+    @Override
+    public FundingModel getFundingModel() {
+        return FundingModel.PREDICTED_SNAPSHOT;
+    }
+
+    @Override
+    public List<FundingSettlement> fetchSettledHistory(String normalizedSymbol, Instant from, Instant to) {
+        return List.of();
+    }
+
+    @Override
+    public Optional<MarketScheduleSnapshot> fetchSchedule(String normalizedSymbol) {
+        int intervalHours = DEFAULT_INTERVAL_HOURS;
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        if (dexOpt.isPresent()) {
+            Ticker ticker = tickerService.getOrCreate(normalizedSymbol);
+            Optional<LastFunding> lf = lastFundingService.getLatestRate(ticker, dexOpt.get());
+            if (lf.isPresent() && lf.get().getIntervalHours() != null && lf.get().getIntervalHours() > 0) {
+                intervalHours = lf.get().getIntervalHours();
+            }
+        }
+        return Optional.of(MarketScheduleSnapshot.builder()
+                .intervalHours(intervalHours)
+                .nextFundingTime(nextAlignedFundingUtc(intervalHours))
+                .continuous(false)
+                .build());
     }
 
     /**
@@ -192,29 +230,19 @@ public class VariationalService implements DexFetcher {
             // Get or create ticker
             Ticker ticker = tickerService.getOrCreate(symbol);
 
-            // Calculate hourly rate from annual rate
-            // hourly_rate = annual_rate / (24 * 365)
-            BigDecimal hourlyRate = annualRateDecimal.divide(
-                    BigDecimal.valueOf(24 * 365), 18, RoundingMode.HALF_UP);
+            NormalizedFundingRate n = FundingRateNormalizer.normalize(
+                    annualRateDecimal, FundingRateUnit.ANNUAL, intervalHours);
 
-            // Rate 8h % = annualRateDecimal * (8 / (24 * 365)) * 100
-            BigDecimal rate8h = annualRateDecimal
-                    .multiply(BigDecimal.valueOf(100))
-                    .multiply(BigDecimal.valueOf(8))
-                    .divide(BigDecimal.valueOf(24 * 365), 6, RoundingMode.HALF_UP);
-
-            // Annual Rate % = annualRateDecimal * 100
-            BigDecimal rateAnnual = annualRateDecimal
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(2, RoundingMode.HALF_UP);
+            LocalDateTime nextFunding = nextAlignedFundingUtc(intervalHours);
 
             return FundingRate.builder()
                     .dex(dex)
                     .ticker(ticker)
-                    .rate(hourlyRate) // Store hourly rate for consistency with other DEXes
-                    .rate8h(rate8h)
-                    .rateAnnual(rateAnnual)
+                    .rate(n.getHourly())
+                    .rate8h(n.getRate8hPercent())
+                    .rateAnnual(n.getRateAnnualPercent())
                     .intervalHours(intervalHours)
+                    .nextFundingTime(nextFunding)
                     .timestamp(timestamp)
                     .build();
 
@@ -223,6 +251,17 @@ public class VariationalService implements DexFetcher {
             log.debug("Error parsing funding rate for {}: {}", tickerName, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Next funding time aligned to UTC epoch multiples of {@code intervalHours}.
+     */
+    static LocalDateTime nextAlignedFundingUtc(int intervalHours) {
+        int n = Math.max(1, intervalHours);
+        LocalDateTime now = LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
+        long epochHour = now.toEpochSecond(ZoneOffset.UTC) / 3600;
+        long nextEpochHour = ((epochHour / n) + 1) * n;
+        return LocalDateTime.ofEpochSecond(nextEpochHour * 3600, 0, ZoneOffset.UTC);
     }
 
     /**

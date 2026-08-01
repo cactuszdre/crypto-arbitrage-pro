@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -31,6 +32,7 @@ public class FundingRateService {
     private final DexRepository dexRepository;
     private final TickerRepository tickerRepository;
     private final com.crypto.arbitrage.repository.DexMarketRepository dexMarketRepository;
+    private final com.crypto.arbitrage.repository.FundingSettlementRepository fundingSettlementRepository;
 
     /**
      * Récupère tous les derniers funding rates (un seul par dex/ticker)
@@ -78,7 +80,8 @@ public class FundingRateService {
     }
 
     /**
-     * Récupère l'historique des funding rates
+     * Historical rates: settled prints where available, older predicted samples to fill
+     * the requested window before the earliest settlement.
      */
     public List<FundingRateDTO> getHistory(String dexName, String symbol, int hours) {
         Optional<Dex> dexOpt = dexRepository.findByName(dexName);
@@ -87,14 +90,38 @@ public class FundingRateService {
         if (dexOpt.isEmpty() || tickerOpt.isEmpty()) {
             return List.of();
         }
-        
-        LocalDateTime startDate = LocalDateTime.now().minusHours(hours);
-        List<FundingRate> rates = fundingRateRepository.findHistoricalData(
+
+        LocalDateTime end = LocalDateTime.ofInstant(java.time.Instant.now(), java.time.ZoneOffset.UTC);
+        LocalDateTime startDate = end.minusHours(hours);
+        List<com.crypto.arbitrage.model.FundingSettlement> settlements =
+                fundingSettlementRepository.findByTickerAndDexBetween(
+                        tickerOpt.get(), dexOpt.get(), startDate, end);
+
+        List<FundingRate> predictedRates = fundingRateRepository.findHistoricalData(
                 dexOpt.get(), tickerOpt.get(), startDate);
-        
-        return rates.stream()
+
+        if (settlements.isEmpty()) {
+            return predictedRates.stream().map(this::toDTO).collect(Collectors.toList());
+        }
+
+        LocalDateTime earliestSettled = settlements.stream()
+                .map(com.crypto.arbitrage.model.FundingSettlement::getSettlementTime)
+                .min(LocalDateTime::compareTo)
+                .orElse(startDate);
+
+        List<FundingRateDTO> olderPredicted = predictedRates.stream()
+                .filter(r -> r.getTimestamp() != null && r.getTimestamp().isBefore(earliestSettled))
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+
+        List<FundingRateDTO> settledDtos = settlements.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+
+        List<FundingRateDTO> merged = new ArrayList<>(olderPredicted.size() + settledDtos.size());
+        merged.addAll(olderPredicted);
+        merged.addAll(settledDtos);
+        return merged;
     }
 
     /**
@@ -146,6 +173,8 @@ public class FundingRateService {
                 .fundingPremium(rate.getFundingPremium())
                 .intervalHours(rate.getIntervalHours())
                 .timestamp(rate.getTimestamp())
+                .nextFundingTime(rate.getNextFundingTime())
+                .rateKind("PREDICTED")
                 .direction(direction)
                 .build();
     }
@@ -165,6 +194,27 @@ public class FundingRateService {
                 .fundingPremium(rate.getFundingPremium())
                 .intervalHours(rate.getIntervalHours())
                 .timestamp(rate.getTimestamp())
+                .nextFundingTime(rate.getNextFundingTime())
+                .rateKind("PREDICTED")
+                .direction(direction)
+                .build();
+    }
+
+    private FundingRateDTO toDTO(com.crypto.arbitrage.model.FundingSettlement s) {
+        String direction = s.getRate().compareTo(BigDecimal.ZERO) > 0
+                ? "LONGS_PAY"
+                : "SHORTS_PAY";
+        return FundingRateDTO.builder()
+                .id(s.getId())
+                .dexName(s.getDexName())
+                .symbol(s.getSymbol())
+                .rate(s.getRate())
+                .rate8h(s.getRate8h())
+                .rateAnnual(s.getRateAnnual())
+                .fundingPremium(s.getFundingPremium())
+                .intervalHours(s.getIntervalHours())
+                .timestamp(s.getSettlementTime())
+                .rateKind("SETTLED")
                 .direction(direction)
                 .build();
     }

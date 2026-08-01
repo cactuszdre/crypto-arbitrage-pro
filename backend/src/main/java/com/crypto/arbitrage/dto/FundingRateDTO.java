@@ -23,5 +23,9 @@ public class FundingRateDTO {
     private BigDecimal fundingPremium;
     private Integer intervalHours;
     private LocalDateTime timestamp;
+    /** Next expected funding payment (predicted track). */
+    private LocalDateTime nextFundingTime;
+    /** PREDICTED vs SETTLED for clients that need to distinguish. */
+    private String rateKind;
     private String direction; // "LONGS_PAY" or "SHORTS_PAY"
 }

@@ -1,7 +1,14 @@
 package com.crypto.arbitrage.service;
 
+import com.crypto.arbitrage.funding.FundingModel;
+import com.crypto.arbitrage.funding.FundingRateNormalizer;
+import com.crypto.arbitrage.funding.FundingRateUnit;
+import com.crypto.arbitrage.funding.MarketScheduleSnapshot;
+import com.crypto.arbitrage.funding.NormalizedFundingRate;
+import com.crypto.arbitrage.funding.SettledFundingProvider;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.FundingSettlement;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
@@ -10,15 +17,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ParadexService {
+public class ParadexService implements SettledFundingProvider {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
@@ -44,6 +49,39 @@ public class ParadexService {
     // Track when market info was last loaded (for periodic refresh)
     private volatile long lastMarketInfoLoadTime = 0;
     private static final long MARKET_INFO_REFRESH_INTERVAL_MS = 3600_000; // Refresh every hour
+
+    @Override
+    public String getDexName() {
+        return DEX_NAME;
+    }
+
+    @Override
+    public FundingModel getFundingModel() {
+        return FundingModel.CONTINUOUS_INDEX;
+    }
+
+    @Override
+    public boolean supportsSettledHistory() {
+        // Continuous accrual — no discrete paid settlement print to backfill.
+        return false;
+    }
+
+    @Override
+    public List<FundingSettlement> fetchSettledHistory(String normalizedSymbol, Instant from, Instant to) {
+        return List.of();
+    }
+
+    @Override
+    public Optional<MarketScheduleSnapshot> fetchSchedule(String normalizedSymbol) {
+        Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
+        String baseUrl = dexOpt.map(Dex::getBaseUrl).orElse("");
+        int intervalHours = getFundingPeriodHours(normalizedSymbol, baseUrl);
+        return Optional.of(MarketScheduleSnapshot.builder()
+                .intervalHours(intervalHours)
+                .nextFundingTime(null)
+                .continuous(true)
+                .build());
+    }
 
     private WebClient paradexClient(String baseUrl) {
         return webClientBuilder.clone()
@@ -277,7 +315,7 @@ public class ParadexService {
 
     private FundingRate parseFundingRate(JsonNode node, Dex dex, String symbol, int fundingPeriodHours) {
         try {
-            BigDecimal rate = new BigDecimal(node.get("funding_rate").asText());
+            BigDecimal periodRate = new BigDecimal(node.get("funding_rate").asText());
             BigDecimal fundingPremium = node.has("funding_premium") 
                     ? new BigDecimal(node.get("funding_premium").asText()) 
                     : null;
@@ -292,39 +330,21 @@ public class ParadexService {
             );
 
             // The funding_rate from Paradex API is the rate for the funding period.
-            // Different pairs have different funding periods:
-            // - BTC/ETH: 8h (3 periods per day)
-            // - MOODENG/ASTER etc: 4h (6 periods per day)
-            
-            // Calculate hourly rate from the period rate
-            // rateHourly = rate / fundingPeriodHours
-            BigDecimal rateHourly = rate.divide(BigDecimal.valueOf(fundingPeriodHours), 12, RoundingMode.HALF_UP);
-            
-            // Rate 8h % = rateHourly * 8 * 100 (standardized to 8h for comparison)
-            BigDecimal rate8h = rateHourly.multiply(BigDecimal.valueOf(8))
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(6, RoundingMode.HALF_UP);
-            
-            // Calculate periods per day based on the actual funding period
-            int periodsPerDay = 24 / fundingPeriodHours;
-            
-            // Annualized % = rate * periodsPerDay * 365 * 100
-            BigDecimal rateAnnual = rate.multiply(BigDecimal.valueOf(periodsPerDay * 365))
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(2, RoundingMode.HALF_UP);
-            
-            // Get or create ticker
+            NormalizedFundingRate n = FundingRateNormalizer.normalize(
+                    periodRate, FundingRateUnit.PERIOD, fundingPeriodHours);
+
             Ticker ticker = tickerService.getOrCreate(symbol);
 
             return FundingRate.builder()
                     .dex(dex)
                     .ticker(ticker)
-                    .rate(rateHourly) // Store the hourly rate for consistency
-                    .rate8h(rate8h)
-                    .rateAnnual(rateAnnual)
+                    .rate(n.getHourly())
+                    .rate8h(n.getRate8hPercent())
+                    .rateAnnual(n.getRateAnnualPercent())
                     .fundingPremium(fundingPremium)
                     .fundingIndex(fundingIndex)
-                    .intervalHours(fundingPeriodHours) // Use the actual funding period
+                    .intervalHours(fundingPeriodHours)
+                    .nextFundingTime(null) // continuous index — no discrete next funding
                     .timestamp(timestamp)
                     .build();
 

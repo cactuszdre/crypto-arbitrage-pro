@@ -61,6 +61,10 @@ public class LastFunding {
     @Builder.Default
     private Integer intervalHours = 1;
 
+    /** Next expected funding payment time (predicted track). */
+    @Column(name = "next_funding_time")
+    private LocalDateTime nextFundingTime;
+
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
@@ -95,6 +99,7 @@ public class LastFunding {
                 .fundingPremium(fr.getFundingPremium())
                 .fundingIndex(fr.getFundingIndex())
                 .intervalHours(fr.getIntervalHours())
+                .nextFundingTime(fr.getNextFundingTime())
                 .timestamp(fr.getTimestamp())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -110,6 +115,9 @@ public class LastFunding {
         this.fundingPremium = fr.getFundingPremium();
         this.fundingIndex = fr.getFundingIndex();
         this.intervalHours = fr.getIntervalHours();
+        if (fr.getNextFundingTime() != null) {
+            this.nextFundingTime = fr.getNextFundingTime();
+        }
         this.timestamp = fr.getTimestamp();
         this.updatedAt = LocalDateTime.now();
     }

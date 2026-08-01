@@ -109,6 +109,9 @@ public class ArbitrageService {
                     .spread(spreadAnnual)
                     .projectedDailyReturn(dailyReturn)
                     .detectedAt(LocalDateTime.now())
+                    .longNextFundingTime(bestLong.getNextFundingTime())
+                    .shortNextFundingTime(bestShort.getNextFundingTime())
+                    .rateKind("PREDICTED")
                     .build();
 
             opportunities.add(opportunity);
@@ -152,6 +155,8 @@ public class ArbitrageService {
                     .map(r -> DexRateDTO.builder()
                             .dex(r.getDex().getName())
                             .rateAnnual(r.getRateAnnual())
+                            .nextFundingTime(r.getNextFundingTime())
+                            .intervalHours(r.getIntervalHours())
                             .build())
                     .collect(Collectors.toList());
 

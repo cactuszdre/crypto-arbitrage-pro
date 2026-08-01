@@ -1,7 +1,14 @@
 package com.crypto.arbitrage.service;
 
+import com.crypto.arbitrage.funding.FundingModel;
+import com.crypto.arbitrage.funding.FundingRateNormalizer;
+import com.crypto.arbitrage.funding.FundingRateUnit;
+import com.crypto.arbitrage.funding.MarketScheduleSnapshot;
+import com.crypto.arbitrage.funding.NormalizedFundingRate;
+import com.crypto.arbitrage.funding.SettledFundingProvider;
 import com.crypto.arbitrage.model.Dex;
 import com.crypto.arbitrage.model.FundingRate;
+import com.crypto.arbitrage.model.FundingSettlement;
 import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.repository.FundingRateRepository;
@@ -15,7 +22,9 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 /**
@@ -32,7 +41,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class NadoService implements DexFetcher {
+public class NadoService implements DexFetcher, SettledFundingProvider {
 
     private final DexRepository dexRepository;
     private final FundingRateRepository fundingRateRepository;
@@ -51,6 +60,26 @@ public class NadoService implements DexFetcher {
     @Override
     public String getDexName() {
         return DEX_NAME;
+    }
+
+    @Override
+    public FundingModel getFundingModel() {
+        return FundingModel.PREDICTED_SNAPSHOT;
+    }
+
+    @Override
+    public List<FundingSettlement> fetchSettledHistory(String normalizedSymbol, Instant from, Instant to) {
+        return List.of();
+    }
+
+    @Override
+    public Optional<MarketScheduleSnapshot> fetchSchedule(String normalizedSymbol) {
+        return Optional.of(MarketScheduleSnapshot.builder()
+                .intervalHours(1)
+                .nextFundingTime(FundingSettlementService.nextHourUtc(
+                        LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC)))
+                .continuous(false)
+                .build());
     }
 
     @Override
@@ -88,6 +117,8 @@ public class NadoService implements DexFetcher {
             // Step 3: Build FundingRate objects
             List<FundingRate> rates = new ArrayList<>();
             LocalDateTime now = LocalDateTime.now();
+            LocalDateTime nextFunding = FundingSettlementService.nextHourUtc(
+                    LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC));
 
             for (Map.Entry<Integer, BigDecimal> entry : fundingRates.entrySet()) {
                 Integer productId = entry.getKey();
@@ -95,7 +126,7 @@ public class NadoService implements DexFetcher {
                 String symbol = productIdToSymbol.get(productId);
 
                 if (symbol != null) {
-                    FundingRate rate = buildFundingRate(symbol, fundingRateValue, dex, now);
+                    FundingRate rate = buildFundingRate(symbol, fundingRateValue, dex, now, nextFunding);
                     if (rate != null) {
                         rates.add(rate);
                     }
@@ -242,41 +273,25 @@ public class NadoService implements DexFetcher {
 
     /**
      * Build a FundingRate object from the symbol and rate data.
-     * 
-     * Nado's funding_rate_x18 is a 24hr rate. To convert:
-     * - Hourly rate = 24hr_rate / 24
-     * - 8h rate % = 24hr_rate / 3 * 100
-     * - Annual rate % = 24hr_rate * 365 * 100
+     * Nado's funding_rate_x18 is a 24hr (daily) rate; settled hourly.
      */
-    private FundingRate buildFundingRate(String symbol, BigDecimal dailyRate, Dex dex, LocalDateTime timestamp) {
+    private FundingRate buildFundingRate(String symbol, BigDecimal dailyRate, Dex dex,
+                                         LocalDateTime timestamp, LocalDateTime nextFunding) {
         try {
-            // Normalize symbol (e.g., BTC-PERP -> BTC-USD-PERP for consistency)
             String normalizedSymbol = normalizeSymbol(symbol);
-            
-            // Get or create ticker
             Ticker ticker = tickerService.getOrCreate(normalizedSymbol);
 
-            // The rate from Nado is a 24hr rate
-            // Calculate hourly rate (for storage, as Nado settles hourly)
-            BigDecimal hourlyRate = dailyRate.divide(BigDecimal.valueOf(24), 18, RoundingMode.HALF_UP);
-
-            // Rate 8h % = dailyRate / 3 * 100 (since 8h is 1/3 of 24h)
-            BigDecimal rate8h = dailyRate.divide(BigDecimal.valueOf(3), 10, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(6, RoundingMode.HALF_UP);
-
-            // Annual Rate % = dailyRate * 365 * 100
-            BigDecimal rateAnnual = dailyRate.multiply(BigDecimal.valueOf(365))
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(2, RoundingMode.HALF_UP);
+            NormalizedFundingRate n = FundingRateNormalizer.normalize(
+                    dailyRate, FundingRateUnit.DAILY, 1);
 
             return FundingRate.builder()
                     .dex(dex)
                     .ticker(ticker)
-                    .rate(hourlyRate) // Store hourly rate for consistency with other DEXes
-                    .rate8h(rate8h)
-                    .rateAnnual(rateAnnual)
-                    .intervalHours(1) // Nado has hourly funding settlement
+                    .rate(n.getHourly())
+                    .rate8h(n.getRate8hPercent())
+                    .rateAnnual(n.getRateAnnualPercent())
+                    .intervalHours(1)
+                    .nextFundingTime(nextFunding)
                     .timestamp(timestamp)
                     .build();
 

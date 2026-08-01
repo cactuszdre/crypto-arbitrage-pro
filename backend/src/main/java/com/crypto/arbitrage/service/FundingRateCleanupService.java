@@ -20,7 +20,10 @@ import java.util.List;
 
 /**
  * Service responsible for cleaning up old funding rate data.
- * Aggregates data older than 24 hours into daily averages, then deletes the raw data.
+ * Aggregates predicted raw samples older than 24 hours into daily averages, then deletes the raw data.
+ * <p>
+ * NOTE: Daily AVG of predicted samples is a monitoring fallback only.
+ * Settled (paid) rates live in {@code funding_settlement} and must not be deleted by this job.
  */
 @Service
 @RequiredArgsConstructor

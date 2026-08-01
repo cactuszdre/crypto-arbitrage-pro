@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * DTO representing a single DEX rate for a symbol.
@@ -17,4 +18,6 @@ import java.math.BigDecimal;
 public class DexRateDTO {
     private String dex;
     private BigDecimal rateAnnual;
+    private LocalDateTime nextFundingTime;
+    private Integer intervalHours;
 }
