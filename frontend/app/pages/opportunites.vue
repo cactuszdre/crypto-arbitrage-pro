@@ -83,53 +83,71 @@ const { data: dexList } = useFetch('/api/dex', {
 // Using getCachedData to avoid refetching on client hydration
 const historicalPeriods = [1, 7, 30, 90, 180, 365]
 
-const { data: historical1d } = useFetch('/api/opportunites/rates-history?days=1', {
+const { data: historical1d, refresh: refreshHistorical1d, pending: pendingHistorical1d } = useFetch('/api/opportunites/rates-history?days=1', {
   key: 'historical-1d',
   lazy: true,
   server: false,
-  default: () => ({ symbols: [] }),
-  getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
+  default: () => ({ symbols: [], dataPointCount: 0 }),
+  timeout: 90000
 })
 
-const { data: historical7d } = useFetch('/api/opportunites/rates-history?days=7', {
+const { data: historical7d, refresh: refreshHistorical7d, pending: pendingHistorical7d } = useFetch('/api/opportunites/rates-history?days=7', {
   key: 'historical-7d',
   lazy: true,
   server: false,
-  default: () => ({ symbols: [] }),
-  getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
+  default: () => ({ symbols: [], dataPointCount: 0 }),
+  timeout: 90000
 })
 
-const { data: historical30d } = useFetch('/api/opportunites/rates-history?days=30', {
+const { data: historical30d, refresh: refreshHistorical30d, pending: pendingHistorical30d } = useFetch('/api/opportunites/rates-history?days=30', {
   key: 'historical-30d',
   lazy: true,
   server: false,
-  default: () => ({ symbols: [] }),
-  getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
+  default: () => ({ symbols: [], dataPointCount: 0 }),
+  timeout: 90000
 })
 
-const { data: historical90d } = useFetch('/api/opportunites/rates-history?days=90', {
+const { data: historical90d, refresh: refreshHistorical90d, pending: pendingHistorical90d } = useFetch('/api/opportunites/rates-history?days=90', {
   key: 'historical-90d',
   lazy: true,
   server: false,
-  default: () => ({ symbols: [] }),
-  getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
+  default: () => ({ symbols: [], dataPointCount: 0 }),
+  timeout: 90000
 })
 
-const { data: historical180d } = useFetch('/api/opportunites/rates-history?days=180', {
+const { data: historical180d, refresh: refreshHistorical180d, pending: pendingHistorical180d } = useFetch('/api/opportunites/rates-history?days=180', {
   key: 'historical-180d',
   lazy: true,
   server: false,
-  default: () => ({ symbols: [] }),
-  getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
+  default: () => ({ symbols: [], dataPointCount: 0 }),
+  timeout: 90000
 })
 
-const { data: historical365d } = useFetch('/api/opportunites/rates-history?days=365', {
+const { data: historical365d, refresh: refreshHistorical365d, pending: pendingHistorical365d } = useFetch('/api/opportunites/rates-history?days=365', {
   key: 'historical-365d',
   lazy: true,
   server: false,
-  default: () => ({ symbols: [] }),
-  getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key] || nuxtApp.static.data[key]
+  default: () => ({ symbols: [], dataPointCount: 0 }),
+  timeout: 90000
 })
+
+const historicalRefreshMap = {
+  1: refreshHistorical1d,
+  7: refreshHistorical7d,
+  30: refreshHistorical30d,
+  90: refreshHistorical90d,
+  180: refreshHistorical180d,
+  365: refreshHistorical365d
+}
+
+const isLoadingHistorical = computed(() =>
+  pendingHistorical1d.value ||
+  pendingHistorical7d.value ||
+  pendingHistorical30d.value ||
+  pendingHistorical90d.value ||
+  pendingHistorical180d.value ||
+  pendingHistorical365d.value
+)
 
 // Map for easy access by days
 const historicalDataMap = computed(() => ({
@@ -299,7 +317,6 @@ const periodOptions = [
   { value: '6m', label: '6 Months', days: 180 },
   { value: '1y', label: '1 Year', days: 365 }
 ]
-const isLoadingHistorical = ref(false)
 const isPreloadingHistorical = ref(false) // True during initial preload phase
 
 // Historical data metadata (period info from backend)
@@ -768,14 +785,13 @@ const fetchOpportunities = async (silent = false) => {
   }
 }
 
-// Apply historical data from SSR preload
+// Apply historical data (preloaded or freshly refreshed)
 const applyHistoricalData = (days) => {
   const data = historicalDataMap.value[days]
-  if (data && data.symbols) {
+  if (data && Array.isArray(data.symbols) && data.dataPointCount > 0) {
     historicalRatesOverride.value = data.symbols
     opportunities.value = []
-    
-    // Set meta info
+
     historicalMeta.value = {
       periodLabel: data.periodLabel,
       actualStartDate: data.actualStartDate,
@@ -788,18 +804,27 @@ const applyHistoricalData = (days) => {
   return false
 }
 
-// Watch period changes - Instant switch thanks to SSR data
-watch(selectedPeriod, (newPeriod) => {
+// Watch period changes — refresh if preload is empty (e.g. poisoned cache after outage)
+watch(selectedPeriod, async (newPeriod) => {
   currentPage.value = 1
   const option = periodOptions.find(o => o.value === newPeriod)
   if (option && option.days > 0) {
-    // Switch to historical view using preloaded data
-    applyHistoricalData(option.days)
+    if (!applyHistoricalData(option.days)) {
+      historicalRatesOverride.value = []
+      historicalMeta.value = { dataPointCount: 0 }
+      const refresh = historicalRefreshMap[option.days]
+      if (refresh) {
+        try {
+          await refresh()
+        } catch (e) {
+          console.warn('[Opportunities] historical refresh failed', e)
+        }
+        applyHistoricalData(option.days)
+      }
+    }
   } else {
-    // Reset to live mode - clear historical override
     historicalRatesOverride.value = null
     historicalMeta.value = null
-    // Refresh live rates just in case
     refreshRates()
   }
 })
