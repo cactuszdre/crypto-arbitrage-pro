@@ -38,11 +38,19 @@ useHead({
   ]
 })
 
+// Client-only fetches: SSR blocking on a saturated backend makes /asset hang (nginx/gateway timeout).
+definePageMeta({
+  ssr: false
+})
+
 // Keep last good rates across failed refreshes (same endpoint can 502 during deploys)
 const lastGoodRates = ref([])
-const { data: rawRatesData, refresh: refreshRates } = await useFetch('/api/opportunites/rates', {
+const { data: rawRatesData, refresh: refreshRates } = useFetch('/api/opportunites/rates', {
   key: 'overview-rates',
+  lazy: true,
+  server: false,
   default: () => [],
+  timeout: 20000,
   onResponse({ response }) {
     const body = response._data
     if (response.ok && Array.isArray(body) && body.length > 0) {
@@ -54,14 +62,20 @@ watch(rawRatesData, (val) => {
   if (Array.isArray(val) && val.length > 0) lastGoodRates.value = val
 }, { immediate: true })
 
-const { data: symbolsData } = await useFetch('/api/funding-rates/symbols', {
+const { data: symbolsData } = useFetch('/api/funding-rates/symbols', {
   key: 'overview-symbols',
-  default: () => []
+  lazy: true,
+  server: false,
+  default: () => [],
+  timeout: 15000
 })
 
-const { data: dexListData } = await useFetch('/api/dex', {
+const { data: dexListData } = useFetch('/api/dex', {
   key: 'overview-dex',
-  default: () => []
+  lazy: true,
+  server: false,
+  default: () => [],
+  timeout: 15000
 })
 
 // Props from router (when navigating from Arbitrage table)

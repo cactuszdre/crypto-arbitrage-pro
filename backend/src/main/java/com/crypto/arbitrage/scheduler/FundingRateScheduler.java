@@ -48,9 +48,11 @@ public class FundingRateScheduler {
     }
 
     /**
-     * Fetches funding rates every 10 seconds from all registered DEXes.
+     * Fetches funding rates from all registered DEXes.
+     * 30s delay keeps the 1-vCPU droplet responsive for API traffic;
+     * cycles often take 7–15s with Paradex/Ondo per-market fetches.
      */
-    @Scheduled(fixedDelay = 10000)
+    @Scheduled(fixedDelay = 30000)
     public void fetchFundingRatesLoop() {
         long startTime = System.currentTimeMillis();
 
