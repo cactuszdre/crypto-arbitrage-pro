@@ -28,8 +28,44 @@ public interface FundingRateDailyRepository extends JpaRepository<FundingRateDai
             @Param("dex") Dex dex,
             @Param("startDate") LocalDate startDate);
 
-    @Query("SELECT f FROM FundingRateDaily f JOIN FETCH f.dex WHERE f.date >= :startDate ORDER BY f.date DESC")
-    List<FundingRateDaily> findAllSince(@Param("startDate") LocalDate startDate);
+    /**
+     * Average annual rate and sample count per symbol and DEX since {@code startDate},
+     * as {symbol, dexName, avgRate, sampleCount}.
+     * <p>
+     * Each symbol is restricted to the range where every one of its DEXes has data
+     * (the most recent per-DEX first date), so the averages stay comparable.
+     * <p>
+     * Doing this in SQL matters: loading the rows as entities meant ~260k objects on
+     * a 512 MB heap, which ran the backend out of memory for the longer periods.
+     */
+    @Query(value = """
+        WITH scoped AS (
+            SELECT ticker_id, dex_id, date, avg_rate_annual
+            FROM funding_rate_daily
+            WHERE date >= :startDate
+        ),
+        per_dex_start AS (
+            SELECT ticker_id, dex_id, MIN(date) AS first_date
+            FROM scoped
+            GROUP BY ticker_id, dex_id
+        ),
+        common_start AS (
+            SELECT ticker_id, MAX(first_date) AS start_date
+            FROM per_dex_start
+            GROUP BY ticker_id
+        )
+        SELECT t.normalized_symbol,
+               d.name,
+               SUM(COALESCE(s.avg_rate_annual, 0)) / COUNT(*) AS avg_rate,
+               COUNT(*) AS sample_count
+        FROM scoped s
+        JOIN common_start c ON c.ticker_id = s.ticker_id AND s.date >= c.start_date
+        JOIN ticker t ON t.id = s.ticker_id
+        JOIN dex d ON d.id = s.dex_id
+        GROUP BY t.normalized_symbol, d.name
+        ORDER BY t.normalized_symbol
+        """, nativeQuery = true)
+    List<Object[]> aggregateRatesPerSymbolAndDexSince(@Param("startDate") LocalDate startDate);
 
     boolean existsByTickerAndDexAndDate(Ticker ticker, Dex dex, LocalDate date);
 

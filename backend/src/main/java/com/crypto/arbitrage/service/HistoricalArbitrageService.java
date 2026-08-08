@@ -5,8 +5,6 @@ import com.crypto.arbitrage.dto.HistoricalArbitrageDTO;
 import com.crypto.arbitrage.dto.HistoricalArbitrageResponse;
 import com.crypto.arbitrage.dto.HistoricalRatesResponse;
 import com.crypto.arbitrage.dto.SymbolRatesDTO;
-import com.crypto.arbitrage.model.FundingRateDaily;
-import com.crypto.arbitrage.model.Ticker;
 import com.crypto.arbitrage.repository.FundingRateDailyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +17,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Service for calculating historical arbitrage opportunities from daily
@@ -68,12 +65,8 @@ public class HistoricalArbitrageService {
         // Build human-readable period label
         String periodLabel = buildPeriodLabel(actualStartDate, actualEndDate, dataPointCount);
 
-        // Get all daily data for the period
-        List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(requestedStartDate);
-
-        // Calculate opportunities
-        List<HistoricalArbitrageDTO> opportunities = calculateOpportunities(allDailyData, actualStartDate,
-                actualEndDate);
+        List<HistoricalArbitrageDTO> opportunities = calculateOpportunities(
+                loadAveragesBySymbol(requestedStartDate), actualStartDate, actualEndDate);
 
         return HistoricalArbitrageResponse.builder()
                 .opportunities(opportunities)
@@ -110,80 +103,50 @@ public class HistoricalArbitrageService {
         return dateRange + " (" + dataPointCount + " day" + (dataPointCount > 1 ? "s" : "") + ")";
     }
 
+    /** Average annual rate and sample count of one DEX over a symbol's common period. */
+    private record DexAverage(String dexName, BigDecimal avgRate, int sampleCount) {
+    }
+
     /**
-     * Calculate arbitrage opportunities from the daily data.
-     * Uses common date range per symbol to ensure fair comparisons between DEXes.
+     * Averages per symbol, already restricted to each symbol's common date range
+     * by the database. Preserves insertion order so symbols stay alphabetical.
+     */
+    private Map<String, List<DexAverage>> loadAveragesBySymbol(LocalDate requestedStartDate) {
+        Map<String, List<DexAverage>> bySymbol = new LinkedHashMap<>();
+        for (Object[] row : fundingRateDailyRepository.aggregateRatesPerSymbolAndDexSince(requestedStartDate)) {
+            String symbol = (String) row[0];
+            String dexName = (String) row[1];
+            BigDecimal avgRate = ((BigDecimal) row[2]).setScale(4, RoundingMode.HALF_UP);
+            int sampleCount = ((Number) row[3]).intValue();
+            bySymbol.computeIfAbsent(symbol, s -> new ArrayList<>())
+                    .add(new DexAverage(dexName, avgRate, sampleCount));
+        }
+        return bySymbol;
+    }
+
+    /**
+     * Calculate arbitrage opportunities from the per-symbol DEX averages.
      */
     private List<HistoricalArbitrageDTO> calculateOpportunities(
-            List<FundingRateDaily> allDailyData,
+            Map<String, List<DexAverage>> averagesBySymbol,
             LocalDate actualStartDate,
             LocalDate actualEndDate) {
 
-        if (allDailyData.isEmpty()) {
-            return List.of();
-        }
-
-        // Group by ticker
-        Map<Integer, List<FundingRateDaily>> dataByTicker = allDailyData.stream()
-                .collect(Collectors.groupingBy(d -> d.getTicker().getId()));
-
         List<HistoricalArbitrageDTO> opportunities = new ArrayList<>();
 
-        for (Map.Entry<Integer, List<FundingRateDaily>> entry : dataByTicker.entrySet()) {
-            List<FundingRateDaily> tickerData = entry.getValue();
-
-            if (tickerData.isEmpty())
-                continue;
-
-            Ticker ticker = tickerData.get(0).getTicker();
-            String symbol = ticker.getNormalizedSymbol();
-
-            // Group by DEX
-            Map<Long, List<FundingRateDaily>> dataByDex = tickerData.stream()
-                    .collect(Collectors.groupingBy(d -> d.getDex().getId()));
+        for (Map.Entry<String, List<DexAverage>> entry : averagesBySymbol.entrySet()) {
+            String symbol = entry.getKey();
+            List<DexAverage> dexAverages = entry.getValue();
 
             // Need at least 2 DEXes for arbitrage
-            if (dataByDex.size() < 2)
+            if (dexAverages.size() < 2)
                 continue;
 
-            // ========== COMMON DATE RANGE CALCULATION ==========
-            // Find the common start date: the most recent "minimum date" across all DEXes
-            // This ensures we only compare data where ALL DEXes have entries
-            LocalDate commonStartDate = dataByDex.values().stream()
-                    .map(list -> list.stream()
-                            .map(FundingRateDaily::getDate)
-                            .min(LocalDate::compareTo)
-                            .orElse(null))
-                    .filter(Objects::nonNull)
-                    .max(LocalDate::compareTo) // Take the most recent among the minimums
-                    .orElse(actualStartDate);
-
-            // Calculate average annual rate for each DEX using only common period data
             Map<String, BigDecimal> dexAvgRates = new HashMap<>();
             Map<String, Integer> dexSampleCounts = new HashMap<>();
-            final LocalDate finalCommonStartDate = commonStartDate;
-
-            for (Map.Entry<Long, List<FundingRateDaily>> dexEntry : dataByDex.entrySet()) {
-                List<FundingRateDaily> dexData = dexEntry.getValue();
-                String dexName = dexData.get(0).getDex().getName();
-
-                // Filter to only include data from common start date onwards
-                List<FundingRateDaily> filteredDexData = dexData.stream()
-                        .filter(d -> !d.getDate().isBefore(finalCommonStartDate))
-                        .toList();
-
-                if (filteredDexData.isEmpty())
-                    continue;
-
-                // Calculate average of avgRateAnnual
-                BigDecimal avgRate = filteredDexData.stream()
-                        .map(FundingRateDaily::getAvgRateAnnual)
-                        .filter(Objects::nonNull)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add)
-                        .divide(BigDecimal.valueOf(filteredDexData.size()), 4, RoundingMode.HALF_UP);
-
-                dexAvgRates.put(dexName, avgRate);
-                dexSampleCounts.put(dexName, filteredDexData.size());
+            for (DexAverage avg : dexAverages) {
+                dexAvgRates.put(avg.dexName(), avg.avgRate());
+                dexSampleCounts.put(avg.dexName(), avg.sampleCount());
             }
 
             // Find best long (lowest rate) and best short (highest rate)
@@ -275,71 +238,17 @@ public class HistoricalArbitrageService {
         // Build human-readable period label
         String periodLabel = buildPeriodLabel(actualStartDate, actualEndDate, dataPointCount);
 
-        // Get all daily data for the period
-        List<FundingRateDaily> allDailyData = fundingRateDailyRepository.findAllSince(requestedStartDate);
-
-        // Group by ticker
-        Map<Integer, List<FundingRateDaily>> dataByTicker = allDailyData.stream()
-                .collect(Collectors.groupingBy(d -> d.getTicker().getId()));
-
         List<SymbolRatesDTO> symbols = new ArrayList<>();
-
-        for (Map.Entry<Integer, List<FundingRateDaily>> entry : dataByTicker.entrySet()) {
-            List<FundingRateDaily> tickerData = entry.getValue();
-
-            if (tickerData.isEmpty())
-                continue;
-
-            Ticker ticker = tickerData.get(0).getTicker();
-            String symbol = ticker.getNormalizedSymbol();
-
-            // Group by DEX
-            Map<Long, List<FundingRateDaily>> dataByDex = tickerData.stream()
-                    .collect(Collectors.groupingBy(d -> d.getDex().getId()));
-
-            // ========== COMMON DATE RANGE CALCULATION ==========
-            // Find the common start date: the most recent "minimum date" across all DEXes
-            // This ensures we only compare data where ALL DEXes have entries
-            LocalDate commonStartDate = dataByDex.values().stream()
-                    .map(list -> list.stream()
-                            .map(FundingRateDaily::getDate)
-                            .min(LocalDate::compareTo)
-                            .orElse(null))
-                    .filter(Objects::nonNull)
-                    .max(LocalDate::compareTo) // Take the most recent among the minimums
-                    .orElse(actualStartDate);
-
-            final LocalDate finalCommonStartDate = commonStartDate;
-
-            List<DexRateDTO> dexRates = new ArrayList<>();
-
-            for (Map.Entry<Long, List<FundingRateDaily>> dexEntry : dataByDex.entrySet()) {
-                List<FundingRateDaily> dexData = dexEntry.getValue();
-                String dexName = dexData.get(0).getDex().getName();
-
-                // Filter to only include data from common start date onwards
-                List<FundingRateDaily> filteredDexData = dexData.stream()
-                        .filter(d -> !d.getDate().isBefore(finalCommonStartDate))
-                        .toList();
-
-                if (filteredDexData.isEmpty())
-                    continue;
-
-                // Calculate average of avgRateAnnual
-                BigDecimal avgRate = filteredDexData.stream()
-                        .map(FundingRateDaily::getAvgRateAnnual)
-                        .filter(Objects::nonNull)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add)
-                        .divide(BigDecimal.valueOf(filteredDexData.size()), 4, RoundingMode.HALF_UP);
-
-                dexRates.add(DexRateDTO.builder()
-                        .dex(dexName)
-                        .rateAnnual(avgRate)
-                        .build());
-            }
+        for (Map.Entry<String, List<DexAverage>> entry : loadAveragesBySymbol(requestedStartDate).entrySet()) {
+            List<DexRateDTO> dexRates = entry.getValue().stream()
+                    .map(avg -> DexRateDTO.builder()
+                            .dex(avg.dexName())
+                            .rateAnnual(avg.avgRate())
+                            .build())
+                    .toList();
 
             symbols.add(SymbolRatesDTO.builder()
-                    .symbol(symbol)
+                    .symbol(entry.getKey())
                     .rates(dexRates)
                     .build());
         }
