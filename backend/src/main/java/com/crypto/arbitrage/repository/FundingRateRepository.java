@@ -128,6 +128,34 @@ public interface FundingRateRepository extends JpaRepository<FundingRate, Long> 
         @Param("endTime") LocalDateTime endTime,
         Pageable pageable
     );
+
+    /**
+     * Open rate of every ticker/dex pair in the window, as {tickerId, dexId, rate}.
+     * Replaces one findFirstInBucket call per pair, which meant thousands of
+     * queries against this multi-million-row table on every aggregation run.
+     */
+    @Query(value = """
+        SELECT DISTINCT ON (ticker_id, dex_id) ticker_id, dex_id, rate
+        FROM funding_rate
+        WHERE timestamp >= :startTime AND timestamp < :endTime
+        ORDER BY ticker_id, dex_id, timestamp ASC, id ASC
+        """, nativeQuery = true)
+    List<Object[]> findOpenRatesInBucket(
+        @Param("startTime") LocalDateTime startTime,
+        @Param("endTime") LocalDateTime endTime
+    );
+
+    /** Close rate counterpart of {@link #findOpenRatesInBucket}. */
+    @Query(value = """
+        SELECT DISTINCT ON (ticker_id, dex_id) ticker_id, dex_id, rate
+        FROM funding_rate
+        WHERE timestamp >= :startTime AND timestamp < :endTime
+        ORDER BY ticker_id, dex_id, timestamp DESC, id DESC
+        """, nativeQuery = true)
+    List<Object[]> findCloseRatesInBucket(
+        @Param("startTime") LocalDateTime startTime,
+        @Param("endTime") LocalDateTime endTime
+    );
 }
 
 

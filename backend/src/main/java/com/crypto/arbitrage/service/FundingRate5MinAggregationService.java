@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +42,17 @@ public class FundingRate5MinAggregationService {
 
     private static final int BUCKET_MINUTES = 5;
     private static final int RETENTION_HOURS = 48; // Keep 5-min data for 48 hours
+
+    /** Maps {tickerId, dexId, rate} rows to a "tickerId:dexId" keyed lookup. */
+    static Map<String, BigDecimal> toRateMap(List<Object[]> rows) {
+        Map<String, BigDecimal> map = new HashMap<>();
+        for (Object[] row : rows) {
+            Number tickerId = (Number) row[0];
+            Number dexId = (Number) row[1];
+            map.put(tickerId.intValue() + ":" + dexId.longValue(), (BigDecimal) row[2]);
+        }
+        return map;
+    }
 
     /** Column 0 of an {@code aggregateForBucket} row is the ticker id, column 1 the dex id. */
     private Map<Integer, Ticker> loadTickers(List<Object[]> rows) {
@@ -102,6 +114,10 @@ public class FundingRate5MinAggregationService {
                             b -> b.getTicker().getId() + ":" + b.getDex().getId(),
                             Function.identity(),
                             (a, b) -> a));
+            Map<String, BigDecimal> openRates = toRateMap(
+                    fundingRateRepository.findOpenRatesInBucket(bucketStart, bucketEnd));
+            Map<String, BigDecimal> closeRates = toRateMap(
+                    fundingRateRepository.findCloseRatesInBucket(bucketStart, bucketEnd));
 
             int savedCount = 0;
             int updatedCount = 0;
@@ -125,8 +141,8 @@ public class FundingRate5MinAggregationService {
                     }
 
                     // Get open and close rates
-                    BigDecimal openRate = getOpenRate(tickerId, dexId, bucketStart, bucketEnd);
-                    BigDecimal closeRate = getCloseRate(tickerId, dexId, bucketStart, bucketEnd);
+                    BigDecimal openRate = openRates.get(tickerId + ":" + dexId);
+                    BigDecimal closeRate = closeRates.get(tickerId + ":" + dexId);
 
                     FundingRate5Min existing = existingByKey.get(tickerId + ":" + dexId);
 

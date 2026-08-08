@@ -88,6 +88,10 @@ public class FundingRateHourlyAggregationService {
                             b -> b.getTicker().getId() + ":" + b.getDex().getId(),
                             Function.identity(),
                             (a, b) -> a));
+            Map<String, BigDecimal> openRates = FundingRate5MinAggregationService.toRateMap(
+                    fundingRateRepository.findOpenRatesInBucket(bucketStart, bucketEnd));
+            Map<String, BigDecimal> closeRates = FundingRate5MinAggregationService.toRateMap(
+                    fundingRateRepository.findCloseRatesInBucket(bucketStart, bucketEnd));
 
             int savedCount = 0;
             int updatedCount = 0;
@@ -111,9 +115,8 @@ public class FundingRateHourlyAggregationService {
                         continue;
                     }
 
-                    // Get open and close rates from raw data
-                    BigDecimal openRate = getOpenRate(tickerId, dexId, bucketStart, bucketEnd);
-                    BigDecimal closeRate = getCloseRate(tickerId, dexId, bucketStart, bucketEnd);
+                    BigDecimal openRate = openRates.get(tickerId + ":" + dexId);
+                    BigDecimal closeRate = closeRates.get(tickerId + ":" + dexId);
 
                     FundingRateHourly existing = existingByKey.get(tickerId + ":" + dexId);
 
