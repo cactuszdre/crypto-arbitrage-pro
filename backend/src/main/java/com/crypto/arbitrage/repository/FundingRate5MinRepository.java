@@ -22,6 +22,12 @@ public interface FundingRate5MinRepository extends JpaRepository<FundingRate5Min
     Optional<FundingRate5Min> findByTickerAndDexAndBucketTime(Ticker ticker, Dex dex, LocalDateTime bucketTime);
 
     /**
+     * All buckets for one timestamp, so aggregation can look them up in memory
+     * instead of one query per ticker/dex pair.
+     */
+    List<FundingRate5Min> findByBucketTime(LocalDateTime bucketTime);
+
+    /**
      * Check if a bucket exists
      */
     boolean existsByTickerAndDexAndBucketTime(Ticker ticker, Dex dex, LocalDateTime bucketTime);

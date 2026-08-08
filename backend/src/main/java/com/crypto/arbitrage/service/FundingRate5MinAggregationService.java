@@ -20,6 +20,10 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Service responsible for aggregating funding rate data into 5-minute buckets.
@@ -37,6 +41,19 @@ public class FundingRate5MinAggregationService {
 
     private static final int BUCKET_MINUTES = 5;
     private static final int RETENTION_HOURS = 48; // Keep 5-min data for 48 hours
+
+    /** Column 0 of an {@code aggregateForBucket} row is the ticker id, column 1 the dex id. */
+    private Map<Integer, Ticker> loadTickers(List<Object[]> rows) {
+        Set<Integer> ids = rows.stream().map(r -> (Integer) r[0]).collect(Collectors.toSet());
+        return tickerRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Ticker::getId, Function.identity()));
+    }
+
+    private Map<Long, Dex> loadDexes(List<Object[]> rows) {
+        Set<Long> ids = rows.stream().map(r -> (Long) r[1]).collect(Collectors.toSet());
+        return dexRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Dex::getId, Function.identity()));
+    }
 
     /**
      * Helper method to convert numeric types from DB to BigDecimal.
@@ -74,6 +91,18 @@ public class FundingRate5MinAggregationService {
             // Get aggregated data for this bucket
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(bucketStart, bucketEnd);
 
+            // Preload every entity this pass needs. Resolving them per row issued
+            // several thousand extra queries inside a single transaction, which
+            // exhausted the connection pool and eventually hit the transaction timeout.
+            Map<Integer, Ticker> tickersById = loadTickers(aggregatedData);
+            Map<Long, Dex> dexesById = loadDexes(aggregatedData);
+            Map<String, FundingRate5Min> existingByKey = fundingRate5MinRepository
+                    .findByBucketTime(bucketEnd).stream()
+                    .collect(Collectors.toMap(
+                            b -> b.getTicker().getId() + ":" + b.getDex().getId(),
+                            Function.identity(),
+                            (a, b) -> a));
+
             int savedCount = 0;
             int updatedCount = 0;
 
@@ -88,9 +117,8 @@ public class FundingRate5MinAggregationService {
                     BigDecimal avgRateAnnual = toBigDecimal(row[6]);
                     Long sampleCount = (Long) row[7];
 
-                    // Get entities
-                    Ticker ticker = tickerRepository.findById(tickerId).orElse(null);
-                    Dex dex = dexRepository.findById(dexId).orElse(null);
+                    Ticker ticker = tickersById.get(tickerId);
+                    Dex dex = dexesById.get(dexId);
 
                     if (ticker == null || dex == null) {
                         continue;
@@ -100,11 +128,7 @@ public class FundingRate5MinAggregationService {
                     BigDecimal openRate = getOpenRate(tickerId, dexId, bucketStart, bucketEnd);
                     BigDecimal closeRate = getCloseRate(tickerId, dexId, bucketStart, bucketEnd);
 
-                    // Check if we already have an entry for this bucket (using bucketEnd as the
-                    // label)
-                    FundingRate5Min existing = fundingRate5MinRepository
-                            .findByTickerAndDexAndBucketTime(ticker, dex, bucketEnd)
-                            .orElse(null);
+                    FundingRate5Min existing = existingByKey.get(tickerId + ":" + dexId);
 
                     if (existing != null) {
                         // Update existing record

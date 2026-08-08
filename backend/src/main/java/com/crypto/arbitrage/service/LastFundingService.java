@@ -11,8 +11,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing the last_funding table.
@@ -54,12 +59,56 @@ public class LastFundingService {
 
     /**
      * Bulk upsert multiple funding rates.
+     * <p>
+     * Loads the affected rows once instead of a SELECT per rate: doing it row by
+     * row kept a pooled connection busy for the whole DEX batch and was the main
+     * source of connection-pool exhaustion.
      */
     @Transactional
     public void upsertAll(List<FundingRate> rates) {
-        for (FundingRate fr : rates) {
-            upsertFromFundingRate(fr);
+        if (rates == null || rates.isEmpty()) {
+            return;
         }
+
+        Set<Long> dexIds = rates.stream()
+                .filter(fr -> fr != null && fr.getDex() != null && fr.getTicker() != null)
+                .map(fr -> fr.getDex().getId())
+                .collect(Collectors.toSet());
+        if (dexIds.isEmpty()) {
+            return;
+        }
+
+        Map<String, LastFunding> existingByKey = lastFundingRepository
+                .findAllByDexIdInFetchingAssociations(dexIds).stream()
+                .collect(Collectors.toMap(
+                        lf -> key(lf.getTicker().getId(), lf.getDex().getId()),
+                        Function.identity(),
+                        (a, b) -> a));
+
+        List<LastFunding> toInsert = new ArrayList<>();
+        for (FundingRate fr : rates) {
+            if (fr == null || fr.getTicker() == null || fr.getDex() == null) {
+                continue;
+            }
+            String k = key(fr.getTicker().getId(), fr.getDex().getId());
+            LastFunding existing = existingByKey.get(k);
+            if (existing != null) {
+                // Managed entity: Hibernate flushes the UPDATE at commit.
+                existing.updateFrom(fr);
+            } else {
+                LastFunding created = LastFunding.fromFundingRate(fr);
+                existingByKey.put(k, created);
+                toInsert.add(created);
+            }
+        }
+
+        if (!toInsert.isEmpty()) {
+            lastFundingRepository.saveAll(toInsert);
+        }
+    }
+
+    private static String key(Integer tickerId, Long dexId) {
+        return tickerId + ":" + dexId;
     }
 
     /**

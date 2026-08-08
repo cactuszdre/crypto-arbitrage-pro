@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,6 +49,13 @@ public interface LastFundingRepository extends JpaRepository<LastFunding, Long> 
         @Param("tickerId") Integer tickerId,
         @Param("dexId") Long dexId
     );
+
+    /**
+     * Loads every entry for the given DEXes with their associations in a single
+     * query, so a bulk upsert does not issue one SELECT per rate.
+     */
+    @Query("SELECT lf FROM LastFunding lf JOIN FETCH lf.ticker JOIN FETCH lf.dex WHERE lf.dex.id IN :dexIds")
+    List<LastFunding> findAllByDexIdInFetchingAssociations(@Param("dexIds") Collection<Long> dexIds);
 
     /**
      * Get all rates ordered by annual rate descending (best shorts first)

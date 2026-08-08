@@ -34,6 +34,12 @@ public interface FundingRateDailyRepository extends JpaRepository<FundingRateDai
     boolean existsByTickerAndDexAndDate(Ticker ticker, Dex dex, LocalDate date);
 
     /**
+     * All rows for one date, so the daily job can check for duplicates in memory
+     * instead of one query per ticker/dex pair.
+     */
+    List<FundingRateDaily> findByDate(LocalDate date);
+
+    /**
      * Find the minimum (oldest) date in the database since a given start date
      */
     @Query("SELECT MIN(f.date) FROM FundingRateDaily f WHERE f.date >= :startDate")

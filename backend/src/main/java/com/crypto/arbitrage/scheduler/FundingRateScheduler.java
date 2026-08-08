@@ -33,6 +33,13 @@ public class FundingRateScheduler {
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(20);
 
+    /**
+     * Separate pool for the per-DEX coordinators. They block on their market
+     * tasks, so running them on the shared pool consumed workers that the very
+     * tasks they wait for need.
+     */
+    private final ExecutorService coordinatorExecutor = Executors.newFixedThreadPool(4);
+
     public FundingRateScheduler(
             List<DexFetcher> dexFetchers,
             ParadexService paradexService,
@@ -128,7 +135,7 @@ public class FundingRateScheduler {
             } catch (Exception e) {
                 log.error("Error in {} fetch loop", dexName, e);
             }
-        }, executorService);
+        }, coordinatorExecutor);
     }
 
     @Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE)

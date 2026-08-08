@@ -16,7 +16,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Service responsible for cleaning up old funding rate data.
@@ -78,7 +83,19 @@ public class FundingRateCleanupService {
 
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(startOfYesterday, endOfYesterday);
 
-            int savedCount = 0;
+            // Preload entities and already-written rows; resolving them per row
+            // issued thousands of extra queries inside one transaction.
+            Set<Integer> tickerIds = aggregatedData.stream().map(r -> (Integer) r[0]).collect(Collectors.toSet());
+            Set<Long> dexIds = aggregatedData.stream().map(r -> (Long) r[1]).collect(Collectors.toSet());
+            Map<Integer, Ticker> tickersById = tickerRepository.findAllById(tickerIds).stream()
+                    .collect(Collectors.toMap(Ticker::getId, Function.identity()));
+            Map<Long, Dex> dexesById = dexRepository.findAllById(dexIds).stream()
+                    .collect(Collectors.toMap(Dex::getId, Function.identity()));
+            Set<String> alreadyStored = fundingRateDailyRepository.findByDate(yesterday).stream()
+                    .map(d -> d.getTicker().getId() + ":" + d.getDex().getId())
+                    .collect(Collectors.toSet());
+
+            List<FundingRateDaily> toInsert = new ArrayList<>();
             for (Object[] row : aggregatedData) {
                 try {
                     Integer tickerId = (Integer) row[0];
@@ -89,23 +106,20 @@ public class FundingRateCleanupService {
                     BigDecimal avgRate8h = toBigDecimal(row[5]);
                     BigDecimal avgRateAnnual = toBigDecimal(row[6]);
                     Long sampleCount = (Long) row[7];
-                    
-                    // Get entities
-                    Ticker ticker = tickerRepository.findById(tickerId).orElse(null);
-                    Dex dex = dexRepository.findById(dexId).orElse(null);
-                    
+
+                    Ticker ticker = tickersById.get(tickerId);
+                    Dex dex = dexesById.get(dexId);
+
                     if (ticker == null || dex == null) {
                         log.warn("Skipping aggregation for tickerId={}, dexId={} - not found", tickerId, dexId);
                         continue;
                     }
-                    
-                    // Check if we already have an entry for this date
-                    if (fundingRateDailyRepository.existsByTickerAndDexAndDate(ticker, dex, yesterday)) {
+
+                    if (!alreadyStored.add(tickerId + ":" + dexId)) {
                         continue;
                     }
-                    
-                    // Create daily aggregate
-                    FundingRateDaily daily = FundingRateDaily.builder()
+
+                    toInsert.add(FundingRateDaily.builder()
                             .ticker(ticker)
                             .dex(dex)
                             .date(yesterday)
@@ -115,17 +129,15 @@ public class FundingRateCleanupService {
                             .avgRate8h(avgRate8h)
                             .avgRateAnnual(avgRateAnnual)
                             .sampleCount(sampleCount.intValue())
-                            .build();
-                    
-                    fundingRateDailyRepository.save(daily);
-                    savedCount++;
-                    
+                            .build());
+
                 } catch (Exception e) {
                     log.error("Error aggregating row: {}", e.getMessage());
                 }
             }
 
-            log.info("Aggregated {} daily funding rows for {}", savedCount, yesterday);
+            fundingRateDailyRepository.saveAll(toInsert);
+            log.info("Aggregated {} daily funding rows for {}", toInsert.size(), yesterday);
         } catch (Exception e) {
             log.error("Error during funding rate aggregation: {}", e.getMessage(), e);
         }

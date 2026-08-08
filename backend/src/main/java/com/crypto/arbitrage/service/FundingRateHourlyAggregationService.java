@@ -19,6 +19,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Service responsible for aggregating funding rate data into 1-hour buckets.
@@ -70,6 +74,21 @@ public class FundingRateHourlyAggregationService {
             // Get aggregated data for this bucket from raw 10-second data
             List<Object[]> aggregatedData = fundingRateRepository.aggregateForBucket(bucketStart, bucketEnd);
 
+            // Preload entities and existing buckets; resolving them per row issued
+            // thousands of extra queries inside one transaction.
+            Set<Integer> tickerIds = aggregatedData.stream().map(r -> (Integer) r[0]).collect(Collectors.toSet());
+            Set<Long> dexIds = aggregatedData.stream().map(r -> (Long) r[1]).collect(Collectors.toSet());
+            Map<Integer, Ticker> tickersById = tickerRepository.findAllById(tickerIds).stream()
+                    .collect(Collectors.toMap(Ticker::getId, Function.identity()));
+            Map<Long, Dex> dexesById = dexRepository.findAllById(dexIds).stream()
+                    .collect(Collectors.toMap(Dex::getId, Function.identity()));
+            Map<String, FundingRateHourly> existingByKey = fundingRateHourlyRepository
+                    .findByBucketTime(bucketEnd).stream()
+                    .collect(Collectors.toMap(
+                            b -> b.getTicker().getId() + ":" + b.getDex().getId(),
+                            Function.identity(),
+                            (a, b) -> a));
+
             int savedCount = 0;
             int updatedCount = 0;
 
@@ -84,9 +103,8 @@ public class FundingRateHourlyAggregationService {
                     BigDecimal avgRateAnnual = toBigDecimal(row[6]);
                     Long sampleCount = (Long) row[7];
 
-                    // Get entities
-                    Ticker ticker = tickerRepository.findById(tickerId).orElse(null);
-                    Dex dex = dexRepository.findById(dexId).orElse(null);
+                    Ticker ticker = tickersById.get(tickerId);
+                    Dex dex = dexesById.get(dexId);
 
                     if (ticker == null || dex == null) {
                         log.warn("Skipping hourly aggregation for tickerId={}, dexId={} - not found", tickerId, dexId);
@@ -97,10 +115,7 @@ public class FundingRateHourlyAggregationService {
                     BigDecimal openRate = getOpenRate(tickerId, dexId, bucketStart, bucketEnd);
                     BigDecimal closeRate = getCloseRate(tickerId, dexId, bucketStart, bucketEnd);
 
-                    // Check if we already have an entry for this bucket (using bucketEnd as the label)
-                    FundingRateHourly existing = fundingRateHourlyRepository
-                            .findByTickerAndDexAndBucketTime(ticker, dex, bucketEnd)
-                            .orElse(null);
+                    FundingRateHourly existing = existingByKey.get(tickerId + ":" + dexId);
 
                     if (existing != null) {
                         // Update existing record
