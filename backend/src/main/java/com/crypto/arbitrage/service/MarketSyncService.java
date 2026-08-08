@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,6 +36,7 @@ public class MarketSyncService {
     private final OndoPerpsService ondoPerpsService; // Special case: has fetchAvailableSymbols
     private final Map<String, DexFetcher> fetchersByName;
     private final LastFundingService lastFundingService;
+    private final TransactionTemplate transactionTemplate;
 
     public MarketSyncService(
             DexRepository dexRepository,
@@ -43,7 +45,8 @@ public class MarketSyncService {
             ParadexService paradexService,
             OndoPerpsService ondoPerpsService,
             List<DexFetcher> dexFetchers,
-            LastFundingService lastFundingService) {
+            LastFundingService lastFundingService,
+            TransactionTemplate transactionTemplate) {
         this.dexRepository = dexRepository;
         this.dexMarketRepository = dexMarketRepository;
         this.tickerService = tickerService;
@@ -52,20 +55,20 @@ public class MarketSyncService {
         this.fetchersByName = dexFetchers.stream()
                 .collect(Collectors.toMap(DexFetcher::getDexName, Function.identity()));
         this.lastFundingService = lastFundingService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
      * Runs daily at midnight to refresh available markets for all DEXes.
      */
     @Scheduled(cron = "0 0 0 * * *")
-    @Transactional
     public void syncAllMarkets() {
-        
+
         // Get all active DEXes from database
         List<Dex> activeDexes = dexRepository.findAll().stream()
                 .filter(Dex::getActive)
                 .toList();
-        
+
         for (Dex dex : activeDexes) {
             try {
                 syncDex(dex);
@@ -73,16 +76,18 @@ public class MarketSyncService {
                 log.error("Failed to sync {} markets", dex.getName(), e);
             }
         }
-        
+
     }
-    
+
     /**
      * Sync markets for a specific DEX.
+     * The remote symbol list is fetched outside any transaction: holding a pooled
+     * connection across seven DEX HTTP round-trips starved the whole application.
      */
     private void syncDex(Dex dex) {
         String dexName = dex.getName();
         List<String> symbols;
-        
+
         // Special cases: per-market DEXes expose an explicit symbol list endpoint
         if ("Paradex".equals(dexName)) {
             symbols = paradexService.fetchAvailableSymbols();
@@ -95,16 +100,17 @@ public class MarketSyncService {
                 log.warn("No DexFetcher found for DEX: {}", dexName);
                 return;
             }
-            
+
             List<FundingRate> rates = fetcher.fetchFundingData();
             symbols = rates.stream()
                     .map(FundingRate::getSymbol)
                     .distinct()
                     .collect(Collectors.toList());
         }
-        
+
         if (!symbols.isEmpty()) {
-            updateMarketsForDex(dex, symbols);
+            List<String> finalSymbols = symbols;
+            transactionTemplate.executeWithoutResult(status -> updateMarketsForDex(dex, finalSymbols));
         }
     }
     
@@ -118,7 +124,6 @@ public class MarketSyncService {
      * Manual trigger for market sync (useful for admin actions).
      * This will deactivate delisted markets and remove them from LastFunding.
      */
-    @Transactional
     public void manualSync() {
         log.info("Manual market sync triggered");
         syncAllMarkets();

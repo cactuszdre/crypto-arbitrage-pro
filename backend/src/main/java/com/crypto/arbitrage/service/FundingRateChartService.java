@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -37,6 +38,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// FundingRate5Min/Hourly/Daily map dex lazily; with open-in-view disabled the
+// session must be owned here rather than by the request.
+@Transactional(readOnly = true)
 public class FundingRateChartService {
 
     private final FundingRate5MinRepository fundingRate5MinRepository;

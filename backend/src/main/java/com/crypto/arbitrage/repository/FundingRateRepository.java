@@ -52,6 +52,21 @@ public interface FundingRateRepository extends JpaRepository<FundingRate, Long> 
     @Query("DELETE FROM FundingRate f WHERE f.timestamp < :cutoffTime")
     int deleteByTimestampBefore(@Param("cutoffTime") LocalDateTime cutoffTime);
 
+    /**
+     * Deletes at most {@code batchSize} expired rows. The daily cleanup removes
+     * millions of rows; doing it in one statement holds a pooled connection and
+     * the table lock for minutes, which starves web traffic.
+     */
+    @Modifying
+    @Query(value = """
+        DELETE FROM funding_rate
+        WHERE ctid IN (
+            SELECT ctid FROM funding_rate WHERE timestamp < :cutoffTime LIMIT :batchSize
+        )
+        """, nativeQuery = true)
+    int deleteBatchByTimestampBefore(@Param("cutoffTime") LocalDateTime cutoffTime,
+                                     @Param("batchSize") int batchSize);
+
     // Aggregation query - returns Object[] with: tickerId, dexId, avgRate, minRate, maxRate, avgRate8h, avgRateAnnual, count
     @Query("""
         SELECT f.ticker.id, f.dex.id, 

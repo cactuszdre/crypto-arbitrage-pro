@@ -6,6 +6,7 @@ import com.crypto.arbitrage.repository.DexRepository;
 import com.crypto.arbitrage.service.EncryptionService;
 import com.crypto.arbitrage.service.MarketSyncService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +51,7 @@ public class DexController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @CacheEvict(value = "dexByName", allEntries = true)
     public ResponseEntity<Dex> createDex(@RequestBody DexDTO dexDTO) {
         Dex dex = new Dex();
         dex.setName(dexDTO.getName());

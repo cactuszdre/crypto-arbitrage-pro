@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +47,47 @@ public class LighterService implements DexFetcher, SettledFundingProvider {
 
     /** symbol base (BTC) -> market_id */
     private final Map<String, Integer> marketIdCache = new ConcurrentHashMap<>();
+
+    /**
+     * The hourly backfill walks ~1500 markets, which Lighter answers with 429s.
+     * Space out history calls and stand down entirely for a while after a 429.
+     */
+    private static final long HISTORY_MIN_INTERVAL_MS = 200;
+    private static final long HISTORY_BACKOFF_MS = 120_000;
+    private final AtomicLong nextHistorySlotMs = new AtomicLong(0L);
+    private volatile long historyBackoffUntilMs = 0L;
+
+    /**
+     * Reserves the next evenly spaced request slot, then waits for it.
+     *
+     * @return false when Lighter is in cooldown and the call should be skipped.
+     */
+    private boolean awaitHistorySlot() {
+        if (System.currentTimeMillis() < historyBackoffUntilMs) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        long slot = nextHistorySlotMs.accumulateAndGet(
+                now, (previous, current) -> Math.max(previous, current) + HISTORY_MIN_INTERVAL_MS)
+                - HISTORY_MIN_INTERVAL_MS;
+
+        long waitMs = slot - now;
+        if (waitMs > 0) {
+            try {
+                Thread.sleep(waitMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return System.currentTimeMillis() >= historyBackoffUntilMs;
+    }
+
+    private void enterHistoryBackoff(String reason) {
+        historyBackoffUntilMs = System.currentTimeMillis() + HISTORY_BACKOFF_MS;
+        log.warn("Lighter rate limited ({}), pausing settled-history calls for {}s",
+                reason, HISTORY_BACKOFF_MS / 1000);
+    }
 
     @Override
     public String getDexName() {
@@ -122,6 +165,9 @@ public class LighterService implements DexFetcher, SettledFundingProvider {
 
     @Override
     public List<FundingSettlement> fetchSettledHistory(String normalizedSymbol, Instant from, Instant to) {
+        if (System.currentTimeMillis() < historyBackoffUntilMs) {
+            return List.of();
+        }
         Optional<Dex> dexOpt = dexRepository.findByName(DEX_NAME);
         if (dexOpt.isEmpty()) {
             return List.of();
@@ -135,6 +181,10 @@ public class LighterService implements DexFetcher, SettledFundingProvider {
             marketId = marketIdCache.get(base);
         }
         if (marketId == null) {
+            return List.of();
+        }
+
+        if (!awaitHistorySlot()) {
             return List.of();
         }
 
@@ -196,6 +246,9 @@ public class LighterService implements DexFetcher, SettledFundingProvider {
                         .build());
             }
             return out;
+        } catch (WebClientResponseException.TooManyRequests e) {
+            enterHistoryBackoff("429 on " + normalizedSymbol);
+            return List.of();
         } catch (Exception e) {
             log.error("Lighter fundings history failed for {}: {}", normalizedSymbol, e.getMessage());
             return List.of();

@@ -73,12 +73,24 @@ public class CacheConfig {
                                                 .recordStats()
                                                 .build());
 
+                // DEX lookups by name - 60 seconds TTL.
+                // Every fetcher resolves its DEX per market per cycle; without this the
+                // 7-row dex table absorbed ~800M scans. Short TTL so admin edits apply
+                // quickly without needing explicit eviction everywhere.
+                CaffeineCache dexByNameCache = new CaffeineCache("dexByName",
+                                Caffeine.newBuilder()
+                                                .expireAfterWrite(60, TimeUnit.SECONDS)
+                                                .maximumSize(64)
+                                                .recordStats()
+                                                .build());
+
                 cacheManager.setCaches(Arrays.asList(
                                 arbitrageCache,
                                 fundingRatesCache,
                                 allRatesCache,
                                 historicalCache,
-                                historicalRatesCache));
+                                historicalRatesCache,
+                                dexByNameCache));
 
                 return cacheManager;
         }

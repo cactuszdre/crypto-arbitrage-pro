@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -22,6 +23,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// Read paths must own their transaction now that open-in-view is disabled,
+// instead of borrowing the request-scoped session.
+@Transactional(readOnly = true)
 public class ArbitrageService {
 
     private final LastFundingRepository lastFundingRepository;
