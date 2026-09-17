@@ -470,8 +470,8 @@ const refreshData = async () => {
     // Update symbol data from rawRates
     if (rawRates.value && rawRates.value.length > 0) {
       const symbolInfo = rawRates.value.find(s => s.symbol === selectedSymbol.value)
-      if (symbolInfo) {
-        // Auto-select DEXes if not set
+      if (symbolInfo && availableDexes.value.length > 0) {
+        // Auto-select DEXes if not set (skip when /api/dex hasn't responded yet)
         const validDexes = symbolInfo.rates.map(r => r.dex).filter(dex => availableDexes.value.includes(dex))
         
         if (!selectedLongDex.value || !validDexes.includes(selectedLongDex.value)) {
@@ -494,6 +494,29 @@ const isScrolled = ref(false)
 const handleScroll = (e) => {
   isScrolled.value = e.target.scrollTop > 20
 }
+
+// Re-apply DEX selections once the DEX list finishes loading.
+// On first load, refreshData() may run before /api/dex responds, so
+// availableDexes is empty and the URL-selected DEXes get skipped.
+// This one-shot watcher triggers a re-validation as soon as the list arrives.
+watch(dexListData, () => {
+  if (!dexListData.value || dexListData.value.length === 0) return
+
+  // Restore URL params if selections were cleared by the early refreshData()
+  const urlLongDex = route.query.longDex
+  const urlShortDex = route.query.shortDex
+  const dexNames = dexListData.value.map(d => d.name)
+
+  if (!selectedLongDex.value && urlLongDex && dexNames.includes(urlLongDex)) {
+    selectedLongDex.value = urlLongDex
+  }
+  if (!selectedShortDex.value && urlShortDex && dexNames.includes(urlShortDex)) {
+    selectedShortDex.value = urlShortDex
+  }
+
+  // Now that the DEX list is available, run full selection logic
+  refreshData()
+}, { once: true })
 
 // ===== LIFECYCLE =====
 
